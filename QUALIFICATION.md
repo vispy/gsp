@@ -31,6 +31,7 @@ installed into clean Python 3.13 environments outside both source repositories.
 | Combination | Result |
 |---|---|
 | `gsp-core` only | 167 passed |
+| `gsp-core` + `vispy2` only | 10 passed; semantic example passed |
 | `gsp-core` + `gsp-matplotlib` + `vispy2` | 140 passed |
 | `gsp-core` + `gsp-datoviz` + `vispy2` | 163 passed |
 | GSP source workspace | 451 passed; strict mypy and Ruff passed |
