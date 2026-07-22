@@ -619,7 +619,7 @@ def import_datoviz_v04() -> ModuleType:
     """Import Datoviz and validate the C-shaped v0.4 facade."""
     bootstrap_datoviz_v04_source()
     try:
-        import datoviz as dvz  # type: ignore[import-untyped]
+        import datoviz as dvz
 
         diagnostics = datoviz_current_api_contract_diagnostics(dvz)
         if diagnostics:

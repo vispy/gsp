@@ -217,7 +217,7 @@ def datoviz_v04_capability_snapshot(
     if dvz is None:
         bootstrap_datoviz_v04_source()
         try:
-            import datoviz as imported_dvz  # type: ignore[import-untyped]
+            import datoviz as imported_dvz
         except ModuleNotFoundError:
             diagnostics = (
                 "Datoviz is not importable; using conservative static GSP slice capabilities",
