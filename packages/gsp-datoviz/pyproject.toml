@@ -12,3 +12,5 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/gsp_datoviz"]
 
+[tool.uv.sources]
+gsp-core = { workspace = true }
