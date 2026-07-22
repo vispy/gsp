@@ -15,5 +15,16 @@ The repository is being curated from the historical `vispy/GSP_API` research pro
 - `gsp-matplotlib` imports as `gsp_matplotlib` and provides the reference/publication backend.
 - `gsp-datoviz` imports as `gsp_datoviz` and provides the flagship GPU backend.
 
-No GitHub remote or public release is configured during the local bootstrap.
+Backends register lazy providers in the `gsp.backends` entry-point group. `gsp.discover_backends()`
+lists installed provider metadata without importing Matplotlib or Datoviz;
+`gsp.discover_backends(probe=True)` performs dependency/API checks. Rendering always selects a
+backend explicitly with `gsp.open_session("matplotlib")`, `gsp.open_session("datoviz")`, or a
+caller-supplied ordered `prefer=` policy.
 
+During the unpublished bootstrap, install the built wheels together from `dist/`; there is no
+repository-root umbrella distribution. The Datoviz adapter intentionally has no ordinary Datoviz
+dependency yet because the required RC3-compatible artifact is not published. Local development
+sets `GSP_DATOVIZ_SOURCE=/path/to/datoviz` for explicit source-checkout probing. That bootstrap is
+not a release installation claim.
+
+No GitHub remote or public release is configured during the local bootstrap.
