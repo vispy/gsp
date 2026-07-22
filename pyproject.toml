@@ -1,0 +1,18 @@
+[tool.uv.workspace]
+members = [
+    "packages/gsp-core",
+    "packages/gsp-matplotlib",
+    "packages/gsp-datoviz",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["packages", "conformance"]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+

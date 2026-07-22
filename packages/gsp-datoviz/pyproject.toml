@@ -1,0 +1,14 @@
+[project]
+name = "gsp-datoviz"
+version = "0.2.0a1"
+description = "Datoviz v0.4 GPU backend for GSP."
+requires-python = ">=3.13,<4"
+dependencies = ["gsp-core==0.2.0a1"]
+
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/gsp_datoviz"]
+
