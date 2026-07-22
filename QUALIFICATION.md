@@ -23,6 +23,26 @@ The Datoviz native gates used the explicit development source
 an RC2 compatibility or publication claim. An ordinary Datoviz dependency remains blocked on a
 compatible published artifact.
 
+## S063 live View2D interaction qualification
+
+On 2026-07-22, all four wheels were rebuilt after the live View2D synchronization changes and
+installed into clean Python 3.13 environments outside both source repositories.
+
+| Combination | Result |
+|---|---|
+| `gsp-core` only | 167 passed |
+| `gsp-core` + `gsp-matplotlib` + `vispy2` | 140 passed |
+| `gsp-core` + `gsp-datoviz` + `vispy2` | 163 passed |
+| GSP source workspace | 451 passed; strict mypy and Ruff passed |
+| VisPy2 source | Strict mypy and Ruff passed |
+| All four installed wheels | Matplotlib and Datoviz offscreen PNGs passed from `site-packages` imports |
+
+Equivalent canonical pan actions produced equal provider ranges and revision transitions. Existing
+Datoviz retained-navigation tests confirmed no unchanged visual-buffer upload, Texture2D nearest and
+linear expectations remained exact, and controller callbacks unsubscribed on close. The project
+owner manually accepted the same installed-wheel VisPy2 scene in both live windows: DATA points and
+grid navigation remained synchronized while the NDC overlay stayed fixed.
+
 ## Artifact SHA-256
 
 | Artifact | SHA-256 |
