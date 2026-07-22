@@ -27,4 +27,5 @@ dependency yet because the required RC3-compatible artifact is not published. Lo
 sets `GSP_DATOVIZ_SOURCE=/path/to/datoviz` for explicit source-checkout probing. That bootstrap is
 not a release installation claim.
 
-No GitHub remote or public release is configured during the local bootstrap.
+The source repository is [vispy/gsp](https://github.com/vispy/gsp). No public package release is
+configured during the bootstrap.
