@@ -5,6 +5,9 @@ description = "Datoviz v0.4 GPU backend for GSP."
 requires-python = ">=3.13,<4"
 dependencies = ["gsp-core==0.2.0a1"]
 
+[project.entry-points."gsp.backends"]
+datoviz = "gsp_datoviz.plugin:get_provider"
+
 [build-system]
 requires = ["hatchling>=1.27,<2"]
 build-backend = "hatchling.build"
