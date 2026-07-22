@@ -32,6 +32,8 @@ def _session(renderer: _FakeRenderer) -> DatovizSession:
     session.capabilities = None  # type: ignore[assignment]
     session._diagnostics = []
     session._renderers = []
+    session._renderer_scenes = {}
+    session._interactive_view2d_renderers = set()
     session._closed = False
     session._build_renderer = lambda scene: renderer  # type: ignore[method-assign]
     return session
@@ -61,6 +63,23 @@ def test_interactive_2d_display_enables_canonical_navigation_exactly_once() -> N
     assert renderer.enable_calls == [scene.view2d]
     assert renderer.show_calls == [0]
 
+    session.close()
+    assert renderer.closed
+
+
+def test_run_after_noninteractive_render_enables_navigation_once() -> None:
+    scene = _scene()
+    assert scene.view2d is not None
+    renderer = _FakeRenderer(scene.view2d)
+    session = _session(renderer)
+
+    session.render(scene)
+    assert renderer.enable_calls == []
+
+    session.run()
+
+    assert renderer.enable_calls == [scene.view2d]
+
 
 def test_offscreen_render_does_not_enable_interactive_navigation(tmp_path: Any) -> None:
     scene = _scene()
@@ -72,4 +91,3 @@ def test_offscreen_render_does_not_enable_interactive_navigation(tmp_path: Any) 
     session.render(scene, target=tmp_path / "frame.png")
 
     assert renderer.enable_calls == []
-

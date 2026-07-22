@@ -32,6 +32,8 @@ class DatovizSession:
         self.capabilities = datoviz_v04_capability_snapshot(self._dvz)
         self._diagnostics: list[str] = []
         self._renderers: list[DatovizV04ProtocolRenderer] = []
+        self._renderer_scenes: dict[int, Scene] = {}
+        self._interactive_view2d_renderers: set[int] = set()
         self._closed = False
 
     @property
@@ -52,6 +54,7 @@ class DatovizSession:
             raise TypeError(f"unsupported Datoviz render options: {sorted(kwargs)!r}")
         renderer = self._build_renderer(scene)
         self._renderers.append(renderer)
+        self._renderer_scenes[id(renderer)] = scene
         if target is not None:
             Path(target).write_bytes(renderer.capture_png_bytes())
         return renderer
@@ -69,6 +72,7 @@ class DatovizSession:
         if frame_count < 1:
             raise ValueError("frame_count must be positive")
         renderer = self.render(scene)
+        self._enable_interactive_view2d(renderer, scene)
         if block:
             renderer.show(frame_count=frame_count)
         return renderer
@@ -77,7 +81,9 @@ class DatovizSession:
         self._require_open()
         if not self._renderers:
             raise RuntimeError("run() requires a rendered scene")
-        self._renderers[-1].show(frame_count=0)
+        renderer = self._renderers[-1]
+        self._enable_interactive_view2d(renderer, self._renderer_scenes[id(renderer)])
+        renderer.show(frame_count=0)
 
     def close(self) -> None:
         if self._closed:
@@ -96,6 +102,17 @@ class DatovizSession:
     def _require_open(self) -> None:
         if self._closed:
             raise RuntimeError("session is closed")
+
+    def _enable_interactive_view2d(
+        self, renderer: DatovizV04ProtocolRenderer, scene: Scene
+    ) -> None:
+        renderer_id = id(renderer)
+        if renderer_id in self._interactive_view2d_renderers:
+            return
+        if scene.view2d is None or scene.view3d is not None:
+            return
+        renderer.enable_gsp_view2d_navigation(scene.view2d)
+        self._interactive_view2d_renderers.add(renderer_id)
 
     def _build_renderer(self, scene: Scene) -> DatovizV04ProtocolRenderer:
         renderer = DatovizV04ProtocolRenderer(
