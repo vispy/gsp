@@ -739,24 +739,11 @@ def _render_positions(
     transformed = transformed_positions(
         positions, visual.transform, transform_resources
     )
-    if view is None:
-        if (
-            isinstance(visual, TextVisual)
-            and visual.coordinate_space == CoordinateSpace.NDC
-        ):
-            return panel_ndc_to_axes_fraction(transformed), axes.transAxes
-        return transformed, axes.transData
     if visual.coordinate_space == CoordinateSpace.DATA:
-        x0, x1 = view.xlim
-        y0, y1 = view.ylim
-        panel_ndc = np.empty_like(transformed, dtype=np.float64)
-        panel_ndc[:, 0] = -1.0 + 2.0 * (transformed[:, 0] - x0) / (x1 - x0)
-        panel_ndc[:, 1] = -1.0 + 2.0 * (transformed[:, 1] - y0) / (y1 - y0)
-    elif visual.coordinate_space == CoordinateSpace.NDC:
-        panel_ndc = transformed
-    else:
-        raise ValueError(f"unsupported coordinate_space: {visual.coordinate_space!r}")
-    return panel_ndc_to_axes_fraction(panel_ndc), axes.transAxes
+        return transformed, axes.transData
+    if visual.coordinate_space == CoordinateSpace.NDC:
+        return panel_ndc_to_axes_fraction(transformed), axes.transAxes
+    raise ValueError(f"unsupported coordinate_space: {visual.coordinate_space!r}")
 
 
 def _render_mesh3d_positions(

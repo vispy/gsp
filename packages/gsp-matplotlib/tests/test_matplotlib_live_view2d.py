@@ -81,3 +81,21 @@ def test_native_limits_update_session_owned_canonical_view_and_cleanup() -> None
     session.close()
     assert binding.closed
 
+
+def test_canonical_view_application_advances_once_without_callback_recursion() -> None:
+    with gsp.open_session("matplotlib", require={"visual.points"}) as session:
+        result = session.display(_scene(CoordinateSpace.DATA))
+        binding = session._view2d_bindings[result.axes]  # type: ignore[attr-defined]
+
+        binding.apply_canonical_view(
+            View2D(
+                id="view:main",
+                panel_id="panel:main",
+                x_range=(-4.0, 2.0),
+                y_range=(8.0, -3.0),
+            )
+        )
+
+        assert binding.revision_index == 2
+        assert result.axes.get_xlim() == pytest.approx((-4.0, 2.0))
+        assert result.axes.get_ylim() == pytest.approx((8.0, -3.0))

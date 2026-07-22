@@ -94,7 +94,10 @@ def test_render_point_visual_creates_path_collection():
 
         artist = render_point_visual(ax, visual)
 
-        np.testing.assert_allclose(artist.get_offsets(), visual.positions)
+        np.testing.assert_allclose(
+            artist.get_offsets(), [[0.25, 0.625], [0.75, 0.375]]
+        )
+        assert artist.get_offset_transform() == ax.transAxes
         np.testing.assert_allclose(
             artist.get_sizes(), _marker_areas_from_pixel_diameters(ax, visual.sizes)
         )
@@ -419,8 +422,8 @@ def test_render_point_visual_applies_inline_transform_and_view2d_mapping():
 
         artist = render_point_visual(ax, visual, view=view)
 
-        np.testing.assert_allclose(artist.get_offsets(), np.array([[0.5, 0.5]]))
-        assert artist.get_offset_transform() == ax.transAxes
+        np.testing.assert_allclose(artist.get_offsets(), np.array([[2.0, 1.0]]))
+        assert artist.get_offset_transform() == ax.transData
     finally:
         plt.close(fig)
 
@@ -445,7 +448,8 @@ def test_render_point_visual_handles_reversed_view2d_limits():
 
         artist = render_point_visual(ax, visual, view=view)
 
-        np.testing.assert_allclose(artist.get_offsets(), np.array([[0.5, 0.5]]))
+        np.testing.assert_allclose(artist.get_offsets(), np.array([[1.0, 0.0]]))
+        assert artist.get_offset_transform() == ax.transData
     finally:
         plt.close(fig)
 
@@ -650,7 +654,8 @@ def test_render_marker_visual_creates_marker_collections():
 
         assert len(artists) == 2
         assert all(artist.get_gid() == "visual:markers" for artist in artists)
-        np.testing.assert_allclose(artists[0].get_offsets(), np.array([[-0.5, 0.25]]))
+        np.testing.assert_allclose(artists[0].get_offsets(), np.array([[0.25, 0.625]]))
+        assert artists[0].get_offset_transform() == ax.transAxes
         np.testing.assert_allclose(
             artists[1].get_sizes(),
             np.array([_marker_areas_from_pixel_diameters(ax, visual.sizes)[1]]),
@@ -682,7 +687,8 @@ def test_render_segment_visual_creates_line_collection_with_pixel_widths():
         artist = render_segment_visual(ax, visual)
 
         assert artist.get_gid() == "visual:segments"
-        np.testing.assert_allclose(artist.get_segments()[0], [[-0.5, 0.25], [0.0, 0.5]])
+        np.testing.assert_allclose(artist.get_segments()[0], [[0.25, 0.625], [0.5, 0.75]])
+        assert artist.get_transform() == ax.transAxes
         np.testing.assert_allclose(artist.get_linewidths(), np.array([5.0, 10.0]))
         np.testing.assert_allclose(
             artist.get_colors()[0], np.array([1.0, 0.0, 0.0, 1.0])
@@ -714,8 +720,9 @@ def test_render_path_visual_creates_open_path_patches_with_pixel_widths():
         assert len(artists) == 2
         assert all(artist.get_gid() == "visual:paths" for artist in artists)
         np.testing.assert_allclose(
-            artists[0].get_path().vertices, [[-0.5, 0.0], [0.0, 0.5], [0.5, 0.0]]
+            artists[0].get_path().vertices, [[0.25, 0.5], [0.5, 0.75], [0.75, 0.5]]
         )
+        assert artists[0].get_transform() == ax.transAxes
         np.testing.assert_allclose(artists[0].get_linewidth(), 5.0)
         np.testing.assert_allclose(artists[1].get_linewidth(), 10.0)
         assert artists[0].get_capstyle() == "round"
@@ -887,9 +894,9 @@ def test_render_mesh_visual_applies_view2d_mapping():
 
         np.testing.assert_allclose(
             artist.get_paths()[0].vertices[:3],
-            np.array([[0.0, 0.0], [0.5, 0.0], [0.0, 0.5]]),
+            np.array([[0.0, 0.0], [2.0, 0.0], [0.0, 2.0]]),
         )
-        assert artist.get_transform() == ax.transAxes
+        assert artist.get_transform() == ax.transData
     finally:
         plt.close(fig)
 
