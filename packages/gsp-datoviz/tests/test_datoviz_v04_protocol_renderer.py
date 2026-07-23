@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ctypes
+from dataclasses import replace
 import inspect
 import math
 from pathlib import Path
@@ -100,6 +101,7 @@ from gsp.protocol import (
     VisualFamily,
     VisualTransformBinding,
     pan_view2d,
+    project_view3d_data_point,
     resolve_view3d_projection_snapshot,
     apply_view3d_navigation_action,
     Pan3DPayload,
@@ -109,6 +111,7 @@ from gsp.protocol.visuals import CoordinateSpace, ImageInterpolation
 from gsp_datoviz.capabilities import (
     DATOVIZ_S034_AXIS_STYLE_FIELDS,
     DATOVIZ_V04_AXIS_PROVIDER,
+    datoviz_v04_capability_snapshot,
     datoviz_v04_axis_provider_capability,
     datoviz_v04_axis_symbols,
     datoviz_v04_capture_diagnostics,
@@ -1840,7 +1843,6 @@ def test_capability_snapshot_defers_query_support():
         "segment",
         "path",
         "image",
-        "text",
         "mesh",
     )
     assert caps.metadata["profile_id"] == "gsp.datoviz-v0.4@0.2"
@@ -5559,7 +5561,7 @@ def test_add_text_visual_uses_retained_text_style_placement_and_strings():
             "text-1",
             0,
             5,
-            (-150.0, -75.0, 1.0),
+            (-200.0, -75.0, 0.0),
             (0.0, 0.0),
             True,
             0.0,
@@ -5570,7 +5572,7 @@ def test_add_text_visual_uses_retained_text_style_placement_and_strings():
             "text-2",
             0,
             5,
-            (150.0, 75.0, 1.0),
+            (200.0, 75.0, 0.0),
             (1.0, 1.0),
             True,
             0.5,
@@ -5582,6 +5584,132 @@ def test_add_text_visual_uses_retained_text_style_placement_and_strings():
         ("text_set_string", "text-2", "café".encode("utf-8")),
     ]
     assert renderer.visuals["visual:text"] == ("text-1", "text-2")
+
+
+def test_add_text_visual_projects_and_repositions_billboard3d_overlay():
+    class FakeTextRetainedView3D(
+        FakeDatovizV04WithText, FakeDatovizV04WithRetainedView3D
+    ):
+        pass
+
+    fake = FakeTextRetainedView3D()
+    view = _vector_view3d()
+    renderer = DatovizV04ProtocolRenderer(
+        dvz=fake,
+        width=600,
+        height=600,
+        panel_bounds=(0.0, 0.0, 0.5, 0.25),
+        view3d=view,
+    )
+    visual = TextVisual(
+        id="visual:billboard",
+        texts=("ASCII", "Δ café"),
+        positions=np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]], dtype=np.float32),
+        coordinate_space=CoordinateSpace.DATA,
+        font_size_px=np.array([16.0, 24.0], dtype=np.float32),
+        anchor_x=(TextAnchorX.LEFT, TextAnchorX.RIGHT),
+        anchor_y=(TextAnchorY.TOP, TextAnchorY.BOTTOM),
+        rotation_rad=np.array([0.0, 0.5], dtype=np.float32),
+        z_order=1,
+    )
+
+    renderer.add_text_visual(visual)
+    initial_placements = _calls(fake, "text_set_placement")
+    expected_projection = project_view3d_data_point(
+        view, (1.0, 0.0, 0.0), aspect_ratio=2.0
+    )
+    np.testing.assert_allclose(
+        initial_placements[-1][4][:2],
+        (expected_projection[0] * 150.0, -expected_projection[1] * 75.0),
+        atol=1e-5,
+    )
+    allocated = tuple(_calls(fake, "text"))
+    styles = tuple(_calls(fake, "text_set_style"))
+    strings = tuple(_calls(fake, "text_set_string"))
+    handles = renderer.visuals[visual.id]
+    moved_view = replace(
+        view,
+        camera=Camera3D(
+            eye=(-3.0, 3.0, 3.0),
+            target=(0.0, 0.0, 0.0),
+            up=(0.0, 0.0, 1.0),
+        ),
+        revision=view.revision + 1,
+    )
+    renderer.apply_retained_view3d_navigation(moved_view)
+    moved = _calls(fake, "text_set_placement")[-1]
+
+    assert initial_placements[-1][2] == 0
+    assert initial_placements[-1][4][2] == 0.0
+    assert initial_placements[-1][-1] is False
+    assert moved[2] == 0
+    assert moved[4][2] == 0.0
+    assert initial_placements[-1][4][:2] != moved[4][:2]
+    assert tuple(_calls(fake, "text")) == allocated
+    assert tuple(_calls(fake, "text_set_style")) == styles
+    assert tuple(_calls(fake, "text_set_string")) == strings
+    assert renderer.visuals[visual.id] == handles
+    assert _calls(fake, "text_set_style")[-1][2] == 24.0
+    assert _calls(fake, "text_set_string")[-1][-1] == "Δ café".encode("utf-8")
+
+
+def test_datoviz_billboard_capability_is_conditional_and_never_claims_depth():
+    incomplete = FakeDatovizV04WithRetainedView3D()
+    missing = datoviz_v04_capability_snapshot(incomplete)
+    assert not missing.supports_view3d_capability("textvisual.billboard3d.v1")
+
+    for name in (
+        "dvz_text",
+        "dvz_text_set_string",
+        "dvz_text_style",
+        "dvz_text_set_style",
+        "dvz_text_set_placement",
+    ):
+        setattr(incomplete, name, lambda *args: None)
+    ready = datoviz_v04_capability_snapshot(incomplete)
+
+    assert ready.supports_view3d_capability("textvisual.billboard3d.v1")
+    assert not ready.supports_view3d_capability(
+        "textvisual.billboard3d.depth_occlusion.v1"
+    )
+    assert ready.font_layout_capability.rasterization_parity is False
+    assert "generic font roles adapt to the Datoviz default font" in ready.metadata[
+        "s065_textvisual"
+    ]
+
+
+@pytest.mark.parametrize(
+    "missing",
+    [
+        "dvz_text",
+        "dvz_text_set_string",
+        "dvz_text_style",
+        "dvz_text_set_style",
+        "dvz_text_set_placement",
+    ],
+)
+def test_datoviz_text_rejects_missing_callable_and_removes_family(
+    missing: str,
+) -> None:
+    fake = FakeDatovizV04WithText()
+    setattr(fake, missing, None)
+    renderer = DatovizV04ProtocolRenderer(dvz=fake)
+    visual = TextVisual(
+        id="visual:text-missing",
+        texts=("text",),
+        positions=np.array([[0.0, 0.0]], dtype=np.float32),
+        coordinate_space=CoordinateSpace.NDC,
+    )
+
+    with pytest.raises(DatovizV04Unsupported, match=f"missing callable {missing}"):
+        renderer.add_text_visual(visual)
+
+    assert _calls(fake, "text") == []
+    capabilities = gsp_capability_snapshot_from_datoviz(None, dvz=fake)
+    assert not capabilities.supports_visual("text")
+    assert f"missing callable {missing}" in capabilities.metadata[
+        "datoviz_textvisual_diagnostics"
+    ]
 
 
 def test_add_text_visual_reports_structured_unsupported_until_semantics_verified():
@@ -5603,8 +5731,8 @@ def test_add_text_visual_reports_structured_unsupported_until_semantics_verified
         renderer.add_text_visual(visual)
 
     message = str(exc_info.value)
-    assert "missing dvz_text_set_style" in message
-    assert "missing dvz_text_set_placement" in message
+    assert "missing callable dvz_text_set_style" in message
+    assert "missing callable dvz_text_set_placement" in message
     assert datoviz_v04_text_ready(fake) is False
 
 
@@ -5617,7 +5745,7 @@ def test_add_text_visual_reports_missing_text_facade_for_data_coordinates():
         coordinate_space=CoordinateSpace.DATA,
     )
 
-    with pytest.raises(DatovizV04Unsupported, match="missing dvz_text"):
+    with pytest.raises(DatovizV04Unsupported, match="missing callable dvz_text"):
         renderer.add_text_visual(visual)
 
 
@@ -5626,9 +5754,9 @@ def test_datoviz_text_diagnostics_name_missing_and_unverified_symbols():
 
     diagnostics = datoviz_v04_text_diagnostics(fake)
 
-    assert "missing dvz_text" in diagnostics
-    assert "missing dvz_text_set_style" in diagnostics
-    assert "missing dvz_text_set_placement" in diagnostics
+    assert "missing callable dvz_text" in diagnostics
+    assert "missing callable dvz_text_set_style" in diagnostics
+    assert "missing callable dvz_text_set_placement" in diagnostics
     assert datoviz_v04_text_ready(fake) is False
 
 

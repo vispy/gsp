@@ -321,7 +321,11 @@ def _render_protocol_visual(
         )
     if isinstance(visual, TextVisual):
         return render_text_visual(
-            axes, visual, view=view, transform_resources=transform_resources
+            axes,
+            visual,
+            view=view,
+            view3d=view3d,
+            transform_resources=transform_resources,
         )
     raise TypeError(f"unsupported protocol visual: {type(visual)!r}")
 
@@ -976,12 +980,35 @@ def render_text_visual(
     visual: TextVisual,
     *,
     view: View2D | None = None,
+    view3d: View3D | None = None,
     transform_resources: Mapping[str, AffineTransform2DResource] | None = None,
 ) -> tuple[matplotlib.text.Text, ...]:
-    """Render protocol text labels into a Matplotlib axes."""
-    positions, transform = _render_positions(
-        axes, visual, visual.positions, view, transform_resources
-    )
+    """Render 2D labels or projected screen-facing 3D billboard labels."""
+    if visual.positions.shape[1] == 3:
+        if visual.transform is not None:
+            raise NotImplementedError(
+                "Matplotlib TextVisual billboard3d does not support a 2D transform"
+            )
+        if visual.coordinate_space is not CoordinateSpace.DATA or view3d is None:
+            raise NotImplementedError(
+                "Matplotlib TextVisual positions3d require DATA space and View3D"
+            )
+        aspect_ratio = _axes_pixel_aspect_ratio(axes)
+        projected = np.asarray(
+            [
+                project_view3d_data_point(
+                    view3d, tuple(point), aspect_ratio=aspect_ratio
+                )
+                for point in visual.positions
+            ],
+            dtype=np.float64,
+        )
+        positions = panel_ndc_to_axes_fraction(projected[:, :2])
+        transform = axes.transAxes
+    else:
+        positions, transform = _render_positions(
+            axes, visual, visual.positions, view, transform_resources
+        )
     colors = _rgba_for_matplotlib(visual.rgba_values())
     font_sizes = visual.font_size_values() * np.float32(_pixel_to_point(axes))
     anchor_x_values = visual.anchor_x_values()

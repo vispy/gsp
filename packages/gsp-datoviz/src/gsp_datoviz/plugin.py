@@ -79,6 +79,8 @@ class DatovizProvider:
             capabilities.discard("visual.vector")
         if not snapshot.supports_visual("primitive"):
             capabilities.discard("visual.primitive")
+        if not snapshot.supports_visual("text"):
+            capabilities.discard("visual.text")
         return BackendInfo(
             name="datoviz",
             installed=True,

@@ -36,6 +36,7 @@ from gsp.protocol import (
     PRIMITIVE_VISUAL_TRIANGLE_STRIP_CAPABILITY,
     SPHERE_VISUAL_ANALYTIC_SURFACE_DEPTH_CAPABILITY,
     SPHERE_VISUAL_CAPABILITY,
+    TEXT_VISUAL_BILLBOARD3D_CAPABILITY,
     VECTOR_VISUAL_POSITIONS3D_DATA_VIEW3D_CAPABILITY,
     VECTOR_VISUAL_STRAIGHT_CAPABILITY,
     VECTOR_VISUAL_TRIANGLE_HEAD_CAPABILITY,
@@ -63,6 +64,7 @@ from gsp.protocol import (
 from gsp_datoviz.query import datoviz_v04_query_binding_diagnostics
 from gsp_datoviz.latest_api_contract import (
     datoviz_primitive_api_diagnostics,
+    datoviz_text_api_diagnostics,
     datoviz_vector_api_diagnostics,
 )
 from gsp_datoviz.v04_import import bootstrap_datoviz_v04_source
@@ -512,6 +514,9 @@ def gsp_capability_snapshot_from_datoviz(
         )
     )
     sphere_ready = not sphere_missing and not view3d_diagnostics
+    text_diagnostics = datoviz_text_api_diagnostics(dvz)
+    text_ready = not text_diagnostics
+    text_billboard_ready = text_ready and not view3d_diagnostics
     vector_diagnostics = datoviz_vector_api_diagnostics(dvz)
     vector_ready = not vector_diagnostics
     primitive_diagnostics = datoviz_primitive_api_diagnostics(
@@ -581,6 +586,13 @@ def gsp_capability_snapshot_from_datoviz(
             )
     else:
         metadata["datoviz_primitivevisual_diagnostics"] = primitive_diagnostics
+    if text_ready:
+        metadata["s065_textvisual"] = (
+            "retained UTF-8 text preserving logical size, RGBA, anchors, rotation, "
+            "and overlay order; generic font roles adapt to the Datoviz default font"
+        )
+    else:
+        metadata["datoviz_textvisual_diagnostics"] = text_diagnostics
     if view3d_diagnostics:
         metadata["datoviz_view3d_binding_diagnostics"] = view3d_diagnostics
     else:
@@ -620,6 +632,20 @@ def gsp_capability_snapshot_from_datoviz(
         else:
             metadata["datoviz_spherevisual_diagnostics"] = tuple(
                 f"missing {name}" for name in sphere_missing
+            ) or tuple(view3d_diagnostics)
+        if text_billboard_ready:
+            view3d_capabilities = (
+                *view3d_capabilities,
+                TEXT_VISUAL_BILLBOARD3D_CAPABILITY,
+            )
+            metadata["s065_textvisual_billboard3d"] = (
+                "CPU-projected retained screen-facing overlay text preserving DATA anchors, "
+                "logical-pixel size, layout-box anchors, rotation, color, and z-order; glyph "
+                "raster parity and depth occlusion are not claimed"
+            )
+        else:
+            metadata["datoviz_textvisual_billboard3d_diagnostics"] = tuple(
+                text_diagnostics
             ) or tuple(view3d_diagnostics)
         if not texture2d_mesh_diagnostics:
             view3d_capabilities = (
@@ -710,7 +736,7 @@ def gsp_capability_snapshot_from_datoviz(
             "segment",
             "path",
             "image",
-            "text",
+            *(("text",) if text_ready else ()),
             "mesh",
         ),
         transform_placements=(

@@ -22,6 +22,7 @@ from gsp.protocol import (
     PRIMITIVE_VISUAL_TRIANGLE_LIST_CAPABILITY,
     PRIMITIVE_VISUAL_TRIANGLE_STRIP_CAPABILITY,
     SPHERE_VISUAL_CAPABILITY,
+    TEXT_VISUAL_BILLBOARD3D_CAPABILITY,
     VECTOR_VISUAL_POSITIONS3D_DATA_VIEW3D_CAPABILITY,
     VECTOR_VISUAL_STRAIGHT_CAPABILITY,
     VECTOR_VISUAL_TRIANGLE_HEAD_CAPABILITY,
@@ -91,6 +92,7 @@ def capability_snapshot() -> CapabilitySnapshot:
             PIXEL_VISUAL_EXACT_LOGICAL_SIZE_CAPABILITY,
             PIXEL_VISUAL_POSITIONS3D_DATA_VIEW3D_CAPABILITY,
             SPHERE_VISUAL_CAPABILITY,
+            TEXT_VISUAL_BILLBOARD3D_CAPABILITY,
             VECTOR_VISUAL_STRAIGHT_CAPABILITY,
             VECTOR_VISUAL_POSITIONS3D_DATA_VIEW3D_CAPABILITY,
             VECTOR_VISUAL_TRIANGLE_HEAD_CAPABILITY,
@@ -136,6 +138,11 @@ def capability_snapshot() -> CapabilitySnapshot:
                 "deterministic point/line/triangle collection adaptation; indexed vertex order "
                 "is preserved, while point rasterization, line width/depth, triangle depth, and "
                 "per-vertex color interpolation differ from GPU rendering"
+            ),
+            "textvisual_billboard3d": (
+                "projected screen-facing overlay text preserving DATA anchors, logical-pixel "
+                "size, generic font role, layout-box anchors, rotation, color, and z-order; "
+                "glyph raster parity and depth occlusion are not claimed"
             ),
         },
         axis_providers=(matplotlib_axis_provider_capability(),),

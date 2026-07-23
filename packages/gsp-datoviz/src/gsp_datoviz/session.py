@@ -150,7 +150,7 @@ class DatovizSession:
         )
         try:
             self._configure_guides(renderer, scene)
-            for visual in scene.visuals:
+            for visual in _canonical_visual_emission_order(scene.visuals):
                 _add_visual(renderer, visual)
             for guide in scene.colorbar_guides:
                 renderer.add_colorbar_guide(guide)
@@ -217,3 +217,22 @@ def _add_visual(renderer: DatovizV04ProtocolRenderer, visual: object) -> None:
         renderer.add_mesh_visual(visual)
     else:
         raise TypeError(f"unsupported protocol visual: {type(visual).__name__}")
+
+
+def _canonical_visual_emission_order(
+    visuals: tuple[object, ...],
+) -> tuple[object, ...]:
+    """Emit geometry first, then stable overlay text ordered by semantic z-order."""
+    geometry = tuple(visual for visual in visuals if not isinstance(visual, TextVisual))
+    text = tuple(
+        visual
+        for _index, visual in sorted(
+            (
+                (index, visual)
+                for index, visual in enumerate(visuals)
+                if isinstance(visual, TextVisual)
+            ),
+            key=lambda item: (item[1].z_order, item[0]),
+        )
+    )
+    return (*geometry, *text)

@@ -135,6 +135,7 @@ from gsp_datoviz.latest_api_contract import (
     REQUIRED_DATOVIZ_V04_DEV_SYMBOLS,
     datoviz_current_api_contract_diagnostics,
     datoviz_primitive_api_diagnostics,
+    datoviz_text_api_diagnostics,
     datoviz_vector_api_diagnostics,
 )
 from gsp_datoviz.query import (
@@ -240,14 +241,6 @@ _REQUIRED_DVZ_PANEL_FRAME_GUIDE_QUERY_FUNCTIONS = (
     "dvz_panel_frame_guide_hit",
 )
 
-
-_REQUIRED_DVZ_TEXT_FUNCTIONS = (
-    "dvz_text",
-    "dvz_text_set_string",
-    "dvz_text_style",
-    "dvz_text_set_style",
-    "dvz_text_set_placement",
-)
 
 _OPTIONAL_UNVERIFIED_DVZ_TEXT_FUNCTIONS: tuple[str, ...] = ()
 
@@ -622,11 +615,7 @@ def datoviz_v04_view3d_live_navigation_diagnostics(
 
 def datoviz_v04_text_diagnostics(module: ModuleType | Any) -> tuple[str, ...]:
     """Return why Datoviz TextVisual rendering is disabled for this slice."""
-    diagnostics = [
-        f"missing {name}"
-        for name in _REQUIRED_DVZ_TEXT_FUNCTIONS
-        if not hasattr(module, name)
-    ]
+    diagnostics = list(datoviz_text_api_diagnostics(module))
     diagnostics.extend(
         f"unverified {name}"
         for name in _OPTIONAL_UNVERIFIED_DVZ_TEXT_FUNCTIONS
@@ -948,6 +937,14 @@ class _RetainedView3DMeshAttachment:
     native_visual: Any
 
 
+@dataclass
+class _RetainedView3DTextAttachment:
+    """Source billboard anchors and retained Datoviz text handles."""
+
+    visual: TextVisual
+    native_texts: tuple[Any, ...]
+
+
 @dataclass(frozen=True)
 class _DatovizView2DAxisState:
     """Native Datoviz axis handles and semantic configuration for one View2D."""
@@ -1007,6 +1004,9 @@ class DatovizV04ProtocolRenderer:
         default_factory=list, init=False
     )
     retained_view3d_meshes: list[_RetainedView3DMeshAttachment] = field(
+        default_factory=list, init=False
+    )
+    retained_view3d_texts: list[_RetainedView3DTextAttachment] = field(
         default_factory=list, init=False
     )
     retained_view3d_update_stats: DatovizRetainedView3DUpdateStats = field(
@@ -1957,7 +1957,7 @@ class DatovizV04ProtocolRenderer:
         self.sampled_fields[visual.id] = sampled_field
 
     def add_text_visual(self, visual: TextVisual) -> Any:
-        """Create Datoviz retained text objects for bounded S024 text cases."""
+        """Create retained 2D text or projected screen-facing 3D billboards."""
         diagnostics = datoviz_v04_text_diagnostics(self.dvz)
         if diagnostics:
             raise DatovizV04Unsupported(
@@ -1965,16 +1965,31 @@ class DatovizV04ProtocolRenderer:
                 + "; ".join(diagnostics)
             )
 
-        positions = _positions_3d(
-            _adapt_visual_positions(
-                visual.id,
-                visual.positions,
-                visual.transform,
-                visual.coordinate_space,
-                self.view,
-                self.transform_resources,
+        is_billboard3d = visual.positions.shape[1] == 3
+        if is_billboard3d:
+            if visual.transform is not None:
+                raise DatovizV04Unsupported(
+                    "Datoviz TextVisual billboard3d does not support a 2D transform"
+                )
+            if (
+                visual.coordinate_space is not CoordinateSpace.DATA
+                or self.view3d is None
+            ):
+                raise DatovizV04Unsupported(
+                    "Datoviz TextVisual positions3d require DATA space and View3D"
+                )
+            positions = _positions_3d(visual.positions)
+        else:
+            positions = _positions_3d(
+                _adapt_visual_positions(
+                    visual.id,
+                    visual.positions,
+                    visual.transform,
+                    visual.coordinate_space,
+                    self.view,
+                    self.transform_resources,
+                )
             )
-        )
         _record_transform_adaptation(
             self.transform_adaptations, visual.id, visual.transform
         )
@@ -1983,7 +1998,8 @@ class DatovizV04ProtocolRenderer:
         rotations = visual.rotation_values()
         anchor_x = visual.anchor_x_values()
         anchor_y = visual.anchor_y_values()
-        mode = _text_placement_mode_value(self.dvz, visual.coordinate_space)
+        placement_space = CoordinateSpace.NDC if is_billboard3d else visual.coordinate_space
+        mode = _text_placement_mode_value(self.dvz, placement_space)
         texts: list[Any] = []
 
         for index, text_value in enumerate(visual.texts):
@@ -2002,8 +2018,24 @@ class DatovizV04ProtocolRenderer:
 
             placement = _text_placement(self.dvz)
             placement.mode = mode
-            placement.anchor = _text_anchor_value(self.dvz, visual.coordinate_space)
-            if visual.coordinate_space is CoordinateSpace.NDC:
+            placement.anchor = _text_anchor_value(self.dvz, placement_space)
+            if is_billboard3d:
+                assert self.view3d is not None
+                panel_width, panel_height = _panel_pixel_size(
+                    self.width, self.height, self.panel_bounds
+                )
+                projected = project_view3d_data_point(
+                    self.view3d,
+                    tuple(positions[index]),
+                    aspect_ratio=panel_width / panel_height,
+                )
+                position_x, position_y = _ndc_text_screen_position(
+                    np.asarray(projected),
+                    self.width,
+                    self.height,
+                    self.panel_bounds,
+                )
+            elif visual.coordinate_space is CoordinateSpace.NDC:
                 position_x, position_y = _ndc_text_screen_position(
                     positions[index],
                     self.width,
@@ -2015,7 +2047,7 @@ class DatovizV04ProtocolRenderer:
                 position_y = float(positions[index, 1])
             placement.position[0] = position_x
             placement.position[1] = position_y
-            placement.position[2] = float(np.clip(visual.z_order, -1.0, 1.0))
+            placement.position[2] = 0.0
             placement.text_anchor[0] = _text_anchor_x_value(anchor_x[index])
             placement.text_anchor[1] = _text_anchor_y_value(anchor_y[index])
             placement.has_text_anchor = True
@@ -2026,7 +2058,51 @@ class DatovizV04ProtocolRenderer:
             texts.append(text)
 
         self.visuals[visual.id] = tuple(texts)
+        if is_billboard3d:
+            self.retained_view3d_texts.append(
+                _RetainedView3DTextAttachment(visual=visual, native_texts=tuple(texts))
+            )
         return tuple(texts)
+
+    def _update_billboard_text_placements(self, view3d: View3D) -> None:
+        """Move retained overlay labels after a View3D camera/projection update."""
+        panel_width, panel_height = _panel_pixel_size(
+            self.width, self.height, self.panel_bounds
+        )
+        aspect_ratio = panel_width / panel_height
+        for attachment in self.retained_view3d_texts:
+            visual = attachment.visual
+            anchor_x = visual.anchor_x_values()
+            anchor_y = visual.anchor_y_values()
+            rotations = visual.rotation_values()
+            for index, text in enumerate(attachment.native_texts):
+                projected = project_view3d_data_point(
+                    view3d,
+                    tuple(visual.positions[index]),
+                    aspect_ratio=aspect_ratio,
+                )
+                position_x, position_y = _ndc_text_screen_position(
+                    np.asarray(projected),
+                    self.width,
+                    self.height,
+                    self.panel_bounds,
+                )
+                placement = _text_placement(self.dvz)
+                placement.mode = _text_placement_mode_value(
+                    self.dvz, CoordinateSpace.NDC
+                )
+                placement.anchor = _text_anchor_value(
+                    self.dvz, CoordinateSpace.NDC
+                )
+                placement.position[0] = position_x
+                placement.position[1] = position_y
+                placement.position[2] = 0.0
+                placement.text_anchor[0] = _text_anchor_x_value(anchor_x[index])
+                placement.text_anchor[1] = _text_anchor_y_value(anchor_y[index])
+                placement.has_text_anchor = True
+                placement.angle = float(rotations[index])
+                placement.depth_test = False
+                _set_text_placement(self.dvz, text, placement)
 
     def _visual_coord_space(self, coordinate_space: CoordinateSpace) -> str:
         if (
@@ -2835,6 +2911,7 @@ class DatovizV04ProtocolRenderer:
         self.native_view3d_camera = _update_datoviz_view3d_camera(
             self.dvz, self.panel, view3d
         )
+        self._update_billboard_text_placements(view3d)
         self.view3d = view3d
         self.retained_view3d_update_stats.view_projection_uniform_updates += 1
         return self.resolve_retained_view3d_state_snapshot(
@@ -4115,8 +4192,10 @@ def _ndc_text_screen_position(
     panel_bounds: tuple[float, float, float, float] | None,
 ) -> tuple[float, float]:
     panel_width, panel_height = _panel_pixel_size(width, height, panel_bounds)
-    scale = 0.5 * min(panel_width, panel_height)
-    return float(position[0]) * scale, -float(position[1]) * scale
+    return (
+        float(position[0]) * 0.5 * panel_width,
+        -float(position[1]) * 0.5 * panel_height,
+    )
 
 
 def _panel_pixel_size(

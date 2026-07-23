@@ -236,6 +236,10 @@ PRIMITIVE_VISUAL_LINE_LIST_CAPABILITY = "primitivevisual.line_list"
 PRIMITIVE_VISUAL_LINE_STRIP_CAPABILITY = "primitivevisual.line_strip"
 PRIMITIVE_VISUAL_TRIANGLE_LIST_CAPABILITY = "primitivevisual.triangle_list"
 PRIMITIVE_VISUAL_TRIANGLE_STRIP_CAPABILITY = "primitivevisual.triangle_strip"
+TEXT_VISUAL_BILLBOARD3D_CAPABILITY = "textvisual.billboard3d.v1"
+TEXT_VISUAL_BILLBOARD3D_DEPTH_OCCLUSION_CAPABILITY = (
+    "textvisual.billboard3d.depth_occlusion.v1"
+)
 PRIMITIVE_VISUAL_TOPOLOGY_CAPABILITIES: Mapping[PrimitiveTopology, str] = {
     PrimitiveTopology.POINT_LIST: PRIMITIVE_VISUAL_POINT_LIST_CAPABILITY,
     PrimitiveTopology.LINE_LIST: PRIMITIVE_VISUAL_LINE_LIST_CAPABILITY,
@@ -868,7 +872,8 @@ class TextVisual:
     """Semantic user-authored text label visual model.
 
     ``font_size_px`` values are logical screen pixels. ``rotation_rad`` values are
-    display-plane radians around the resolved anchor.
+    display-plane radians around the resolved anchor. Three-dimensional DATA
+    positions are screen-facing billboard anchors when attached to a View3D.
     """
 
     id: str

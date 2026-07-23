@@ -74,7 +74,9 @@ class Scene:
                         "SphereVisual DATA positions3d require Scene.view3d"
                     )
                 continue
-            if not isinstance(visual, (PixelVisual, VectorVisual, PrimitiveVisual)):
+            if not isinstance(
+                visual, (PixelVisual, VectorVisual, PrimitiveVisual, TextVisual)
+            ):
                 continue
             if visual.positions.shape[1] == 3:
                 if visual.coordinate_space is not CoordinateSpace.DATA:
@@ -84,6 +86,10 @@ class Scene:
                 if self.view3d is None:
                     raise ValueError(
                         f"{type(visual).__name__} DATA positions3d require Scene.view3d"
+                    )
+                if isinstance(visual, TextVisual) and visual.transform is not None:
+                    raise ValueError(
+                        "TextVisual billboard3d does not support a 2D visual transform"
                     )
             elif (
                 visual.coordinate_space is CoordinateSpace.DATA

@@ -34,6 +34,14 @@ REQUIRED_DATOVIZ_PRIMITIVE_BASE_SYMBOLS: tuple[str, ...] = (
     "DVZ_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP",
 )
 
+REQUIRED_DATOVIZ_TEXT_SYMBOLS: tuple[str, ...] = (
+    "dvz_text",
+    "dvz_text_set_string",
+    "dvz_text_style",
+    "dvz_text_set_style",
+    "dvz_text_set_placement",
+)
+
 REQUIRED_DATOVIZ_V04_DEV_SYMBOLS: tuple[str, ...] = (
     "DvzVisualCoordSpace",
     "DVZ_VISUAL_COORD_VIEW",
@@ -122,6 +130,15 @@ def datoviz_primitive_api_diagnostics(
     ):
         diagnostics.append("missing callable dvz_visual_set_index_data")
     return tuple(diagnostics)
+
+
+def datoviz_text_api_diagnostics(module: ModuleType | Any) -> tuple[str, ...]:
+    """Return strict non-allocating diagnostics for retained text."""
+    return tuple(
+        f"missing callable {name}"
+        for name in REQUIRED_DATOVIZ_TEXT_SYMBOLS
+        if not callable(getattr(module, name, None))
+    )
 
 
 def datoviz_current_api_contract_diagnostics(
