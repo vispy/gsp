@@ -55,6 +55,8 @@ from gsp.protocol.visuals import (
     PathVisual,
     PixelVisual,
     PointVisual,
+    PrimitiveTopology,
+    PrimitiveVisual,
     SegmentVisual,
     SphereVisual,
     StrokeCap,
@@ -127,6 +129,7 @@ ProtocolVisual = (
     | PixelVisual
     | SphereVisual
     | VectorVisual
+    | PrimitiveVisual
     | MarkerVisual
     | SegmentVisual
     | PathVisual
@@ -302,6 +305,14 @@ def _render_protocol_visual(
         return render_sphere_visual(axes, visual, view3d=view3d)
     if isinstance(visual, VectorVisual):
         return render_vector_visual(
+            axes,
+            visual,
+            view=view,
+            view3d=view3d,
+            transform_resources=transform_resources,
+        )
+    if isinstance(visual, PrimitiveVisual):
+        return render_primitive_visual(
             axes,
             visual,
             view=view,
@@ -602,6 +613,125 @@ def render_vector_visual(
             if cap_artist is not None:
                 artists.append(cap_artist)
     return tuple(artists)
+
+
+def render_primitive_visual(
+    axes: matplotlib.axes.Axes,
+    visual: PrimitiveVisual,
+    *,
+    view: View2D | None = None,
+    view3d: View3D | None = None,
+    transform_resources: Mapping[str, AffineTransform2DResource] | None = None,
+) -> tuple[matplotlib.artist.Artist, ...]:
+    """Adapt bounded primitive topology to deterministic Matplotlib collections."""
+    if visual.positions.shape[1] == 3:
+        if visual.transform is not None:
+            raise NotImplementedError(
+                "primitivevisual_transform_unsupported: projected 3D primitives "
+                "do not support a 2D transform"
+            )
+        if visual.coordinate_space is not CoordinateSpace.DATA or view3d is None:
+            raise NotImplementedError(
+                "primitivevisual_view3d_required: positions3d require DATA space and View3D"
+            )
+        projected = np.asarray(
+            [
+                project_view3d_data_point(
+                    view3d,
+                    tuple(point),
+                    aspect_ratio=_axes_pixel_aspect_ratio(axes),
+                )
+                for point in visual.positions
+            ],
+            dtype=np.float64,
+        )
+        offsets = panel_ndc_to_axes_fraction(projected[:, :2])
+        depths = projected[:, 2]
+        transform = axes.transAxes
+    else:
+        if visual.coordinate_space is CoordinateSpace.DATA and view is None:
+            raise NotImplementedError(
+                "primitivevisual_view2d_required: DATA positions2d require View2D"
+            )
+        offsets, transform = _render_positions(
+            axes,
+            visual,
+            visual.positions,
+            view,
+            transform_resources,
+        )
+        depths = np.zeros((offsets.shape[0],), dtype=np.float64)
+
+    colors = _rgba_for_matplotlib(visual.colors)
+    if colors.ndim == 1:
+        colors = np.broadcast_to(colors, (visual.positions.shape[0], 4))
+    indices = visual.resolved_vertex_indices()
+    ordered_offsets = offsets[indices]
+    ordered_colors = colors[indices]
+    ordered_depths = depths[indices]
+    collection: matplotlib.collections.Collection
+
+    if visual.topology is PrimitiveTopology.POINT_LIST:
+        collection = axes.scatter(
+            ordered_offsets[:, 0],
+            ordered_offsets[:, 1],
+            marker=".",
+            s=1.0,
+            color=ordered_colors,
+            linewidths=0.0,
+            transform=transform,
+        )
+    elif visual.topology in (
+        PrimitiveTopology.LINE_LIST,
+        PrimitiveTopology.LINE_STRIP,
+    ):
+        segment_indices: npt.NDArray[np.intp]
+        if visual.topology is PrimitiveTopology.LINE_LIST:
+            segment_indices = np.arange(indices.shape[0]).reshape(-1, 2)
+        else:
+            segment_indices = np.column_stack(
+                (
+                    np.arange(indices.shape[0] - 1),
+                    np.arange(1, indices.shape[0]),
+                )
+            )
+        segments = ordered_offsets[segment_indices]
+        segment_colors = ordered_colors[segment_indices].mean(axis=1)
+        collection = matplotlib.collections.LineCollection(
+            segments.tolist(),
+            colors=segment_colors,
+            linewidths=0.72,
+            transform=transform,
+        )
+        axes.add_collection(collection)
+    else:
+        triangle_indices: npt.NDArray[np.intp]
+        if visual.topology is PrimitiveTopology.TRIANGLE_LIST:
+            triangle_indices = np.arange(indices.shape[0]).reshape(-1, 3)
+        else:
+            triangle_indices = np.asarray(
+                [
+                    (index, index + 1, index + 2)
+                    if index % 2 == 0
+                    else (index + 1, index, index + 2)
+                    for index in range(indices.shape[0] - 2)
+                ],
+                dtype=np.intp,
+            )
+        triangles = ordered_offsets[triangle_indices]
+        triangle_colors = ordered_colors[triangle_indices].mean(axis=1)
+        triangle_depths = ordered_depths[triangle_indices].mean(axis=1)
+        order = np.argsort(triangle_depths, kind="stable")[::-1]
+        collection = matplotlib.collections.PolyCollection(
+            triangles[order].tolist(),
+            facecolors=triangle_colors[order],
+            edgecolors="none",
+            linewidths=0.0,
+            transform=transform,
+        )
+        axes.add_collection(collection)
+    collection.set_gid(visual.id)
+    return (collection,)
 
 
 def _render_vector_cap(
@@ -1008,6 +1138,7 @@ def _render_positions(
     visual: PointVisual
     | PixelVisual
     | VectorVisual
+    | PrimitiveVisual
     | MarkerVisual
     | SegmentVisual
     | PathVisual

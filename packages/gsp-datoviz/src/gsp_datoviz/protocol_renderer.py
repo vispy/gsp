@@ -55,6 +55,8 @@ from gsp.protocol import (
     PathVisual,
     PanByAction,
     PixelVisual,
+    PrimitiveTopology,
+    PrimitiveVisual,
     SphereVisual,
     VectorCap,
     VectorVisual,
@@ -132,6 +134,7 @@ from gsp_datoviz.capabilities import (
 from gsp_datoviz.latest_api_contract import (
     REQUIRED_DATOVIZ_V04_DEV_SYMBOLS,
     datoviz_current_api_contract_diagnostics,
+    datoviz_primitive_api_diagnostics,
     datoviz_vector_api_diagnostics,
 )
 from gsp_datoviz.query import (
@@ -177,6 +180,14 @@ _REQUIRED_DVZ_MESH_FUNCTIONS = (
     "dvz_visual_set_index_data",
     "dvz_visual_set_depth_test",
 )
+
+_PRIMITIVE_TOPOLOGY_NAMES = {
+    PrimitiveTopology.POINT_LIST: "DVZ_PRIMITIVE_TOPOLOGY_POINT_LIST",
+    PrimitiveTopology.LINE_LIST: "DVZ_PRIMITIVE_TOPOLOGY_LINE_LIST",
+    PrimitiveTopology.LINE_STRIP: "DVZ_PRIMITIVE_TOPOLOGY_LINE_STRIP",
+    PrimitiveTopology.TRIANGLE_LIST: "DVZ_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST",
+    PrimitiveTopology.TRIANGLE_STRIP: "DVZ_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP",
+}
 
 _REQUIRED_DVZ_TEXTURE2D_MESH_FUNCTIONS = (
     "dvz_field_sampling_desc",
@@ -1350,6 +1361,75 @@ class DatovizV04ProtocolRenderer:
         _set_visual_data(self.dvz, dvz_visual, "vector", vectors)
         _set_visual_data(self.dvz, dvz_visual, "color", colors)
         _set_visual_data(self.dvz, dvz_visual, "stroke_width_px", widths)
+        _add_visual_to_panel(
+            self.dvz,
+            self.panel,
+            dvz_visual,
+            _visual_attach_desc(
+                self.dvz,
+                coord_space=self._visual_coord_space(visual.coordinate_space),
+                z_layer=0,
+            ),
+        )
+        self.visuals[visual.id] = dvz_visual
+        _record_transform_adaptation(
+            self.transform_adaptations, visual.id, visual.transform
+        )
+        return dvz_visual
+
+    def add_primitive_visual(self, visual: PrimitiveVisual) -> Any:
+        """Create a public Datoviz bounded primitive with optional public indices."""
+        is_3d = visual.positions.shape[1] == 3
+        if is_3d:
+            if visual.transform is not None:
+                raise DatovizV04Unsupported(
+                    "primitivevisual_transform_unsupported: Datoviz positions3d "
+                    "do not support a 2D transform"
+                )
+            if (
+                visual.coordinate_space is not CoordinateSpace.DATA
+                or self.view3d is None
+            ):
+                raise DatovizV04Unsupported(
+                    "primitivevisual_view3d_required: Datoviz positions3d "
+                    "require DATA space and View3D"
+                )
+        elif visual.coordinate_space is CoordinateSpace.DATA and self.view is None:
+            raise DatovizV04Unsupported(
+                "primitivevisual_view2d_required: Datoviz DATA positions2d require View2D"
+            )
+        diagnostics = datoviz_primitive_api_diagnostics(
+            self.dvz, indexed=visual.indices is not None
+        )
+        if diagnostics:
+            raise DatovizV04Unsupported(
+                "primitivevisual_capability_unsupported: "
+                + ", ".join(diagnostics)
+            )
+        topology_name = _PRIMITIVE_TOPOLOGY_NAMES[visual.topology]
+        positions = _positions_3d(
+            _adapt_visual_positions(
+                visual.id,
+                visual.positions,
+                visual.transform,
+                visual.coordinate_space,
+                self.view,
+                self.transform_resources,
+                cpu_map_data_to_view=self._cpu_map_data_visuals_to_view,
+            )
+        )
+        colors = _rgba8_broadcast(visual.colors, positions.shape[0])
+        dvz_visual = self.dvz.dvz_primitive(
+            self.scene, int(getattr(self.dvz, topology_name)), 0
+        )
+        if _is_null_handle(dvz_visual):
+            raise DatovizV04Unavailable("Datoviz dvz_primitive() failed")
+        _set_alpha_mode_if_translucent(self.dvz, dvz_visual, colors)
+        _set_visual_data(self.dvz, dvz_visual, "position", positions)
+        _set_visual_data(self.dvz, dvz_visual, "color", colors)
+        indices = visual.index_values()
+        if indices is not None:
+            _set_visual_index_data(self.dvz, dvz_visual, indices)
         _add_visual_to_panel(
             self.dvz,
             self.panel,

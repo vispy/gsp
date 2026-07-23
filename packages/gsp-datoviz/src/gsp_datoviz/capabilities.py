@@ -27,6 +27,13 @@ from gsp.protocol import (
     PIXEL_VISUAL_CAPABILITY,
     PIXEL_VISUAL_EXACT_LOGICAL_SIZE_CAPABILITY,
     PIXEL_VISUAL_POSITIONS3D_DATA_VIEW3D_CAPABILITY,
+    PRIMITIVE_VISUAL_CAPABILITY,
+    PRIMITIVE_VISUAL_INDEXED_CAPABILITY,
+    PRIMITIVE_VISUAL_LINE_LIST_CAPABILITY,
+    PRIMITIVE_VISUAL_LINE_STRIP_CAPABILITY,
+    PRIMITIVE_VISUAL_POINT_LIST_CAPABILITY,
+    PRIMITIVE_VISUAL_TRIANGLE_LIST_CAPABILITY,
+    PRIMITIVE_VISUAL_TRIANGLE_STRIP_CAPABILITY,
     SPHERE_VISUAL_ANALYTIC_SURFACE_DEPTH_CAPABILITY,
     SPHERE_VISUAL_CAPABILITY,
     VECTOR_VISUAL_POSITIONS3D_DATA_VIEW3D_CAPABILITY,
@@ -54,7 +61,10 @@ from gsp.protocol import (
     VIEW3D_STATIC_PERSPECTIVE_CAPABILITY,
 )
 from gsp_datoviz.query import datoviz_v04_query_binding_diagnostics
-from gsp_datoviz.latest_api_contract import datoviz_vector_api_diagnostics
+from gsp_datoviz.latest_api_contract import (
+    datoviz_primitive_api_diagnostics,
+    datoviz_vector_api_diagnostics,
+)
 from gsp_datoviz.v04_import import bootstrap_datoviz_v04_source
 
 
@@ -504,6 +514,14 @@ def gsp_capability_snapshot_from_datoviz(
     sphere_ready = not sphere_missing and not view3d_diagnostics
     vector_diagnostics = datoviz_vector_api_diagnostics(dvz)
     vector_ready = not vector_diagnostics
+    primitive_diagnostics = datoviz_primitive_api_diagnostics(
+        dvz, indexed=False
+    )
+    primitive_indexed_diagnostics = datoviz_primitive_api_diagnostics(
+        dvz, indexed=True
+    )
+    primitive_ready = not primitive_diagnostics
+    primitive_indexed_ready = not primitive_indexed_diagnostics
     general_visual_capabilities: list[str] = []
     if pixel_ready:
         general_visual_capabilities.extend(
@@ -519,6 +537,19 @@ def gsp_capability_snapshot_from_datoviz(
                 VECTOR_VISUAL_TRIANGLE_HEAD_CAPABILITY,
             )
         )
+    if primitive_ready:
+        general_visual_capabilities.extend(
+            (
+                PRIMITIVE_VISUAL_CAPABILITY,
+                PRIMITIVE_VISUAL_POINT_LIST_CAPABILITY,
+                PRIMITIVE_VISUAL_LINE_LIST_CAPABILITY,
+                PRIMITIVE_VISUAL_LINE_STRIP_CAPABILITY,
+                PRIMITIVE_VISUAL_TRIANGLE_LIST_CAPABILITY,
+                PRIMITIVE_VISUAL_TRIANGLE_STRIP_CAPABILITY,
+            )
+        )
+        if primitive_indexed_ready:
+            general_visual_capabilities.append(PRIMITIVE_VISUAL_INDEXED_CAPABILITY)
     view3d_capabilities: tuple[str, ...] = tuple(general_visual_capabilities)
     if not pixel_ready:
         metadata["datoviz_pixelvisual_diagnostics"] = ("missing callable dvz_pixel",)
@@ -535,6 +566,21 @@ def gsp_capability_snapshot_from_datoviz(
         )
     else:
         metadata["datoviz_vectorvisual_diagnostics"] = vector_diagnostics
+    if primitive_ready:
+        metadata["s065_primitivevisual"] = (
+            "public dvz_primitive construction for five exact bounded topologies with "
+            "dense position/color attributes"
+        )
+        if primitive_indexed_ready:
+            metadata["s065_primitivevisual_indexed"] = (
+                "public dvz_visual_set_index_data binding"
+            )
+        else:
+            metadata["datoviz_primitivevisual_indexed_diagnostics"] = (
+                primitive_indexed_diagnostics
+            )
+    else:
+        metadata["datoviz_primitivevisual_diagnostics"] = primitive_diagnostics
     if view3d_diagnostics:
         metadata["datoviz_view3d_binding_diagnostics"] = view3d_diagnostics
     else:
@@ -659,6 +705,7 @@ def gsp_capability_snapshot_from_datoviz(
             *(("pixel",) if pixel_ready else ()),
             *(("sphere",) if sphere_ready else ()),
             *(("vector",) if vector_ready else ()),
+            *(("primitive",) if primitive_ready else ()),
             "marker",
             "segment",
             "path",

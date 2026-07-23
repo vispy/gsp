@@ -33,6 +33,8 @@ from gsp.protocol import (
     PathVisual,
     PointVisual,
     PixelVisual,
+    PrimitiveTopology,
+    PrimitiveVisual,
     SegmentVisual,
     SphereVisual,
     VectorAnchor,
@@ -500,6 +502,24 @@ class FakeDatovizV04:
 
 class FakeDatovizV04WithColorPipeline(FakeDatovizV04):
     pass
+
+
+class FakeDatovizV04WithPrimitive(FakeDatovizV04):
+    DVZ_PRIMITIVE_TOPOLOGY_POINT_LIST = 0
+    DVZ_PRIMITIVE_TOPOLOGY_LINE_LIST = 1
+    DVZ_PRIMITIVE_TOPOLOGY_LINE_STRIP = 2
+    DVZ_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST = 3
+    DVZ_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP = 4
+
+    def dvz_primitive(self, scene, topology, flags):
+        self.calls.append(("primitive", scene, topology, flags))
+        return "primitive-visual"
+
+    def dvz_visual_set_index_data(self, visual, indices, count):
+        self.calls.append(
+            ("set_index_data", visual, np.array(indices, copy=True), count)
+        )
+        return 0
 
 
 class FakeDatovizV04WithoutColorPipeline(FakeDatovizV04):
@@ -6790,3 +6810,261 @@ def _test_color_scale(*, colormap_id: ColorMapId = ColorMapId.VIRIDIS) -> ColorS
         colormap=ColorMapRef(colormap_id),
         normalize=LinearNormalize(vmin=0.0, vmax=1.0),
     )
+
+
+@pytest.mark.parametrize("topology", list(PrimitiveTopology))
+@pytest.mark.parametrize("indexed", [False, True])
+def test_datoviz_primitive_uses_public_topology_and_optional_indices(
+    topology: PrimitiveTopology, indexed: bool
+) -> None:
+    fake = FakeDatovizV04WithPrimitive()
+    counts = {
+        PrimitiveTopology.POINT_LIST: 1,
+        PrimitiveTopology.LINE_LIST: 2,
+        PrimitiveTopology.LINE_STRIP: 2,
+        PrimitiveTopology.TRIANGLE_LIST: 3,
+        PrimitiveTopology.TRIANGLE_STRIP: 3,
+    }
+    count = counts[topology]
+    visual = PrimitiveVisual(
+        id=f"primitive:{topology.value}:{indexed}",
+        topology=topology,
+        positions=np.arange(count * 2, dtype=np.float32).reshape(count, 2),
+        colors=np.array([255, 0, 0, 255], dtype=np.uint8),
+        indices=np.arange(count, dtype=np.uint32) if indexed else None,
+    )
+    renderer = DatovizV04ProtocolRenderer(
+        dvz=fake,
+        view=View2D(id="view:primitive", panel_id="panel:primitive"),
+    )
+    renderer.add_primitive_visual(visual)
+
+    expected_topology = getattr(
+        fake, f"DVZ_PRIMITIVE_TOPOLOGY_{topology.value.upper()}"
+    )
+    assert ("primitive", "scene", expected_topology, 0) in fake.calls
+    assert any(
+        call[:3] == ("set_data", "primitive-visual", "position")
+        for call in fake.calls
+    )
+    assert any(
+        call[:3] == ("set_data", "primitive-visual", "color")
+        for call in fake.calls
+    )
+    index_calls = [
+        call for call in fake.calls if call[0] == "set_index_data"
+    ]
+    assert bool(index_calls) is indexed
+    if indexed:
+        np.testing.assert_array_equal(
+            index_calls[0][2], visual.resolved_vertex_indices()
+        )
+        assert index_calls[0][3] == count
+
+
+def test_datoviz_primitive_capabilities_are_gated_on_complete_public_abi() -> None:
+    ready = gsp_capability_snapshot_from_datoviz(
+        None, dvz=FakeDatovizV04WithPrimitive()
+    )
+    assert ready.supports_visual("primitive")
+    for capability in (
+        "primitivevisual.v1",
+        "primitivevisual.indexed.v1",
+        "primitivevisual.point_list",
+        "primitivevisual.line_list",
+        "primitivevisual.line_strip",
+        "primitivevisual.triangle_list",
+        "primitivevisual.triangle_strip",
+    ):
+        assert ready.supports_view3d_capability(capability)
+
+    unindexed_only = FakeDatovizV04WithPrimitive()
+    unindexed_only.dvz_visual_set_index_data = None  # type: ignore[method-assign]
+    limited = gsp_capability_snapshot_from_datoviz(None, dvz=unindexed_only)
+    assert limited.supports_visual("primitive")
+    assert limited.supports_view3d_capability("primitivevisual.v1")
+    assert not limited.supports_view3d_capability("primitivevisual.indexed.v1")
+    assert "datoviz_primitivevisual_indexed_diagnostics" in limited.metadata
+
+
+@pytest.mark.parametrize(
+    "missing",
+    [
+        "dvz_primitive",
+        "dvz_visual_set_data",
+        "DVZ_PRIMITIVE_TOPOLOGY_POINT_LIST",
+        "DVZ_PRIMITIVE_TOPOLOGY_LINE_LIST",
+        "DVZ_PRIMITIVE_TOPOLOGY_LINE_STRIP",
+        "DVZ_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST",
+        "DVZ_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP",
+    ],
+)
+def test_datoviz_primitive_rejects_incomplete_base_abi_before_allocation(
+    monkeypatch: pytest.MonkeyPatch, missing: str
+) -> None:
+    fake = FakeDatovizV04WithPrimitive()
+    monkeypatch.setattr(fake, missing, None)
+    renderer = DatovizV04ProtocolRenderer(
+        dvz=fake,
+        view=View2D(id="view:primitive-abi", panel_id="panel:primitive"),
+    )
+    with pytest.raises(DatovizV04Unsupported, match=missing):
+        renderer.add_primitive_visual(
+            PrimitiveVisual(
+                id="primitive:abi",
+                topology=PrimitiveTopology.POINT_LIST,
+                positions=np.array([[0.0, 0.0]], dtype=np.float32),
+                colors=np.array([255, 255, 255, 255], dtype=np.uint8),
+            )
+        )
+    assert not any(call[0] == "primitive" for call in fake.calls)
+    capabilities = gsp_capability_snapshot_from_datoviz(None, dvz=fake)
+    assert not capabilities.supports_visual("primitive")
+    assert any(
+        missing in diagnostic
+        for diagnostic in capabilities.metadata[
+            "datoviz_primitivevisual_diagnostics"
+        ]
+    )
+
+
+def test_datoviz_primitive_requires_index_setter_only_for_indexed_input() -> None:
+    fake = FakeDatovizV04WithPrimitive()
+    fake.dvz_visual_set_index_data = None  # type: ignore[method-assign]
+    renderer = DatovizV04ProtocolRenderer(
+        dvz=fake,
+        view=View2D(id="view:primitive-index", panel_id="panel:primitive"),
+    )
+    base = dict(
+        topology=PrimitiveTopology.POINT_LIST,
+        positions=np.array([[0.0, 0.0]], dtype=np.float32),
+        colors=np.array([255, 255, 255, 255], dtype=np.uint8),
+    )
+    renderer.add_primitive_visual(PrimitiveVisual(id="primitive:plain", **base))
+    with pytest.raises(
+        DatovizV04Unsupported, match="dvz_visual_set_index_data"
+    ):
+        renderer.add_primitive_visual(
+            PrimitiveVisual(
+                id="primitive:indexed",
+                indices=np.array([0], dtype=np.uint32),
+                **base,
+            )
+        )
+    assert len([call for call in fake.calls if call[0] == "primitive"]) == 1
+
+
+@pytest.mark.parametrize(
+    ("factory_name", "factory", "error_type", "message"),
+    [
+        (
+            "dvz_primitive",
+            lambda _scene, _topology, _flags: None,
+            DatovizV04Unavailable,
+            r"dvz_primitive\(\) failed",
+        ),
+        (
+            "dvz_visual_set_index_data",
+            lambda _visual, _indices, _count: 1,
+            DatovizV04Unsupported,
+            "index upload failed",
+        ),
+    ],
+)
+def test_datoviz_primitive_reports_native_failures(
+    factory_name: str,
+    factory: object,
+    error_type: type[Exception],
+    message: str,
+) -> None:
+    fake = FakeDatovizV04WithPrimitive()
+    setattr(fake, factory_name, factory)
+    renderer = DatovizV04ProtocolRenderer(
+        dvz=fake,
+        view=View2D(id="view:primitive-failure", panel_id="panel:primitive"),
+    )
+    visual = PrimitiveVisual(
+        id="primitive:failure",
+        topology=PrimitiveTopology.POINT_LIST,
+        positions=np.array([[0.0, 0.0]], dtype=np.float32),
+        colors=np.array([255, 255, 255, 255], dtype=np.uint8),
+        indices=np.array([0], dtype=np.uint32),
+    )
+    with pytest.raises(error_type, match=message):
+        renderer.add_primitive_visual(visual)
+
+
+def test_datoviz_primitive_broadcasts_color_and_adapts_2d_transform() -> None:
+    fake = FakeDatovizV04WithPrimitive()
+    renderer = DatovizV04ProtocolRenderer(
+        dvz=fake,
+        view=View2D(id="view:primitive-transform", panel_id="panel:primitive"),
+    )
+    renderer.add_primitive_visual(
+        PrimitiveVisual(
+            id="primitive:transform",
+            topology=PrimitiveTopology.LINE_LIST,
+            positions=np.array([[0.0, 0.0], [1.0, 1.0]], dtype=np.float32),
+            colors=np.array([12, 34, 56, 255], dtype=np.uint8),
+            transform=VisualTransformBinding.inline_affine(
+                np.array(
+                    [[1.0, 0.0, 0.25], [0.0, 1.0, -0.5], [0.0, 0.0, 1.0]]
+                )
+            ),
+        )
+    )
+    uploads = [
+        call for call in fake.calls if call[0] == "set_data"
+    ]
+    np.testing.assert_allclose(
+        uploads[-2][3], [[0.25, -0.5, 0.0], [1.25, 0.5, 0.0]]
+    )
+    np.testing.assert_array_equal(
+        uploads[-1][3], [[12, 34, 56, 255], [12, 34, 56, 255]]
+    )
+
+
+def test_datoviz_primitive_rejects_missing_view_with_stable_diagnostic() -> None:
+    renderer = DatovizV04ProtocolRenderer(dvz=FakeDatovizV04WithPrimitive())
+    visual = PrimitiveVisual(
+        id="primitive:missing-view",
+        topology=PrimitiveTopology.POINT_LIST,
+        positions=np.array([[0.0, 0.0]], dtype=np.float32),
+        colors=np.array([255, 255, 255, 255], dtype=np.uint8),
+    )
+    with pytest.raises(DatovizV04Unsupported, match="primitivevisual_view2d_required"):
+        renderer.add_primitive_visual(visual)
+
+
+def test_datoviz_primitive_enforces_3d_view_space_and_transform_gates() -> None:
+    class FakePrimitive3D(
+        FakeDatovizV04WithPrimitive, FakeDatovizV04WithRetainedView3D
+    ):
+        pass
+
+    fake = FakePrimitive3D()
+    positions = np.array([[0.0, 0.0, 0.0]], dtype=np.float32)
+    base = dict(
+        id="primitive:3d-gate",
+        topology=PrimitiveTopology.POINT_LIST,
+        positions=positions,
+        colors=np.array([255, 255, 255, 255], dtype=np.uint8),
+    )
+    with pytest.raises(DatovizV04Unsupported, match="view3d_required"):
+        DatovizV04ProtocolRenderer(dvz=fake).add_primitive_visual(
+            PrimitiveVisual(**base)
+        )
+    view3d = _vector_view3d()
+    with pytest.raises(DatovizV04Unsupported, match="view3d_required"):
+        DatovizV04ProtocolRenderer(dvz=fake, view3d=view3d).add_primitive_visual(
+            PrimitiveVisual(**base, coordinate_space=CoordinateSpace.NDC)
+        )
+    with pytest.raises(DatovizV04Unsupported, match="transform_unsupported"):
+        DatovizV04ProtocolRenderer(dvz=fake, view3d=view3d).add_primitive_visual(
+            PrimitiveVisual(
+                **base,
+                transform=VisualTransformBinding.inline_affine(
+                    np.eye(3, dtype=np.float64)
+                ),
+            )
+        )

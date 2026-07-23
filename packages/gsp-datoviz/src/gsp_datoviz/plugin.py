@@ -24,6 +24,7 @@ _DECLARED_CAPABILITIES = frozenset(
         "visual.segments",
         "visual.sphere",
         "visual.vector",
+        "visual.primitive",
         "visual.text",
         "texture.rgba8",
         "texture.filter.nearest",
@@ -76,6 +77,8 @@ class DatovizProvider:
             capabilities.discard("visual.sphere")
         if not snapshot.supports_visual("vector"):
             capabilities.discard("visual.vector")
+        if not snapshot.supports_visual("primitive"):
+            capabilities.discard("visual.primitive")
         return BackendInfo(
             name="datoviz",
             installed=True,

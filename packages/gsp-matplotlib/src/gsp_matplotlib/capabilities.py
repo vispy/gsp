@@ -14,6 +14,13 @@ from gsp.protocol import (
     PIXEL_VISUAL_CAPABILITY,
     PIXEL_VISUAL_EXACT_LOGICAL_SIZE_CAPABILITY,
     PIXEL_VISUAL_POSITIONS3D_DATA_VIEW3D_CAPABILITY,
+    PRIMITIVE_VISUAL_CAPABILITY,
+    PRIMITIVE_VISUAL_INDEXED_CAPABILITY,
+    PRIMITIVE_VISUAL_LINE_LIST_CAPABILITY,
+    PRIMITIVE_VISUAL_LINE_STRIP_CAPABILITY,
+    PRIMITIVE_VISUAL_POINT_LIST_CAPABILITY,
+    PRIMITIVE_VISUAL_TRIANGLE_LIST_CAPABILITY,
+    PRIMITIVE_VISUAL_TRIANGLE_STRIP_CAPABILITY,
     SPHERE_VISUAL_CAPABILITY,
     VECTOR_VISUAL_POSITIONS3D_DATA_VIEW3D_CAPABILITY,
     VECTOR_VISUAL_STRAIGHT_CAPABILITY,
@@ -69,6 +76,7 @@ def capability_snapshot() -> CapabilitySnapshot:
             "mesh",
             "sphere",
             "vector",
+            "primitive",
         ),
         query_modes=("panel-query", "point-item", "image-texel"),
         navigation_placements=(NavigationPlacement.CLIENT_SIDE.value,),
@@ -86,6 +94,13 @@ def capability_snapshot() -> CapabilitySnapshot:
             VECTOR_VISUAL_STRAIGHT_CAPABILITY,
             VECTOR_VISUAL_POSITIONS3D_DATA_VIEW3D_CAPABILITY,
             VECTOR_VISUAL_TRIANGLE_HEAD_CAPABILITY,
+            PRIMITIVE_VISUAL_CAPABILITY,
+            PRIMITIVE_VISUAL_INDEXED_CAPABILITY,
+            PRIMITIVE_VISUAL_POINT_LIST_CAPABILITY,
+            PRIMITIVE_VISUAL_LINE_LIST_CAPABILITY,
+            PRIMITIVE_VISUAL_LINE_STRIP_CAPABILITY,
+            PRIMITIVE_VISUAL_TRIANGLE_LIST_CAPABILITY,
+            PRIMITIVE_VISUAL_TRIANGLE_STRIP_CAPABILITY,
         ),
         output_formats=("png", "svg", "pdf"),
         extensions=(TILED_IMAGE_EXTENSION_CAPABILITY,),
@@ -116,6 +131,11 @@ def capability_snapshot() -> CapabilitySnapshot:
                 "deterministic 2D/3D line-and-marker-cap adaptation preserving resolved "
                 "endpoints, color, and logical-pixel widths; cap rasterization differs "
                 "from Datoviz"
+            ),
+            "primitivevisual": (
+                "deterministic point/line/triangle collection adaptation; indexed vertex order "
+                "is preserved, while point rasterization, line width/depth, triangle depth, and "
+                "per-vertex color interpolation differ from GPU rendering"
             ),
         },
         axis_providers=(matplotlib_axis_provider_capability(),),

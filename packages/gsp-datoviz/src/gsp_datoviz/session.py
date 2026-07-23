@@ -14,6 +14,7 @@ from gsp.protocol import (
     MeshVisual,
     PathVisual,
     PixelVisual,
+    PrimitiveVisual,
     SphereVisual,
     VectorVisual,
     PointVisual,
@@ -200,6 +201,8 @@ def _add_visual(renderer: DatovizV04ProtocolRenderer, visual: object) -> None:
         renderer.add_sphere_visual(visual)
     elif isinstance(visual, VectorVisual):
         renderer.add_vector_visual(visual)
+    elif isinstance(visual, PrimitiveVisual):
+        renderer.add_primitive_visual(visual)
     elif isinstance(visual, MarkerVisual):
         renderer.add_marker_visual(visual)
     elif isinstance(visual, SegmentVisual):

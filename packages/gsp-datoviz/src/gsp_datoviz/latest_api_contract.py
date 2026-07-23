@@ -24,6 +24,16 @@ REQUIRED_DATOVIZ_VECTOR_SYMBOLS: tuple[str, ...] = (
     "DVZ_SEGMENT_CAP_SQUARE",
 )
 
+REQUIRED_DATOVIZ_PRIMITIVE_BASE_SYMBOLS: tuple[str, ...] = (
+    "dvz_primitive",
+    "dvz_visual_set_data",
+    "DVZ_PRIMITIVE_TOPOLOGY_POINT_LIST",
+    "DVZ_PRIMITIVE_TOPOLOGY_LINE_LIST",
+    "DVZ_PRIMITIVE_TOPOLOGY_LINE_STRIP",
+    "DVZ_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST",
+    "DVZ_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP",
+)
+
 REQUIRED_DATOVIZ_V04_DEV_SYMBOLS: tuple[str, ...] = (
     "DvzVisualCoordSpace",
     "DVZ_VISUAL_COORD_VIEW",
@@ -94,6 +104,24 @@ def datoviz_vector_api_diagnostics(module: ModuleType | Any) -> tuple[str, ...]:
             if name not in fields:
                 diagnostics.append(f"missing DvzVectorStyle.{name}")
     return tuple(dict.fromkeys(diagnostics))
+
+
+def datoviz_primitive_api_diagnostics(
+    module: ModuleType | Any, *, indexed: bool
+) -> tuple[str, ...]:
+    """Return strict non-allocating diagnostics for the bounded primitive ABI."""
+    diagnostics: list[str] = []
+    for name in REQUIRED_DATOVIZ_PRIMITIVE_BASE_SYMBOLS:
+        value = getattr(module, name, None)
+        if name.startswith("dvz_") and not callable(value):
+            diagnostics.append(f"missing callable {name}")
+        elif not name.startswith("dvz_") and value is None:
+            diagnostics.append(f"missing {name}")
+    if indexed and not callable(
+        getattr(module, "dvz_visual_set_index_data", None)
+    ):
+        diagnostics.append("missing callable dvz_visual_set_index_data")
+    return tuple(diagnostics)
 
 
 def datoviz_current_api_contract_diagnostics(

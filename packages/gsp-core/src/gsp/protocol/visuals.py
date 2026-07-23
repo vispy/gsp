@@ -92,6 +92,16 @@ class VectorCap(str, Enum):
     SQUARE = "square"
 
 
+class PrimitiveTopology(str, Enum):
+    """Bounded generic geometry topology vocabulary."""
+
+    POINT_LIST = "point_list"
+    LINE_LIST = "line_list"
+    LINE_STRIP = "line_strip"
+    TRIANGLE_LIST = "triangle_list"
+    TRIANGLE_STRIP = "triangle_strip"
+
+
 class FontRole(str, Enum):
     """Generic backend-resolved text font role."""
 
@@ -219,6 +229,20 @@ VECTOR_VISUAL_POSITIONS3D_DATA_VIEW3D_CAPABILITY = (
     "vectorvisual.positions3d.data.view3d.v1"
 )
 VECTOR_VISUAL_TRIANGLE_HEAD_CAPABILITY = "vectorvisual.triangle_head.v1"
+PRIMITIVE_VISUAL_CAPABILITY = "primitivevisual.v1"
+PRIMITIVE_VISUAL_INDEXED_CAPABILITY = "primitivevisual.indexed.v1"
+PRIMITIVE_VISUAL_POINT_LIST_CAPABILITY = "primitivevisual.point_list"
+PRIMITIVE_VISUAL_LINE_LIST_CAPABILITY = "primitivevisual.line_list"
+PRIMITIVE_VISUAL_LINE_STRIP_CAPABILITY = "primitivevisual.line_strip"
+PRIMITIVE_VISUAL_TRIANGLE_LIST_CAPABILITY = "primitivevisual.triangle_list"
+PRIMITIVE_VISUAL_TRIANGLE_STRIP_CAPABILITY = "primitivevisual.triangle_strip"
+PRIMITIVE_VISUAL_TOPOLOGY_CAPABILITIES: Mapping[PrimitiveTopology, str] = {
+    PrimitiveTopology.POINT_LIST: PRIMITIVE_VISUAL_POINT_LIST_CAPABILITY,
+    PrimitiveTopology.LINE_LIST: PRIMITIVE_VISUAL_LINE_LIST_CAPABILITY,
+    PrimitiveTopology.LINE_STRIP: PRIMITIVE_VISUAL_LINE_STRIP_CAPABILITY,
+    PrimitiveTopology.TRIANGLE_LIST: PRIMITIVE_VISUAL_TRIANGLE_LIST_CAPABILITY,
+    PrimitiveTopology.TRIANGLE_STRIP: PRIMITIVE_VISUAL_TRIANGLE_STRIP_CAPABILITY,
+}
 MESH_NORMALS_FACE3D_CAPABILITY = "meshvisual.normals.face3d.v1"
 MESH_NORMAL_GENERATION_FACE_FLAT_CAPABILITY = (
     "meshvisual.normal_generation.face_flat.v1"
@@ -414,6 +438,83 @@ class VectorVisual:
             np.ascontiguousarray(tails),
             np.ascontiguousarray(heads),
         )
+
+
+@dataclass(frozen=True, slots=True)
+class PrimitiveVisual:
+    """Bounded point, line, or triangle geometry without backend draw state."""
+
+    id: str
+    topology: PrimitiveTopology
+    positions: FloatArray
+    colors: ColorArray
+    indices: IndexArray | None = None
+    coordinate_space: CoordinateSpace = CoordinateSpace.DATA
+    transform: VisualTransformBinding | None = None
+
+    def __post_init__(self) -> None:
+        validate_id(self.id)
+        _validate_visual_transform(self.transform)
+        vertex_count = _validate_positions(self.positions)
+        _validate_rgba_values(self.colors, vertex_count, field_name="colors")
+        if not isinstance(self.topology, PrimitiveTopology):
+            raise TypeError(
+                "primitivevisual_invalid_topology: topology must be a PrimitiveTopology"
+            )
+        element_count = vertex_count
+        if self.indices is not None:
+            if self.indices.ndim != 1:
+                raise ValueError(
+                    "primitivevisual_invalid_indices_shape: indices must be flat"
+                )
+            if np.issubdtype(self.indices.dtype, np.floating) and not np.all(
+                np.isfinite(self.indices)
+            ):
+                raise ValueError(
+                    "primitivevisual_nonfinite_index: indices must be finite"
+                )
+            if not np.issubdtype(self.indices.dtype, np.integer) or np.issubdtype(
+                self.indices.dtype, np.bool_
+            ):
+                raise TypeError(
+                    "primitivevisual_noninteger_index: indices must have integer dtype"
+                )
+            if np.any(self.indices < 0):
+                raise ValueError(
+                    "primitivevisual_negative_index: indices must be non-negative"
+                )
+            if np.any(self.indices >= vertex_count):
+                raise ValueError(
+                    "primitivevisual_index_out_of_range: indices must reference positions"
+                )
+            element_count = int(self.indices.shape[0])
+        self._validate_cardinality(element_count)
+
+    def _validate_cardinality(self, count: int) -> None:
+        valid = {
+            PrimitiveTopology.POINT_LIST: count >= 1,
+            PrimitiveTopology.LINE_LIST: count >= 2 and count % 2 == 0,
+            PrimitiveTopology.LINE_STRIP: count >= 2,
+            PrimitiveTopology.TRIANGLE_LIST: count >= 3 and count % 3 == 0,
+            PrimitiveTopology.TRIANGLE_STRIP: count >= 3,
+        }[self.topology]
+        if not valid:
+            raise ValueError(
+                "primitivevisual_invalid_cardinality: "
+                f"{self.topology.value} received {count} vertices after indexing"
+            )
+
+    def index_values(self) -> npt.NDArray[np.uint32] | None:
+        """Return contiguous public vertex indices for backend lowering."""
+        if self.indices is None:
+            return None
+        return np.ascontiguousarray(self.indices, dtype=np.uint32)
+
+    def resolved_vertex_indices(self) -> npt.NDArray[np.intp]:
+        """Return the effective public vertex order after optional indexing."""
+        if self.indices is None:
+            return np.arange(self.positions.shape[0], dtype=np.intp)
+        return np.ascontiguousarray(self.indices, dtype=np.intp)
 
 
 @dataclass(frozen=True, slots=True)

@@ -19,6 +19,7 @@ from .protocol import (
     PathVisual,
     PixelVisual,
     PointVisual,
+    PrimitiveVisual,
     SegmentVisual,
     SphereVisual,
     TextVisual,
@@ -34,6 +35,7 @@ SceneVisual = (
     | PixelVisual
     | SphereVisual
     | VectorVisual
+    | PrimitiveVisual
     | MarkerVisual
     | SegmentVisual
     | PathVisual
@@ -72,7 +74,7 @@ class Scene:
                         "SphereVisual DATA positions3d require Scene.view3d"
                     )
                 continue
-            if not isinstance(visual, (PixelVisual, VectorVisual)):
+            if not isinstance(visual, (PixelVisual, VectorVisual, PrimitiveVisual)):
                 continue
             if visual.positions.shape[1] == 3:
                 if visual.coordinate_space is not CoordinateSpace.DATA:
