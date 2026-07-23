@@ -21,6 +21,10 @@ lists installed provider metadata without importing Matplotlib or Datoviz;
 backend explicitly with `gsp.open_session("matplotlib")`, `gsp.open_session("datoviz")`, or a
 caller-supplied ordered `prefer=` policy.
 
+Start with the [protocol and backend guide](docs/protocol-and-backends.md) for session ownership,
+capability checks, queries, and backend limitations. High-level plotting journeys and reviewed
+artifacts live in the VisPy2 repository.
+
 During the unpublished bootstrap, install the built wheels together from `dist/`; there is no
 repository-root umbrella distribution. The Datoviz adapter intentionally has no ordinary Datoviz
 dependency yet because the required RC3-compatible artifact is not published. Local development
