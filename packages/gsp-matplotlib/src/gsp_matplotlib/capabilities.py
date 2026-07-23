@@ -6,6 +6,7 @@ from gsp.protocol import (
     AxisProviderCapability,
     CapabilitySnapshot,
     FontLayoutCapability,
+    GUIDE_QUERY_PAYLOAD_KIND,
     GuideLayoutCapability,
     LayoutCapability,
     MESH3D_DATA_VIEW3D_CAPABILITY,
@@ -27,7 +28,15 @@ from gsp.protocol import (
     VECTOR_VISUAL_STRAIGHT_CAPABILITY,
     VECTOR_VISUAL_TRIANGLE_HEAD_CAPABILITY,
     QUERY_VIEW3D_RAY_READBACK_CAPABILITY,
+    QueryCoordinateSpace,
+    QueryHitPolicy,
     QueryLayoutCapability,
+    QueryOrderingGuarantee,
+    QueryPayload,
+    QueryScope,
+    QueryScopeCapability,
+    QueryTargetCapability,
+    QueryTargetKind,
     RenderTargetCapability,
     TILED_IMAGE_EXTENSION_CAPABILITY,
     TransportKind,
@@ -80,6 +89,47 @@ def capability_snapshot() -> CapabilitySnapshot:
             "primitive",
         ),
         query_modes=("panel-query", "point-item", "image-texel"),
+        query_capabilities=(
+            QueryScopeCapability(
+                scope=QueryScope.DATA,
+                coordinate_spaces=(QueryCoordinateSpace.DATA,),
+                hit_policies=(QueryHitPolicy.FRONTMOST, QueryHitPolicy.ALL),
+                ordering=QueryOrderingGuarantee.SCOPE_RENDER_ORDER,
+                targets=tuple(
+                    QueryTargetCapability(
+                        target_kind=QueryTargetKind.VISUAL_FAMILY,
+                        target=family,
+                        payloads=(
+                            QueryPayload.IDENTITY,
+                            QueryPayload.COORDINATE,
+                            QueryPayload.COLOR,
+                            QueryPayload.VALUE,
+                        ),
+                    )
+                    for family in ("point", "marker", "image", "text", "mesh")
+                ),
+            ),
+            QueryScopeCapability(
+                scope=QueryScope.GUIDES,
+                coordinate_spaces=(QueryCoordinateSpace.PANEL,),
+                hit_policies=(QueryHitPolicy.FRONTMOST, QueryHitPolicy.ALL),
+                ordering=QueryOrderingGuarantee.SCOPE_RENDER_ORDER,
+                provider_ids=(MATPLOTLIB_NATIVE_AXIS_PROVIDER,),
+                targets=(
+                    QueryTargetCapability(
+                        target_kind=QueryTargetKind.GUIDE_ROLE,
+                        target="axis",
+                        payloads=(
+                            QueryPayload.IDENTITY,
+                            QueryPayload.COORDINATE,
+                            QueryPayload.COLOR,
+                            QueryPayload.VALUE,
+                        ),
+                        extension_payload_kinds=(GUIDE_QUERY_PAYLOAD_KIND,),
+                    ),
+                ),
+            ),
+        ),
         navigation_placements=(NavigationPlacement.CLIENT_SIDE.value,),
         navigation_capabilities=("interaction.view2d.navigation.v1",),
         view3d_capabilities=(

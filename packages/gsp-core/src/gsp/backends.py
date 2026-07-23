@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from importlib import metadata
 from typing import Any, Protocol, runtime_checkable
 
-from .protocol import PROTOCOL_VERSION, CapabilitySnapshot
+from .protocol import PROTOCOL_VERSION, CapabilitySnapshot, QueryRequest, QueryResult
 
 BACKEND_ENTRY_POINT_GROUP = "gsp.backends"
 PLUGIN_API_VERSION = 1
@@ -70,6 +70,9 @@ class BackendSession(Protocol):
     def diagnostics(self) -> tuple[str, ...]: ...
     def render(self, scene: Any, **kwargs: Any) -> Any: ...
     def display(self, scene: Any, **kwargs: Any) -> Any: ...
+    def query(
+        self, request: QueryRequest, *, scene_id: str | None = None
+    ) -> QueryResult: ...
     def run(self) -> None: ...
     def close(self) -> None: ...
     def __enter__(self) -> "BackendSession": ...
@@ -182,4 +185,3 @@ def open_session(
             SessionRequest(require=required, adaptation=frozenset(adaptation))
         )
     raise BackendUnavailable("; ".join(failures))
-

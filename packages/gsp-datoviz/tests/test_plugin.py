@@ -89,3 +89,33 @@ def test_probe_removes_text_capability_when_runtime_probe_rejects_it(
 
     assert info.available
     assert ("visual.text" in info.capabilities) is text_ready
+
+
+@pytest.mark.parametrize("panel_query_ready", [False, True])
+def test_probe_conditionally_exposes_panel_query_from_runtime_snapshot(
+    monkeypatch: pytest.MonkeyPatch, panel_query_ready: bool
+) -> None:
+    monkeypatch.setattr(renderer_module, "import_datoviz_v04", lambda: object())
+    monkeypatch.setattr(
+        contract_module, "datoviz_current_api_contract_diagnostics", lambda _dvz: ()
+    )
+    monkeypatch.setattr(
+        capability_module,
+        "datoviz_v04_capability_snapshot",
+        lambda _dvz: SimpleNamespace(
+            transform_capabilities=(),
+            navigation_capabilities=(),
+            view3d_capabilities=(),
+            supports_visual=lambda _family: True,
+            supports_query_mode=lambda mode: (
+                panel_query_ready if mode == "panel-query" else False
+            ),
+        ),
+    )
+
+    provider = DatovizProvider()
+    assert "query.panel" in provider.describe().declared_capabilities
+    info = provider.probe()
+
+    assert info.available
+    assert ("query.panel" in info.capabilities) is panel_query_ready

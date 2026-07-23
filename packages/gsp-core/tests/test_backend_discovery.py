@@ -21,6 +21,7 @@ class FakeSession:
 
     def render(self, scene, **kwargs): return scene
     def display(self, scene, **kwargs): return scene
+    def query(self, request, *, scene_id=None): return request
     def run(self): return None
     def close(self): return None
     def __enter__(self): return self
@@ -77,4 +78,3 @@ def test_selection_requires_policy_and_rejects_duplicates(monkeypatch):
     )
     with pytest.raises(backends.DuplicateBackendError):
         backends.discover_backends()
-
