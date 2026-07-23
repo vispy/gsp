@@ -26,12 +26,14 @@ from .protocol import (
     View2D,
     View3D,
     VisualAttachment,
+    VectorVisual,
 )
 
 SceneVisual = (
     PointVisual
     | PixelVisual
     | SphereVisual
+    | VectorVisual
     | MarkerVisual
     | SegmentVisual
     | PathVisual
@@ -70,19 +72,21 @@ class Scene:
                         "SphereVisual DATA positions3d require Scene.view3d"
                     )
                 continue
-            if not isinstance(visual, PixelVisual):
+            if not isinstance(visual, (PixelVisual, VectorVisual)):
                 continue
             if visual.positions.shape[1] == 3:
                 if visual.coordinate_space is not CoordinateSpace.DATA:
                     raise ValueError(
-                        "PixelVisual positions3d require CoordinateSpace.DATA"
+                        f"{type(visual).__name__} positions3d require CoordinateSpace.DATA"
                     )
                 if self.view3d is None:
                     raise ValueError(
-                        "PixelVisual DATA positions3d require Scene.view3d"
+                        f"{type(visual).__name__} DATA positions3d require Scene.view3d"
                     )
             elif (
                 visual.coordinate_space is CoordinateSpace.DATA
                 and self.view2d is None
             ):
-                raise ValueError("PixelVisual DATA positions2d require Scene.view2d")
+                raise ValueError(
+                    f"{type(visual).__name__} DATA positions2d require Scene.view2d"
+                )

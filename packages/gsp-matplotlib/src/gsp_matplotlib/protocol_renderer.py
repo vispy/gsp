@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+import math
 from typing import Any, cast
 
+import matplotlib.artist
 import matplotlib.axes
 import matplotlib.colorbar
 import matplotlib.collections
@@ -60,6 +62,8 @@ from gsp.protocol.visuals import (
     TextAnchorX,
     TextAnchorY,
     TextVisual,
+    VectorCap,
+    VectorVisual,
 )
 from gsp_matplotlib.color_mapping import (
     listed_colormap_for_scale,
@@ -122,6 +126,7 @@ ProtocolVisual = (
     PointVisual
     | PixelVisual
     | SphereVisual
+    | VectorVisual
     | MarkerVisual
     | SegmentVisual
     | PathVisual
@@ -295,6 +300,14 @@ def _render_protocol_visual(
         )
     if isinstance(visual, SphereVisual):
         return render_sphere_visual(axes, visual, view3d=view3d)
+    if isinstance(visual, VectorVisual):
+        return render_vector_visual(
+            axes,
+            visual,
+            view=view,
+            view3d=view3d,
+            transform_resources=transform_resources,
+        )
     if isinstance(visual, TextVisual):
         return render_text_visual(
             axes, visual, view=view, transform_resources=transform_resources
@@ -492,6 +505,143 @@ def render_sphere_visual(
         transform=axes.transAxes,
     )
     collection.set_gid(visual.id)
+    return collection
+
+
+def render_vector_visual(
+    axes: matplotlib.axes.Axes,
+    visual: VectorVisual,
+    *,
+    view: View2D | None = None,
+    view3d: View3D | None = None,
+    transform_resources: Mapping[str, AffineTransform2DResource] | None = None,
+) -> tuple[matplotlib.artist.Artist, ...]:
+    """Render deterministic line-and-cap artists for straight semantic vectors.
+
+    Matplotlib preserves resolved endpoints, colors, and logical-pixel stroke widths. Endpoint
+    cap rasterization is an explicit marker-based adaptation and does not claim Datoviz head-shape
+    parity.
+    """
+    tails, heads = visual.endpoint_values()
+    if visual.positions.shape[1] == 3:
+        if visual.transform is not None:
+            raise NotImplementedError(
+                "Matplotlib projected VectorVisual does not support a 2D transform"
+            )
+        if visual.coordinate_space is not CoordinateSpace.DATA or view3d is None:
+            raise NotImplementedError(
+                "Matplotlib VectorVisual positions3d require DATA space and View3D"
+            )
+        aspect_ratio = _axes_pixel_aspect_ratio(axes)
+        tails3 = np.asarray(
+            [
+                project_view3d_data_point(view3d, tuple(point), aspect_ratio=aspect_ratio)
+                for point in tails
+            ],
+            dtype=np.float64,
+        )
+        heads3 = np.asarray(
+            [
+                project_view3d_data_point(view3d, tuple(point), aspect_ratio=aspect_ratio)
+                for point in heads
+            ],
+            dtype=np.float64,
+        )
+        tail_offsets = panel_ndc_to_axes_fraction(tails3[:, :2])
+        head_offsets = panel_ndc_to_axes_fraction(heads3[:, :2])
+        transform = axes.transAxes
+    else:
+        if visual.coordinate_space is CoordinateSpace.DATA and view is None:
+            raise NotImplementedError(
+                "Matplotlib VectorVisual DATA positions2d require View2D"
+            )
+        tail_offsets, transform = _render_positions(
+            axes, visual, tails, view, transform_resources
+        )
+        head_offsets, _ = _render_positions(
+            axes, visual, heads, view, transform_resources
+        )
+
+    colors = _rgba_for_matplotlib(visual.colors)
+    if colors.ndim == 1:
+        colors = np.broadcast_to(colors, (visual.positions.shape[0], 4))
+    width_values = visual.width_values()
+    widths = np.asarray(
+        _linewidth_values_from_pixel_widths(axes, width_values),
+        dtype=np.float32,
+    )
+    segments = np.stack((tail_offsets, head_offsets), axis=1)
+    lines = matplotlib.collections.LineCollection(
+        segments.tolist(),
+        colors=colors,
+        linewidths=widths,
+        capstyle="butt",
+        transform=transform,
+    )
+    lines.set_gid(visual.id)
+    axes.add_collection(lines)
+
+    artists: list[matplotlib.artist.Artist] = [lines]
+    for index in range(visual.positions.shape[0]):
+        direction = head_offsets[index] - tail_offsets[index]
+        angle = math.atan2(float(direction[1]), float(direction[0]))
+        for offset, cap, outward_angle in (
+            (tail_offsets[index], visual.start_cap, angle + math.pi),
+            (head_offsets[index], visual.end_cap, angle),
+        ):
+            cap_artist = _render_vector_cap(
+                axes,
+                offset=offset,
+                cap=cap,
+                outward_angle=outward_angle,
+                color=colors[index],
+                width_px=float(width_values[index]),
+                transform=transform,
+                gid=visual.id,
+            )
+            if cap_artist is not None:
+                artists.append(cap_artist)
+    return tuple(artists)
+
+
+def _render_vector_cap(
+    axes: matplotlib.axes.Axes,
+    *,
+    offset: npt.NDArray[np.float64],
+    cap: VectorCap,
+    outward_angle: float,
+    color: npt.NDArray[Any],
+    width_px: float,
+    transform: matplotlib.transforms.Transform,
+    gid: str,
+) -> matplotlib.collections.PathCollection | None:
+    if cap in (VectorCap.NONE, VectorCap.BUTT):
+        return None
+    if cap is VectorCap.ROUND:
+        shape = MarkerShape.DISC
+        angle = 0.0
+    elif cap is VectorCap.SQUARE:
+        shape = MarkerShape.SQUARE
+        angle = outward_angle
+    else:
+        shape = MarkerShape.TRIANGLE
+        angle = outward_angle - math.pi / 2.0
+        if cap is VectorCap.TRIANGLE_IN:
+            angle += math.pi
+    diameter_px = max(4.0 * width_px, 4.0)
+    area = float(_marker_areas_from_pixel_diameters(axes, diameter_px))
+    collection = matplotlib.collections.PathCollection(
+        [_marker_path(shape, angle)],
+        sizes=[area],
+        offsets=np.asarray([offset], dtype=np.float64),
+        offset_transform=transform,
+        facecolors=[color],
+        edgecolors=[color],
+        linewidths=0.0,
+    )
+    collection.set_transform(matplotlib.transforms.IdentityTransform())
+    collection.set_gid(gid)
+    axes.add_collection(collection)
     return collection
 
 
@@ -857,6 +1007,7 @@ def _render_positions(
     axes: matplotlib.axes.Axes,
     visual: PointVisual
     | PixelVisual
+    | VectorVisual
     | MarkerVisual
     | SegmentVisual
     | PathVisual

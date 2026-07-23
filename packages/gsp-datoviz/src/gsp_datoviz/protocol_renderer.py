@@ -56,6 +56,8 @@ from gsp.protocol import (
     PanByAction,
     PixelVisual,
     SphereVisual,
+    VectorCap,
+    VectorVisual,
     PointVisual,
     ResetViewAction,
     SegmentVisual,
@@ -130,6 +132,7 @@ from gsp_datoviz.capabilities import (
 from gsp_datoviz.latest_api_contract import (
     REQUIRED_DATOVIZ_V04_DEV_SYMBOLS,
     datoviz_current_api_contract_diagnostics,
+    datoviz_vector_api_diagnostics,
 )
 from gsp_datoviz.query import (
     datoviz_query_view3d_ray_context,
@@ -353,6 +356,15 @@ _STROKE_CAP_NAMES = {
     StrokeCap.BUTT: "DVZ_SEGMENT_CAP_BUTT",
     StrokeCap.ROUND: "DVZ_SEGMENT_CAP_ROUND",
     StrokeCap.SQUARE: "DVZ_SEGMENT_CAP_SQUARE",
+}
+
+_VECTOR_CAP_NAMES = {
+    VectorCap.NONE: "DVZ_SEGMENT_CAP_NONE",
+    VectorCap.BUTT: "DVZ_SEGMENT_CAP_BUTT",
+    VectorCap.ROUND: "DVZ_SEGMENT_CAP_ROUND",
+    VectorCap.TRIANGLE_IN: "DVZ_SEGMENT_CAP_TRIANGLE_IN",
+    VectorCap.TRIANGLE_OUT: "DVZ_SEGMENT_CAP_TRIANGLE_OUT",
+    VectorCap.SQUARE: "DVZ_SEGMENT_CAP_SQUARE",
 }
 
 _STROKE_JOIN_FALLBACKS = {
@@ -1266,6 +1278,92 @@ class DatovizV04ProtocolRenderer:
             ),
         )
         self.visuals[visual.id] = dvz_visual
+        return dvz_visual
+
+    def add_vector_visual(self, visual: VectorVisual) -> Any:
+        """Create a public Datoviz straight vector visual with visual-wide style."""
+        is_3d = visual.positions.shape[1] == 3
+        if is_3d:
+            if visual.transform is not None:
+                raise DatovizV04Unsupported(
+                    "Datoviz VectorVisual positions3d do not support a 2D transform"
+                )
+            if (
+                visual.coordinate_space is not CoordinateSpace.DATA
+                or self.view3d is None
+            ):
+                raise DatovizV04Unsupported(
+                    "Datoviz VectorVisual positions3d require DATA space and View3D"
+                )
+        elif visual.coordinate_space is CoordinateSpace.DATA and self.view is None:
+            raise DatovizV04Unsupported(
+                "Datoviz VectorVisual DATA positions2d require View2D"
+            )
+        cap_values = _preflight_datoviz_vector_api(self.dvz)
+        source_tails, source_heads = visual.endpoint_values()
+        positions = _adapt_visual_positions(
+            visual.id,
+            source_tails,
+            visual.transform,
+            visual.coordinate_space,
+            self.view,
+            self.transform_resources,
+            cpu_map_data_to_view=self._cpu_map_data_visuals_to_view,
+        )
+        endpoints = _adapt_visual_positions(
+            visual.id,
+            source_heads,
+            visual.transform,
+            visual.coordinate_space,
+            self.view,
+            self.transform_resources,
+            cpu_map_data_to_view=self._cpu_map_data_visuals_to_view,
+        )
+        vectors = _positions_3d(endpoints - positions)
+        positions3 = _positions_3d(positions)
+        colors = _rgba8_broadcast(visual.colors, positions3.shape[0])
+        widths = self._scale_canvas_px_array(visual.width_values())
+
+        dvz_visual = self.dvz.dvz_vector(self.scene, 0)
+        if _is_null_handle(dvz_visual):
+            raise DatovizV04Unavailable("Datoviz dvz_vector() failed")
+        try:
+            style = self.dvz.dvz_vector_style()
+        except Exception as exc:
+            raise DatovizV04Unavailable(
+                f"Datoviz dvz_vector_style() failed: {type(exc).__name__}: {exc}"
+            ) from exc
+        if not isinstance(style, self.dvz.DvzVectorStyle):
+            raise DatovizV04Unsupported(
+                "Datoviz dvz_vector_style() returned an incompatible DvzVectorStyle"
+            )
+        style.scale = 1.0
+        style.anchor = int(self.dvz.DVZ_VECTOR_ANCHOR_TAIL)
+        style.start_cap = cap_values[visual.start_cap]
+        style.end_cap = cap_values[visual.end_cap]
+        _require_datoviz_success(
+            self.dvz.dvz_vector_set_style(dvz_visual, ctypes.byref(style)),
+            "Datoviz vector style setup failed",
+        )
+        _set_alpha_mode_if_translucent(self.dvz, dvz_visual, colors)
+        _set_visual_data(self.dvz, dvz_visual, "position", positions3)
+        _set_visual_data(self.dvz, dvz_visual, "vector", vectors)
+        _set_visual_data(self.dvz, dvz_visual, "color", colors)
+        _set_visual_data(self.dvz, dvz_visual, "stroke_width_px", widths)
+        _add_visual_to_panel(
+            self.dvz,
+            self.panel,
+            dvz_visual,
+            _visual_attach_desc(
+                self.dvz,
+                coord_space=self._visual_coord_space(visual.coordinate_space),
+                z_layer=0,
+            ),
+        )
+        self.visuals[visual.id] = dvz_visual
+        _record_transform_adaptation(
+            self.transform_adaptations, visual.id, visual.transform
+        )
         return dvz_visual
 
     def update_point_visual(self, visual: PointVisual) -> None:
@@ -5443,6 +5541,19 @@ def _stroke_cap_value(dvz: Any, cap: StrokeCap) -> int:
     if enum_type is not None:
         return int(getattr(enum_type, name))
     return _STROKE_CAP_FALLBACKS[cap]
+
+
+def _preflight_datoviz_vector_api(dvz: Any) -> dict[VectorCap, int]:
+    """Validate the public vector ABI before allocating a native visual."""
+    diagnostics = datoviz_vector_api_diagnostics(dvz)
+    if diagnostics:
+        raise DatovizV04Unsupported(
+            "Datoviz VectorVisual requires public vector ABI: "
+            + ", ".join(diagnostics)
+        )
+    return {
+        cap: int(getattr(dvz, name)) for cap, name in _VECTOR_CAP_NAMES.items()
+    }
 
 
 def _stroke_join_value(dvz: Any, join: StrokeJoin) -> int:

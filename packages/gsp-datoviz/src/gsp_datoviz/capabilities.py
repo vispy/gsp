@@ -29,6 +29,9 @@ from gsp.protocol import (
     PIXEL_VISUAL_POSITIONS3D_DATA_VIEW3D_CAPABILITY,
     SPHERE_VISUAL_ANALYTIC_SURFACE_DEPTH_CAPABILITY,
     SPHERE_VISUAL_CAPABILITY,
+    VECTOR_VISUAL_POSITIONS3D_DATA_VIEW3D_CAPABILITY,
+    VECTOR_VISUAL_STRAIGHT_CAPABILITY,
+    VECTOR_VISUAL_TRIANGLE_HEAD_CAPABILITY,
     QUERY_VIEW3D_MESH_TRIANGLE_PICK_CAPABILITY,
     QUERY_VIEW3D_RAY_READBACK_CAPABILITY,
     QueryCoordinateSpace,
@@ -51,6 +54,7 @@ from gsp.protocol import (
     VIEW3D_STATIC_PERSPECTIVE_CAPABILITY,
 )
 from gsp_datoviz.query import datoviz_v04_query_binding_diagnostics
+from gsp_datoviz.latest_api_contract import datoviz_vector_api_diagnostics
 from gsp_datoviz.v04_import import bootstrap_datoviz_v04_source
 
 
@@ -494,18 +498,28 @@ def gsp_capability_snapshot_from_datoviz(
         or (
             not callable(getattr(dvz, name, None))
             if name.startswith("dvz_")
-            else not hasattr(dvz, name)
+            else getattr(dvz, name, None) is None
         )
     )
     sphere_ready = not sphere_missing and not view3d_diagnostics
-    view3d_capabilities: tuple[str, ...] = (
-        (
-            PIXEL_VISUAL_CAPABILITY,
-            PIXEL_VISUAL_EXACT_LOGICAL_SIZE_CAPABILITY,
+    vector_diagnostics = datoviz_vector_api_diagnostics(dvz)
+    vector_ready = not vector_diagnostics
+    general_visual_capabilities: list[str] = []
+    if pixel_ready:
+        general_visual_capabilities.extend(
+            (
+                PIXEL_VISUAL_CAPABILITY,
+                PIXEL_VISUAL_EXACT_LOGICAL_SIZE_CAPABILITY,
+            )
         )
-        if pixel_ready
-        else ()
-    )
+    if vector_ready:
+        general_visual_capabilities.extend(
+            (
+                VECTOR_VISUAL_STRAIGHT_CAPABILITY,
+                VECTOR_VISUAL_TRIANGLE_HEAD_CAPABILITY,
+            )
+        )
+    view3d_capabilities: tuple[str, ...] = tuple(general_visual_capabilities)
     if not pixel_ready:
         metadata["datoviz_pixelvisual_diagnostics"] = ("missing callable dvz_pixel",)
     else:
@@ -513,6 +527,14 @@ def gsp_capability_snapshot_from_datoviz(
             "public dvz_pixel with dense position, color, and pixel_size_px attributes; "
             "canvas logical pixels are scaled exactly once to framebuffer pixels"
         )
+    if vector_ready:
+        metadata["s065_vectorvisual"] = (
+            "canonical resolved tail/head endpoints are adapted before public dvz_vector "
+            "lowering; dense tail/displacement/color/stroke_width_px attributes use "
+            "native unit scale and tail anchor, with semantic caps mapped exactly"
+        )
+    else:
+        metadata["datoviz_vectorvisual_diagnostics"] = vector_diagnostics
     if view3d_diagnostics:
         metadata["datoviz_view3d_binding_diagnostics"] = view3d_diagnostics
     else:
@@ -533,6 +555,11 @@ def gsp_capability_snapshot_from_datoviz(
             view3d_capabilities = (
                 *view3d_capabilities,
                 PIXEL_VISUAL_POSITIONS3D_DATA_VIEW3D_CAPABILITY,
+            )
+        if vector_ready:
+            view3d_capabilities = (
+                *view3d_capabilities,
+                VECTOR_VISUAL_POSITIONS3D_DATA_VIEW3D_CAPABILITY,
             )
         if sphere_ready:
             view3d_capabilities = (
@@ -631,6 +658,7 @@ def gsp_capability_snapshot_from_datoviz(
             "point",
             *(("pixel",) if pixel_ready else ()),
             *(("sphere",) if sphere_ready else ()),
+            *(("vector",) if vector_ready else ()),
             "marker",
             "segment",
             "path",

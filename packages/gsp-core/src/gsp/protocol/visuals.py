@@ -73,6 +73,25 @@ class StrokeJoin(str, Enum):
     BEVEL = "bevel"
 
 
+class VectorAnchor(str, Enum):
+    """Placement of a vector anchor relative to its resolved endpoints."""
+
+    TAIL = "tail"
+    CENTER = "center"
+    HEAD = "head"
+
+
+class VectorCap(str, Enum):
+    """Visual-wide vector endpoint cap vocabulary."""
+
+    NONE = "none"
+    BUTT = "butt"
+    ROUND = "round"
+    TRIANGLE_IN = "triangle_in"
+    TRIANGLE_OUT = "triangle_out"
+    SQUARE = "square"
+
+
 class FontRole(str, Enum):
     """Generic backend-resolved text font role."""
 
@@ -195,6 +214,11 @@ SPHERE_VISUAL_CAPABILITY = "spherevisual.v1"
 SPHERE_VISUAL_ANALYTIC_SURFACE_DEPTH_CAPABILITY = (
     "spherevisual.analytic_surface_depth.v1"
 )
+VECTOR_VISUAL_STRAIGHT_CAPABILITY = "vectorvisual.straight.v1"
+VECTOR_VISUAL_POSITIONS3D_DATA_VIEW3D_CAPABILITY = (
+    "vectorvisual.positions3d.data.view3d.v1"
+)
+VECTOR_VISUAL_TRIANGLE_HEAD_CAPABILITY = "vectorvisual.triangle_head.v1"
 MESH_NORMALS_FACE3D_CAPABILITY = "meshvisual.normals.face3d.v1"
 MESH_NORMAL_GENERATION_FACE_FLAT_CAPABILITY = (
     "meshvisual.normal_generation.face_flat.v1"
@@ -315,6 +339,81 @@ class SphereVisual:
                 np.asarray(self.radii, dtype=np.float32).reshape(-1)
             )
         return np.full((self.positions.shape[0],), float(self.radii), dtype=np.float32)
+
+
+@dataclass(frozen=True, slots=True)
+class VectorVisual:
+    """Straight semantic vectors with DATA- or NDC-space displacements."""
+
+    id: str
+    positions: FloatArray
+    vectors: FloatArray
+    colors: ColorArray
+    widths_px: FloatArray | float = 1.0
+    scale: float = 1.0
+    anchor: VectorAnchor = VectorAnchor.TAIL
+    start_cap: VectorCap = VectorCap.BUTT
+    end_cap: VectorCap = VectorCap.TRIANGLE_OUT
+    coordinate_space: CoordinateSpace = CoordinateSpace.DATA
+    transform: VisualTransformBinding | None = None
+
+    def __post_init__(self) -> None:
+        validate_id(self.id)
+        _validate_visual_transform(self.transform)
+        item_count = _validate_positions(self.positions)
+        if self.vectors.shape != self.positions.shape:
+            raise ValueError("vectors must have the same shape as positions")
+        if self.vectors.dtype not in (
+            np.dtype(np.float32),
+            np.dtype(np.float64),
+        ):
+            raise TypeError("vectors must be float32 or float64")
+        if not np.all(np.isfinite(self.vectors)):
+            raise ValueError("vectors must be finite")
+        if np.any(np.linalg.norm(self.vectors, axis=1) == 0):
+            raise ValueError("vectors must be nonzero per item")
+        _validate_rgba_values(self.colors, item_count, field_name="colors")
+        _validate_positive_values(self.widths_px, item_count, field_name="widths_px")
+        if not np.isfinite(self.scale):
+            raise ValueError("scale must be finite")
+        if self.scale <= 0:
+            raise ValueError("scale must be strictly positive")
+        if not isinstance(self.anchor, VectorAnchor):
+            raise TypeError("anchor must be a VectorAnchor")
+        if not isinstance(self.start_cap, VectorCap):
+            raise TypeError("start_cap must be a VectorCap")
+        if not isinstance(self.end_cap, VectorCap):
+            raise TypeError("end_cap must be a VectorCap")
+
+    def width_values(self) -> npt.NDArray[np.float32]:
+        """Return one logical-pixel stroke width per vector item."""
+        if isinstance(self.widths_px, np.ndarray):
+            return np.ascontiguousarray(
+                np.asarray(self.widths_px, dtype=np.float32).reshape(-1)
+            )
+        return np.full(
+            (self.positions.shape[0],), float(self.widths_px), dtype=np.float32
+        )
+
+    def endpoint_values(
+        self,
+    ) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
+        """Resolve semantic tail/head endpoints before backend lowering."""
+        anchors = np.asarray(self.positions, dtype=np.float64)
+        displacements = np.asarray(self.vectors, dtype=np.float64) * float(self.scale)
+        if self.anchor is VectorAnchor.TAIL:
+            tails = anchors
+            heads = anchors + displacements
+        elif self.anchor is VectorAnchor.CENTER:
+            tails = anchors - 0.5 * displacements
+            heads = anchors + 0.5 * displacements
+        else:
+            tails = anchors - displacements
+            heads = anchors
+        return (
+            np.ascontiguousarray(tails),
+            np.ascontiguousarray(heads),
+        )
 
 
 @dataclass(frozen=True, slots=True)

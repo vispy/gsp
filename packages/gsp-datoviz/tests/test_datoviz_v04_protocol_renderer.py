@@ -35,6 +35,9 @@ from gsp.protocol import (
     PixelVisual,
     SegmentVisual,
     SphereVisual,
+    VectorAnchor,
+    VectorCap,
+    VectorVisual,
     TextVisual,
     Texture2D,
     TextureFilter,
@@ -182,6 +185,13 @@ class FakeDatovizV04:
     DVZ_VISUAL_COORD_DATA = 1
     DVZ_VISUAL_COORD_PANEL = 2
     DVZ_SPHERE_MODE_RAYCAST_IMPOSTOR = 1
+    DVZ_VECTOR_ANCHOR_TAIL = 0
+    DVZ_SEGMENT_CAP_NONE = 0
+    DVZ_SEGMENT_CAP_ROUND = 1
+    DVZ_SEGMENT_CAP_TRIANGLE_IN = 2
+    DVZ_SEGMENT_CAP_TRIANGLE_OUT = 3
+    DVZ_SEGMENT_CAP_SQUARE = 4
+    DVZ_SEGMENT_CAP_BUTT = 5
     DvzCameraDesc = object
     DvzCameraView = object
     DvzCameraProjection = object
@@ -286,6 +296,46 @@ class FakeDatovizV04:
         self.calls.append(("sphere_set_mode", visual, mode))
         return 0
 
+    class DvzVectorStyle(ctypes.Structure):
+        _fields_ = (
+            ("struct_size", ctypes.c_uint32),
+            ("flags", ctypes.c_uint32),
+            ("scale", ctypes.c_float),
+            ("anchor", ctypes.c_int),
+            ("start_cap", ctypes.c_int),
+            ("end_cap", ctypes.c_int),
+            ("join", ctypes.c_int),
+            ("miter_limit", ctypes.c_float),
+        )
+
+    def dvz_vector(self, scene, flags):
+        self.calls.append(("vector", scene, flags))
+        return "vector-visual"
+
+    def dvz_vector_style(self):
+        style = self.DvzVectorStyle()
+        style.struct_size = ctypes.sizeof(self.DvzVectorStyle)
+        style.scale = 1.0
+        style.anchor = 0
+        style.start_cap = 0
+        style.end_cap = 3
+        style.miter_limit = 4.0
+        return style
+
+    def dvz_vector_set_style(self, visual, style_pointer):
+        style = style_pointer._obj
+        self.calls.append(
+            (
+                "vector_set_style",
+                visual,
+                float(style.scale),
+                int(style.anchor),
+                int(style.start_cap),
+                int(style.end_cap),
+            )
+        )
+        return 0
+
     def dvz_image(self, scene, flags):
         self.calls.append(("image", scene, flags))
         return "image-visual"
@@ -303,9 +353,17 @@ class FakeDatovizV04:
         return "path-visual"
 
     class DvzSegmentCap:
+        DVZ_SEGMENT_CAP_NONE = 0
         DVZ_SEGMENT_CAP_ROUND = 1
+        DVZ_SEGMENT_CAP_TRIANGLE_IN = 2
+        DVZ_SEGMENT_CAP_TRIANGLE_OUT = 3
         DVZ_SEGMENT_CAP_SQUARE = 4
         DVZ_SEGMENT_CAP_BUTT = 5
+
+    class DvzVectorAnchor:
+        DVZ_VECTOR_ANCHOR_TAIL = 0
+        DVZ_VECTOR_ANCHOR_CENTER = 1
+        DVZ_VECTOR_ANCHOR_HEAD = 2
 
     def dvz_segment_set_caps(self, visual, start_cap, end_cap):
         self.calls.append(("segment_set_caps", visual, start_cap, end_cap))
@@ -2938,6 +2996,286 @@ def test_datoviz_sphere_capabilities_require_complete_public_raycast_api() -> No
     assert not caps.supports_view3d_capability("spherevisual.analytic_surface_depth.v1")
 
 
+def _vector_view3d() -> View3D:
+    return View3D(
+        id="view:vectors",
+        panel_id="panel:vectors",
+        camera=Camera3D(
+            eye=(3.0, 3.0, 3.0),
+            target=(0.0, 0.0, 0.0),
+            up=(0.0, 0.0, 1.0),
+        ),
+        projection=PerspectiveProjection3D(near_far=(0.1, 100.0)),
+    )
+
+
+def _datoviz_vector(**kwargs: object) -> VectorVisual:
+    values: dict[str, object] = {
+        "id": "vector:datoviz",
+        "positions": np.array(
+            [[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]], dtype=np.float32
+        ),
+        "vectors": np.array(
+            [[1.0, 0.0, 0.0], [0.0, 2.0, -1.0]], dtype=np.float32
+        ),
+        "colors": np.array(
+            [[255, 0, 0, 255], [0, 128, 255, 192]], dtype=np.uint8
+        ),
+        "widths_px": np.array([2.0, 5.0], dtype=np.float32),
+    }
+    values.update(kwargs)
+    return VectorVisual(**values)  # type: ignore[arg-type]
+
+
+def test_add_vector_visual_uploads_canonical_endpoints_with_native_unit_style() -> None:
+    fake = FakeDatovizV04WithRetainedView3D()
+    renderer = DatovizV04ProtocolRenderer(
+        dvz=fake,
+        view3d=_vector_view3d(),
+    )
+    visual = _datoviz_vector(
+        scale=2.5,
+        anchor=VectorAnchor.CENTER,
+        start_cap=VectorCap.ROUND,
+        end_cap=VectorCap.TRIANGLE_OUT,
+    )
+
+    native = renderer.add_vector_visual(visual)
+
+    assert native == "vector-visual"
+    assert renderer.visuals[visual.id] == native
+    assert _calls(fake, "vector_set_style")[-1][2:] == (1.0, 0, 1, 3)
+    uploads = _calls(fake, "set_data")
+    assert [upload[2] for upload in uploads[-4:]] == [
+        "position",
+        "vector",
+        "color",
+        "stroke_width_px",
+    ]
+    expected_tails, expected_heads = visual.endpoint_values()
+    np.testing.assert_allclose(uploads[-4][3], expected_tails)
+    np.testing.assert_allclose(uploads[-3][3], expected_heads - expected_tails)
+    np.testing.assert_array_equal(uploads[-2][3], visual.colors)
+    np.testing.assert_allclose(uploads[-1][3], [2.0, 5.0])
+
+
+@pytest.mark.parametrize(
+    ("cap", "native_value"),
+    [
+        (VectorCap.NONE, 0),
+        (VectorCap.ROUND, 1),
+        (VectorCap.TRIANGLE_IN, 2),
+        (VectorCap.TRIANGLE_OUT, 3),
+        (VectorCap.SQUARE, 4),
+        (VectorCap.BUTT, 5),
+    ],
+)
+def test_add_vector_visual_maps_every_semantic_cap(
+    cap: VectorCap, native_value: int
+) -> None:
+    fake = FakeDatovizV04WithRetainedView3D()
+    renderer = DatovizV04ProtocolRenderer(dvz=fake, view3d=_vector_view3d())
+    renderer.add_vector_visual(
+        _datoviz_vector(start_cap=cap, end_cap=cap)
+    )
+    assert _calls(fake, "vector_set_style")[-1][4:] == (
+        native_value,
+        native_value,
+    )
+
+
+def test_add_vector_visual_broadcasts_uniform_color_and_scalar_width() -> None:
+    fake = FakeDatovizV04WithRetainedView3D()
+    renderer = DatovizV04ProtocolRenderer(dvz=fake, view3d=_vector_view3d())
+    renderer.add_vector_visual(
+        _datoviz_vector(
+            colors=np.array([64, 128, 255, 255], dtype=np.uint8),
+            widths_px=3.0,
+        )
+    )
+    uploads = _calls(fake, "set_data")
+    np.testing.assert_array_equal(
+        uploads[-2][3],
+        [[64, 128, 255, 255], [64, 128, 255, 255]],
+    )
+    np.testing.assert_allclose(uploads[-1][3], [3.0, 3.0])
+
+
+@pytest.mark.parametrize(
+    "missing",
+    [
+        "dvz_vector",
+        "dvz_vector_style",
+        "dvz_vector_set_style",
+        "DvzVectorStyle",
+        "DVZ_VECTOR_ANCHOR_TAIL",
+        "DVZ_SEGMENT_CAP_NONE",
+        "DVZ_SEGMENT_CAP_BUTT",
+        "DVZ_SEGMENT_CAP_ROUND",
+        "DVZ_SEGMENT_CAP_TRIANGLE_IN",
+        "DVZ_SEGMENT_CAP_TRIANGLE_OUT",
+        "DVZ_SEGMENT_CAP_SQUARE",
+    ],
+)
+def test_add_vector_visual_rejects_incomplete_public_abi_before_allocation(
+    monkeypatch: pytest.MonkeyPatch, missing: str
+) -> None:
+    fake = FakeDatovizV04WithRetainedView3D()
+    monkeypatch.setattr(fake, missing, None)
+    renderer = DatovizV04ProtocolRenderer(dvz=fake, view3d=_vector_view3d())
+
+    with pytest.raises(DatovizV04Unsupported, match=missing):
+        renderer.add_vector_visual(_datoviz_vector())
+
+    assert _calls(fake, "vector") == []
+
+
+@pytest.mark.parametrize(
+    ("factory_name", "factory", "error_type", "message"),
+    [
+        (
+            "dvz_vector",
+            lambda _scene, _flags: None,
+            DatovizV04Unavailable,
+            r"dvz_vector\(\) failed",
+        ),
+        (
+            "dvz_vector_style",
+            lambda: None,
+            DatovizV04Unsupported,
+            "incompatible DvzVectorStyle",
+        ),
+        (
+            "dvz_vector_style",
+            lambda: (_ for _ in ()).throw(RuntimeError("factory")),
+            DatovizV04Unavailable,
+            r"dvz_vector_style\(\) failed",
+        ),
+        (
+            "dvz_vector_set_style",
+            lambda _visual, _style: 1,
+            DatovizV04Unsupported,
+            "vector style setup failed",
+        ),
+    ],
+)
+def test_add_vector_visual_reports_native_failures(
+    factory_name: str,
+    factory: object,
+    error_type: type[Exception],
+    message: str,
+) -> None:
+    fake = FakeDatovizV04WithRetainedView3D()
+    setattr(fake, factory_name, factory)
+    renderer = DatovizV04ProtocolRenderer(dvz=fake, view3d=_vector_view3d())
+    with pytest.raises(error_type, match=message):
+        renderer.add_vector_visual(_datoviz_vector())
+
+
+def test_add_vector_visual_enforces_2d_and_3d_view_gates() -> None:
+    fake = FakeDatovizV04WithRetainedView3D()
+    visual2d = _datoviz_vector(
+        positions=np.array([[0.0, 0.0]], dtype=np.float32),
+        vectors=np.array([[1.0, 0.0]], dtype=np.float32),
+        colors=np.array([255, 0, 0, 255], dtype=np.uint8),
+        widths_px=1.0,
+    )
+    with pytest.raises(DatovizV04Unsupported, match="require View2D"):
+        DatovizV04ProtocolRenderer(dvz=fake).add_vector_visual(visual2d)
+    with pytest.raises(DatovizV04Unsupported, match="require DATA space and View3D"):
+        DatovizV04ProtocolRenderer(dvz=fake).add_vector_visual(
+            _datoviz_vector(coordinate_space=CoordinateSpace.NDC)
+        )
+    with pytest.raises(DatovizV04Unsupported, match="require DATA space and View3D"):
+        DatovizV04ProtocolRenderer(dvz=fake).add_vector_visual(_datoviz_vector())
+
+
+def test_datoviz_vector_capabilities_require_complete_public_api() -> None:
+    ready = gsp_capability_snapshot_from_datoviz(
+        FakeDvzCapabilitySnapshot(), dvz=FakeDatovizV04WithRetainedView3D()
+    )
+    assert ready.supports_visual("vector")
+    assert ready.supports_view3d_capability("vectorvisual.straight.v1")
+    assert ready.supports_view3d_capability(
+        "vectorvisual.positions3d.data.view3d.v1"
+    )
+    assert ready.supports_view3d_capability("vectorvisual.triangle_head.v1")
+    assert "canonical resolved tail/head endpoints" in ready.metadata[
+        "s065_vectorvisual"
+    ]
+
+    incomplete = FakeDatovizV04WithRetainedView3D()
+    incomplete.dvz_vector_set_style = None
+    capabilities = gsp_capability_snapshot_from_datoviz(
+        FakeDvzCapabilitySnapshot(), dvz=incomplete
+    )
+    assert not capabilities.supports_visual("vector")
+    assert not capabilities.supports_view3d_capability("vectorvisual.straight.v1")
+
+    no_pixel = FakeDatovizV04WithRetainedView3D()
+    no_pixel.dvz_pixel = None
+    vector_only = gsp_capability_snapshot_from_datoviz(
+        FakeDvzCapabilitySnapshot(), dvz=no_pixel
+    )
+    assert vector_only.supports_visual("vector")
+    assert vector_only.supports_view3d_capability("vectorvisual.straight.v1")
+
+
+def test_general_pixel_and_vector_caps_do_not_require_view3d_binding() -> None:
+    capabilities = gsp_capability_snapshot_from_datoviz(
+        FakeDvzCapabilitySnapshot(), dvz=FakeDatovizV04()
+    )
+
+    assert capabilities.supports_visual("pixel")
+    assert capabilities.supports_view3d_capability("pixelvisual.v1")
+    assert capabilities.supports_view3d_capability(
+        "pixelvisual.exact_logical_size.v1"
+    )
+    assert not capabilities.supports_view3d_capability(
+        "pixelvisual.positions3d.data.view3d.v1"
+    )
+    assert capabilities.supports_visual("vector")
+    assert capabilities.supports_view3d_capability("vectorvisual.straight.v1")
+    assert capabilities.supports_view3d_capability("vectorvisual.triangle_head.v1")
+    assert not capabilities.supports_view3d_capability(
+        "vectorvisual.positions3d.data.view3d.v1"
+    )
+
+
+@pytest.mark.parametrize("invalid_style", [object])
+def test_datoviz_vector_capabilities_reject_non_ctypes_style(
+    invalid_style: object,
+) -> None:
+    fake = FakeDatovizV04WithRetainedView3D()
+    fake.DvzVectorStyle = invalid_style  # type: ignore[assignment,misc]
+    capabilities = gsp_capability_snapshot_from_datoviz(
+        FakeDvzCapabilitySnapshot(), dvz=fake
+    )
+    assert not capabilities.supports_visual("vector")
+    assert "ctypes.Structure" in " ".join(
+        capabilities.metadata["datoviz_vectorvisual_diagnostics"]
+    )
+
+
+def test_datoviz_vector_capabilities_reject_style_missing_required_field() -> None:
+    class IncompleteVectorStyle(ctypes.Structure):
+        _fields_ = (
+            ("scale", ctypes.c_float),
+            ("anchor", ctypes.c_int),
+            ("start_cap", ctypes.c_int),
+        )
+
+    fake = FakeDatovizV04WithRetainedView3D()
+    fake.DvzVectorStyle = IncompleteVectorStyle  # type: ignore[assignment,misc]
+    capabilities = gsp_capability_snapshot_from_datoviz(
+        FakeDvzCapabilitySnapshot(), dvz=fake
+    )
+    assert not capabilities.supports_visual("vector")
+    assert "missing DvzVectorStyle.end_cap" in capabilities.metadata[
+        "datoviz_vectorvisual_diagnostics"
+    ]
+
+
 @pytest.mark.parametrize(
     "missing",
     [
@@ -2945,6 +3283,17 @@ def test_datoviz_sphere_capabilities_require_complete_public_raycast_api() -> No
         "dvz_sphere",
         "dvz_sphere_set_mode",
         "DVZ_SPHERE_MODE_RAYCAST_IMPOSTOR",
+        "dvz_vector",
+        "dvz_vector_style",
+        "dvz_vector_set_style",
+        "DvzVectorStyle",
+        "DVZ_VECTOR_ANCHOR_TAIL",
+        "DVZ_SEGMENT_CAP_NONE",
+        "DVZ_SEGMENT_CAP_BUTT",
+        "DVZ_SEGMENT_CAP_ROUND",
+        "DVZ_SEGMENT_CAP_TRIANGLE_IN",
+        "DVZ_SEGMENT_CAP_TRIANGLE_OUT",
+        "DVZ_SEGMENT_CAP_SQUARE",
     ],
 )
 def test_latest_datoviz_contract_requires_visual_symbols(missing: str) -> None:

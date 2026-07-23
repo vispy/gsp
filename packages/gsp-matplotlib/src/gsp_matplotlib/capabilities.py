@@ -15,6 +15,9 @@ from gsp.protocol import (
     PIXEL_VISUAL_EXACT_LOGICAL_SIZE_CAPABILITY,
     PIXEL_VISUAL_POSITIONS3D_DATA_VIEW3D_CAPABILITY,
     SPHERE_VISUAL_CAPABILITY,
+    VECTOR_VISUAL_POSITIONS3D_DATA_VIEW3D_CAPABILITY,
+    VECTOR_VISUAL_STRAIGHT_CAPABILITY,
+    VECTOR_VISUAL_TRIANGLE_HEAD_CAPABILITY,
     QUERY_VIEW3D_RAY_READBACK_CAPABILITY,
     QueryLayoutCapability,
     RenderTargetCapability,
@@ -65,6 +68,7 @@ def capability_snapshot() -> CapabilitySnapshot:
             "text",
             "mesh",
             "sphere",
+            "vector",
         ),
         query_modes=("panel-query", "point-item", "image-texel"),
         navigation_placements=(NavigationPlacement.CLIENT_SIDE.value,),
@@ -79,6 +83,9 @@ def capability_snapshot() -> CapabilitySnapshot:
             PIXEL_VISUAL_EXACT_LOGICAL_SIZE_CAPABILITY,
             PIXEL_VISUAL_POSITIONS3D_DATA_VIEW3D_CAPABILITY,
             SPHERE_VISUAL_CAPABILITY,
+            VECTOR_VISUAL_STRAIGHT_CAPABILITY,
+            VECTOR_VISUAL_POSITIONS3D_DATA_VIEW3D_CAPABILITY,
+            VECTOR_VISUAL_TRIANGLE_HEAD_CAPABILITY,
         ),
         output_formats=("png", "svg", "pdf"),
         extensions=(TILED_IMAGE_EXTENSION_CAPABILITY,),
@@ -104,6 +111,11 @@ def capability_snapshot() -> CapabilitySnapshot:
                 "adapted projected circles from DATA radii with deterministic center-depth "
                 "painter ordering; perspective size is a camera-right view-plane approximation; "
                 "analytic surface depth is not claimed"
+            ),
+            "vectorvisual": (
+                "deterministic 2D/3D line-and-marker-cap adaptation preserving resolved "
+                "endpoints, color, and logical-pixel widths; cap rasterization differs "
+                "from Datoviz"
             ),
         },
         axis_providers=(matplotlib_axis_provider_capability(),),

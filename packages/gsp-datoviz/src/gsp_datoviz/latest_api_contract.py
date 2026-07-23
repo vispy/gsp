@@ -2,12 +2,27 @@
 
 from __future__ import annotations
 
+import ctypes
 from pathlib import Path
 from types import ModuleType
 from typing import Any
 
 
 EXPECTED_DATOVIZ_PACKAGE_ROOT = Path("/Users/cyrille/GIT/Viz/datoviz/datoviz")
+
+REQUIRED_DATOVIZ_VECTOR_SYMBOLS: tuple[str, ...] = (
+    "dvz_vector",
+    "dvz_vector_style",
+    "dvz_vector_set_style",
+    "DvzVectorStyle",
+    "DVZ_VECTOR_ANCHOR_TAIL",
+    "DVZ_SEGMENT_CAP_NONE",
+    "DVZ_SEGMENT_CAP_BUTT",
+    "DVZ_SEGMENT_CAP_ROUND",
+    "DVZ_SEGMENT_CAP_TRIANGLE_IN",
+    "DVZ_SEGMENT_CAP_TRIANGLE_OUT",
+    "DVZ_SEGMENT_CAP_SQUARE",
+)
 
 REQUIRED_DATOVIZ_V04_DEV_SYMBOLS: tuple[str, ...] = (
     "DvzVisualCoordSpace",
@@ -24,6 +39,7 @@ REQUIRED_DATOVIZ_V04_DEV_SYMBOLS: tuple[str, ...] = (
     "dvz_sphere",
     "dvz_sphere_set_mode",
     "DVZ_SPHERE_MODE_RAYCAST_IMPOSTOR",
+    *REQUIRED_DATOVIZ_VECTOR_SYMBOLS,
     "dvz_image",
     "dvz_visual_set_data",
     "dvz_sampled_field_desc",
@@ -57,6 +73,27 @@ def datoviz_current_api_missing_symbols(module: ModuleType | Any) -> tuple[str, 
     return tuple(
         name for name in REQUIRED_DATOVIZ_V04_DEV_SYMBOLS if not hasattr(module, name)
     )
+
+
+def datoviz_vector_api_diagnostics(module: ModuleType | Any) -> tuple[str, ...]:
+    """Return non-allocating diagnostics for the public vector ABI."""
+    diagnostics: list[str] = []
+    for name in REQUIRED_DATOVIZ_VECTOR_SYMBOLS:
+        value = getattr(module, name, None)
+        if name.startswith("dvz_"):
+            if not callable(value):
+                diagnostics.append(f"missing callable {name}")
+        elif value is None:
+            diagnostics.append(f"missing {name}")
+    style_type = getattr(module, "DvzVectorStyle", None)
+    if not isinstance(style_type, type) or not issubclass(style_type, ctypes.Structure):
+        diagnostics.append("DvzVectorStyle is not a ctypes.Structure")
+    else:
+        fields = {name for name, *_ in getattr(style_type, "_fields_", ())}
+        for name in ("scale", "anchor", "start_cap", "end_cap"):
+            if name not in fields:
+                diagnostics.append(f"missing DvzVectorStyle.{name}")
+    return tuple(dict.fromkeys(diagnostics))
 
 
 def datoviz_current_api_contract_diagnostics(
