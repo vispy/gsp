@@ -33,6 +33,11 @@ Screen-space widths and sizes are logical pixels unless a specific contract stat
 
 `PixelVisual` represents screen-aligned square samples. Positions are finite `(N,2)` or `(N,3)` float arrays, colors are uniform `(4,)` or per-item `(N,4)` RGBA, and `pixel_size_px` is a finite strictly positive scalar or `(N,)` logical-pixel width. DATA-space `(N,3)` pixels require `View3D`; per-item state and backend handles are not protocol fields.
 
+`SphereVisual` represents analytic DATA-space spheres. Positions are finite `(N,3)` float arrays,
+`radii` is a finite strictly positive scalar or `(N,)` array in DATA units, and colors are uniform
+`(4,)` or per-item `(N,4)` RGBA. A sphere scene requires `View3D`; backend handles and tessellation
+or impostor choices are not protocol fields.
+
 ### PointVisual
 
 | Field | Type | Cardinality | Default |
@@ -44,6 +49,21 @@ Screen-space widths and sizes are logical pixels unless a specific contract stat
 
 `GSP-VIS-006`: exactly one direct color source or scalar color encoding controls the point color
 slot. `(N,3)` positions require an accepted 3D view/coordinate combination.
+
+### SphereVisual
+
+| Field | Type | Cardinality/default |
+|---|---|---|
+| `positions` | finite float array | `(N,3)` DATA coordinates |
+| `radii` | positive finite float | scalar or `(N,)` DATA-unit radius |
+| `colors` | RGBA | uniform `(4,)` or per-item `(N,4)` |
+| `coordinate_space` | coordinate-space enum | fixed `data` |
+
+`GSP-VIS-016`: `spherevisual.v1` preserves sphere centers, DATA-unit radii, and RGBA association.
+Analytic per-fragment surface depth is a separate
+`spherevisual.analytic_surface_depth.v1` capability. A center-depth painter ordering or a
+view-plane projected-circle approximation must be advertised as adapted behavior and does not
+satisfy the analytic-depth capability.
 
 ### MarkerVisual
 
