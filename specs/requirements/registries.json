@@ -14,7 +14,7 @@
     "panel-query",
     "shutdown"
   ],
-  "visual_families": ["point", "pixel", "sphere", "vector", "marker", "segment", "path", "image", "text", "mesh"],
+  "visual_families": ["point", "pixel", "sphere", "vector", "primitive", "marker", "segment", "path", "image", "text", "mesh"],
   "capabilities": [
     "interaction.view2d.navigation.v1",
     "view3d.static.orthographic.v1",
@@ -27,6 +27,13 @@
     "vectorvisual.straight.v1",
     "vectorvisual.positions3d.data.view3d.v1",
     "vectorvisual.triangle_head.v1",
+    "primitivevisual.v1",
+    "primitivevisual.indexed.v1",
+    "primitivevisual.point_list",
+    "primitivevisual.line_list",
+    "primitivevisual.line_strip",
+    "primitivevisual.triangle_list",
+    "primitivevisual.triangle_strip",
     "meshvisual.positions3d.data_view3d.v1",
     "meshvisual.positions3d.ndc.v1",
     "meshvisual.positions3d.opaque_depth.v1",

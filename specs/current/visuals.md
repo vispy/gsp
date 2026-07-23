@@ -44,6 +44,12 @@ tail/head endpoints before backend lowering. Colors are uniform or per-item RGBA
 strictly positive logical pixels, and start/end caps use the registered six-value cap vocabulary.
 DATA-space `(N,3)` vectors require `View3D`.
 
+`PrimitiveVisual` is a bounded geometry escape hatch for point lists, line lists, line strips,
+triangle lists, and triangle strips. It contains positions, colors, and an optional flat public
+vertex-index stream, but no shader, pipeline, material, depth, culling, instancing, restart,
+adjacency, normals, textures, or native-handle fields. Topology cardinality is validated against
+the effective stream after optional indexing.
+
 ### PointVisual
 
 | Field | Type | Cardinality | Default |
@@ -87,6 +93,25 @@ backend lowering; adapters must not apply scale or anchor a second time.
 `vectorvisual.straight.v1` preserves endpoints, colors, widths, and cap association. DATA-space 3D
 realization requires `vectorvisual.positions3d.data.view3d.v1`; triangle-cap realization is
 declared separately by `vectorvisual.triangle_head.v1`.
+
+### PrimitiveVisual
+
+| Field | Type | Cardinality/default |
+|---|---|---|
+| `topology` | bounded topology enum | required |
+| `positions` | finite float array | `(N,2)` or `(N,3)` |
+| `colors` | RGBA | uniform `(4,)` or per-vertex `(N,4)` |
+| `indices` | non-negative integer array or null | flat public vertex indices; default null |
+| `coordinate_space` | `data` or `ndc` | default `data` |
+| `transform` | transform binding or null | default null; 2D only |
+
+`GSP-VIS-018`: the effective vertex stream is the position order when `indices` is null and the
+exact indexed order otherwise. Indices are finite integers, non-negative, and strictly less than
+the position count `N`. Point lists contain at least one element. Line-list length is an even value
+of at least two; line strips have at least two elements; triangle-list length is a multiple of
+three; triangle strips have at least three elements. `primitivevisual.v1` covers the five bounded
+unindexed topologies and their topology-specific capability IDs. Indexed realization additionally
+requires `primitivevisual.indexed.v1`.
 
 ### MarkerVisual
 

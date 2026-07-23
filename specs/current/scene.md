@@ -60,10 +60,11 @@ never inferred from creation order.
 ## Visuals
 
 A visual is a semantic family, not a backend draw call. Accepted families are points, pixels,
-spheres, vectors, markers, segments, paths, images, text, and triangle meshes. Each declares its
+spheres, vectors, bounded primitives, markers, segments, paths, images, text, and triangle meshes. Each declares its
 coordinate space, geometry, styling inputs, and referenced resources explicitly. DATA-space
 three-dimensional spheres and vectors require an explicit `View3D`; vector scale and anchor are
-resolved to canonical endpoints before backend lowering.
+resolved to canonical endpoints before backend lowering. Primitive topology and optional public
+indices remain semantic records and never expose raw backend draw state.
 
 ### Visual attachment
 

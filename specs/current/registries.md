@@ -19,7 +19,8 @@ replaced; identifiers are never reused for different semantics.
 
 ## Core visual families
 
-`point`, `pixel`, `sphere`, `vector`, `marker`, `segment`, `path`, `image`, `text`, and `mesh`.
+`point`, `pixel`, `sphere`, `vector`, `primitive`, `marker`, `segment`, `path`, `image`, `text`, and
+`mesh`.
 
 ## Capability identifiers
 
@@ -38,6 +39,13 @@ The machine registry is `spec/requirements/registries.json`. Important accepted 
 | `vectorvisual.straight.v1` | straight vectors with canonical resolved endpoints |
 | `vectorvisual.positions3d.data.view3d.v1` | DATA-space 3D VectorVisual mapping |
 | `vectorvisual.triangle_head.v1` | semantic inward/outward triangle vector caps |
+| `primitivevisual.v1` | bounded point/line/triangle primitive geometry |
+| `primitivevisual.indexed.v1` | optional flat public vertex-index stream |
+| `primitivevisual.point_list` | independent points |
+| `primitivevisual.line_list` | independent line pairs |
+| `primitivevisual.line_strip` | connected line strip |
+| `primitivevisual.triangle_list` | independent triangle triples |
+| `primitivevisual.triangle_strip` | alternating-winding triangle strip |
 | `meshvisual.positions3d.data_view3d.v1` | DATA-space 3D mesh mapping |
 | `meshvisual.positions3d.ndc.v1` | NDC 3D mesh placement |
 | `meshvisual.positions3d.opaque_depth.v1` | strict bounded opaque depth |
