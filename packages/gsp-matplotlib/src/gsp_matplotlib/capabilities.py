@@ -11,6 +11,9 @@ from gsp.protocol import (
     MESH3D_DATA_VIEW3D_CAPABILITY,
     MESH3D_NDC_CAPABILITY,
     NavigationPlacement,
+    PIXEL_VISUAL_CAPABILITY,
+    PIXEL_VISUAL_EXACT_LOGICAL_SIZE_CAPABILITY,
+    PIXEL_VISUAL_POSITIONS3D_DATA_VIEW3D_CAPABILITY,
     QUERY_VIEW3D_RAY_READBACK_CAPABILITY,
     QueryLayoutCapability,
     RenderTargetCapability,
@@ -53,6 +56,7 @@ def capability_snapshot() -> CapabilitySnapshot:
         texture_formats=("rgba8",),
         visual_families=(
             "point",
+            "pixel",
             "marker",
             "segment",
             "path",
@@ -69,6 +73,9 @@ def capability_snapshot() -> CapabilitySnapshot:
             MESH3D_DATA_VIEW3D_CAPABILITY,
             MESH3D_NDC_CAPABILITY,
             QUERY_VIEW3D_RAY_READBACK_CAPABILITY,
+            PIXEL_VISUAL_CAPABILITY,
+            PIXEL_VISUAL_EXACT_LOGICAL_SIZE_CAPABILITY,
+            PIXEL_VISUAL_POSITIONS3D_DATA_VIEW3D_CAPABILITY,
         ),
         output_formats=("png", "svg", "pdf"),
         extensions=(TILED_IMAGE_EXTENSION_CAPABILITY,),
@@ -83,7 +90,14 @@ def capability_snapshot() -> CapabilitySnapshot:
         max_tiles_per_request=256,
         max_mosaic_pixels=4096,
         deterministic=True,
-        metadata={"profile_id": "gsp.matplotlib@0.2"},
+        metadata={
+            "profile_id": "gsp.matplotlib@0.2",
+            "pixelvisual_2d": "deterministic square marker with logical-pixel width conversion",
+            "pixelvisual_3d": (
+                "adapted projected-square overlay; anchor projection and logical-pixel width "
+                "are preserved, GPU depth occlusion is not claimed"
+            ),
+        },
         axis_providers=(matplotlib_axis_provider_capability(),),
         layout_capability=LayoutCapability(
             semantic_guides=True,

@@ -10,12 +10,14 @@ from .protocol import (
     CanvasSize,
     ColorScale,
     ColorbarGuide,
+    CoordinateSpace,
     ImageVisual,
     MarkerVisual,
     MeshVisual,
     Panel,
     PanelTextGuide,
     PathVisual,
+    PixelVisual,
     PointVisual,
     SegmentVisual,
     TextVisual,
@@ -26,7 +28,14 @@ from .protocol import (
 )
 
 SceneVisual = (
-    PointVisual | MarkerVisual | SegmentVisual | PathVisual | ImageVisual | TextVisual | MeshVisual
+    PointVisual
+    | PixelVisual
+    | MarkerVisual
+    | SegmentVisual
+    | PathVisual
+    | ImageVisual
+    | TextVisual
+    | MeshVisual
 )
 
 
@@ -52,3 +61,20 @@ class Scene:
         """Reject an ambiguous scene while preserving viewless NDC scenes."""
         if self.view2d is not None and self.view3d is not None:
             raise ValueError("Scene cannot define both view2d and view3d")
+        for visual in self.visuals:
+            if not isinstance(visual, PixelVisual):
+                continue
+            if visual.positions.shape[1] == 3:
+                if visual.coordinate_space is not CoordinateSpace.DATA:
+                    raise ValueError(
+                        "PixelVisual positions3d require CoordinateSpace.DATA"
+                    )
+                if self.view3d is None:
+                    raise ValueError(
+                        "PixelVisual DATA positions3d require Scene.view3d"
+                    )
+            elif (
+                visual.coordinate_space is CoordinateSpace.DATA
+                and self.view2d is None
+            ):
+                raise ValueError("PixelVisual DATA positions2d require Scene.view2d")

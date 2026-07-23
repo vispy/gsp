@@ -24,6 +24,9 @@ from gsp.protocol import (
     MESH_NORMALS_FACE3D_CAPABILITY,
     MESH_NORMAL_GENERATION_FACE_FLAT_CAPABILITY,
     NavigationPlacement,
+    PIXEL_VISUAL_CAPABILITY,
+    PIXEL_VISUAL_EXACT_LOGICAL_SIZE_CAPABILITY,
+    PIXEL_VISUAL_POSITIONS3D_DATA_VIEW3D_CAPABILITY,
     QUERY_VIEW3D_MESH_TRIANGLE_PICK_CAPABILITY,
     QUERY_VIEW3D_RAY_READBACK_CAPABILITY,
     QueryCoordinateSpace,
@@ -477,11 +480,27 @@ def gsp_capability_snapshot_from_datoviz(
         if dvz is None or not hasattr(dvz, name)
     )
     navigation_capabilities = ["interaction.view2d.navigation.v1"]
-    view3d_capabilities: tuple[str, ...] = ()
+    pixel_ready = dvz is not None and callable(getattr(dvz, "dvz_pixel", None))
+    view3d_capabilities: tuple[str, ...] = (
+        (
+            PIXEL_VISUAL_CAPABILITY,
+            PIXEL_VISUAL_EXACT_LOGICAL_SIZE_CAPABILITY,
+        )
+        if pixel_ready
+        else ()
+    )
+    if not pixel_ready:
+        metadata["datoviz_pixelvisual_diagnostics"] = ("missing callable dvz_pixel",)
+    else:
+        metadata["s065_pixelvisual"] = (
+            "public dvz_pixel with dense position, color, and pixel_size_px attributes; "
+            "canvas logical pixels are scaled exactly once to framebuffer pixels"
+        )
     if view3d_diagnostics:
         metadata["datoviz_view3d_binding_diagnostics"] = view3d_diagnostics
     else:
         view3d_capabilities = (
+            *view3d_capabilities,
             VIEW3D_STATIC_ORTHOGRAPHIC_CAPABILITY,
             VIEW3D_STATIC_PERSPECTIVE_CAPABILITY,
             MESH3D_DATA_VIEW3D_CAPABILITY,
@@ -493,6 +512,11 @@ def gsp_capability_snapshot_from_datoviz(
             VIEW3D_LIGHT_AMBIENT_CAPABILITY,
             VIEW3D_LIGHT_DIRECTIONAL_CAPABILITY,
         )
+        if pixel_ready:
+            view3d_capabilities = (
+                *view3d_capabilities,
+                PIXEL_VISUAL_POSITIONS3D_DATA_VIEW3D_CAPABILITY,
+            )
         if not texture2d_mesh_diagnostics:
             view3d_capabilities = (
                 *view3d_capabilities,
@@ -574,6 +598,7 @@ def gsp_capability_snapshot_from_datoviz(
         texture_formats=tuple(texture_formats),
         visual_families=(
             "point",
+            *(("pixel",) if pixel_ready else ()),
             "marker",
             "segment",
             "path",

@@ -32,6 +32,7 @@ from gsp.protocol import (
     MarkerVisual,
     PathVisual,
     PointVisual,
+    PixelVisual,
     SegmentVisual,
     TextVisual,
     Texture2D,
@@ -110,6 +111,10 @@ from gsp_datoviz.capabilities import (
     datoviz_v04_panel_frame_snapshot_diagnostics as capability_panel_frame_snapshot_diagnostics,
     datoviz_v04_view3d_retained_data_diagnostics,
     gsp_capability_snapshot_from_datoviz,
+)
+from gsp_datoviz.latest_api_contract import (
+    REQUIRED_DATOVIZ_V04_DEV_SYMBOLS,
+    datoviz_current_api_missing_symbols,
 )
 from gsp_datoviz.protocol_renderer import (
     DVZ_FIELD_FORMAT_RGBA8_UNORM,
@@ -266,6 +271,10 @@ class FakeDatovizV04:
     def dvz_point(self, scene, flags):
         self.calls.append(("point", scene, flags))
         return "point-visual"
+
+    def dvz_pixel(self, scene, flags):
+        self.calls.append(("pixel", scene, flags))
+        return "pixel-visual"
 
     def dvz_image(self, scene, flags):
         self.calls.append(("image", scene, flags))
@@ -2551,6 +2560,183 @@ def test_add_point_visual_uses_dvz_point_attributes_and_diameter_pixels():
     assert attach_desc.coord_space == 0
     assert attach_desc.clip_rect == 0
     assert attach_desc.viewport_rect == 0
+
+
+def test_add_pixel_visual_uses_public_dense_attributes_and_logical_size_scale():
+    fake = FakeDatovizV04WithQueryCapabilities()
+    canvas_size = CanvasSize.reference_px(320, 240).with_requested_device_scale(2.0)
+    renderer = DatovizV04ProtocolRenderer(
+        dvz=fake,
+        canvas_size=canvas_size,
+        view=View2D(id="view:pixel", panel_id="panel:pixel"),
+    )
+    visual = PixelVisual(
+        id="visual:pixels",
+        positions=np.array([[-0.5, 0.25], [0.5, -0.25]], dtype=np.float32),
+        colors=np.array([255, 0, 0, 255], dtype=np.uint8),
+        pixel_size_px=np.array([2.0, 4.0], dtype=np.float32),
+    )
+
+    dvz_visual = renderer.add_pixel_visual(visual)
+
+    assert dvz_visual == "pixel-visual"
+    assert _calls(fake, "pixel") == [("pixel", "scene", 0)]
+    set_data = _calls(fake, "set_data")
+    assert [call[2] for call in set_data] == [
+        "position",
+        "color",
+        "pixel_size_px",
+    ]
+    np.testing.assert_allclose(
+        set_data[0][3], [[-0.5, 0.25, 0.0], [0.5, -0.25, 0.0]]
+    )
+    np.testing.assert_array_equal(
+        set_data[1][3], [[255, 0, 0, 255], [255, 0, 0, 255]]
+    )
+    np.testing.assert_allclose(set_data[2][3], [4.0, 8.0])
+    assert _calls(fake, "add_visual")[-1][2] == "pixel-visual"
+
+
+def test_add_pixel_visual_preserves_3d_data_positions_and_attachment() -> None:
+    fake = FakeDatovizV04WithRetainedView3D()
+    view3d = View3D(
+        id="view:pixel-3d",
+        panel_id="panel:pixel",
+        camera=Camera3D(
+            eye=(3.0, 3.0, 3.0),
+            target=(0.0, 0.0, 0.0),
+            up=(0.0, 0.0, 1.0),
+        ),
+        projection=PerspectiveProjection3D(
+            fov_y_degrees=45.0,
+            near_far=(0.1, 100.0),
+        ),
+    )
+    renderer = DatovizV04ProtocolRenderer(dvz=fake, view3d=view3d)
+    visual = PixelVisual(
+        id="visual:pixels-3d",
+        positions=np.array(
+            [[-0.5, 0.25, 0.0], [0.5, -0.25, 1.0]], dtype=np.float32
+        ),
+        colors=np.array([0, 128, 255, 255], dtype=np.uint8),
+        pixel_size_px=3.0,
+    )
+
+    renderer.add_pixel_visual(visual)
+
+    set_data = _calls(fake, "set_data")
+    assert [call[2] for call in set_data] == [
+        "position",
+        "color",
+        "pixel_size_px",
+    ]
+    np.testing.assert_allclose(set_data[0][3], visual.positions)
+    np.testing.assert_array_equal(
+        set_data[1][3],
+        [[0, 128, 255, 255], [0, 128, 255, 255]],
+    )
+    attach_desc = _calls(fake, "add_visual")[-1][3]
+    assert attach_desc.coord_space == fake.DVZ_VISUAL_COORD_DATA
+
+
+def test_add_pixel_visual_rejects_unsupported_view_and_transform_combinations() -> None:
+    fake = FakeDatovizV04WithRetainedView3D()
+    positions3d = np.array([[0.0, 0.0, 0.0]], dtype=np.float32)
+    colors = np.array([255, 255, 255, 255], dtype=np.uint8)
+
+    with pytest.raises(DatovizV04Unsupported, match="DATA space and View3D"):
+        DatovizV04ProtocolRenderer(dvz=fake).add_pixel_visual(
+            PixelVisual(
+                id="visual:pixel-no-view3d",
+                positions=positions3d,
+                colors=colors,
+            )
+        )
+    with pytest.raises(DatovizV04Unsupported, match="DATA space and View3D"):
+        DatovizV04ProtocolRenderer(dvz=fake).add_pixel_visual(
+            PixelVisual(
+                id="visual:pixel-ndc3d",
+                positions=positions3d,
+                colors=colors,
+                coordinate_space=CoordinateSpace.NDC,
+            )
+        )
+    view3d = View3D(
+        id="view:pixel-3d-transform",
+        panel_id="panel:pixel",
+        camera=Camera3D(
+            eye=(3.0, 3.0, 3.0),
+            target=(0.0, 0.0, 0.0),
+            up=(0.0, 0.0, 1.0),
+        ),
+        projection=PerspectiveProjection3D(
+            fov_y_degrees=45.0,
+            near_far=(0.1, 100.0),
+        ),
+    )
+    with pytest.raises(DatovizV04Unsupported, match="2D transform"):
+        DatovizV04ProtocolRenderer(dvz=fake, view3d=view3d).add_pixel_visual(
+            PixelVisual(
+                id="visual:pixel-transform3d",
+                positions=positions3d,
+                colors=colors,
+                transform=VisualTransformBinding.inline_affine(
+                    np.eye(3, dtype=np.float64)
+                ),
+            )
+        )
+    with pytest.raises(DatovizV04Unsupported, match="require View2D"):
+        DatovizV04ProtocolRenderer(dvz=fake).add_pixel_visual(
+            PixelVisual(
+                id="visual:pixel-no-view2d",
+                positions=np.array([[0.0, 0.0]], dtype=np.float32),
+                colors=colors,
+            )
+        )
+
+
+def test_datoviz_capabilities_advertise_pixel_evidence() -> None:
+    capabilities = gsp_capability_snapshot_from_datoviz(
+        FakeDvzCapabilitySnapshot(), dvz=FakeDatovizV04WithRetainedView3D()
+    )
+    assert capabilities.supports_visual("pixel")
+    assert capabilities.supports_view3d_capability("pixelvisual.v1")
+    assert capabilities.supports_view3d_capability(
+        "pixelvisual.positions3d.data.view3d.v1"
+    )
+    assert capabilities.supports_view3d_capability(
+        "pixelvisual.exact_logical_size.v1"
+    )
+    assert "public dvz_pixel" in capabilities.metadata["s065_pixelvisual"]
+
+
+def test_datoviz_pixel_capabilities_require_public_pixel_symbol() -> None:
+    fake = FakeDatovizV04WithRetainedView3D()
+    fake.dvz_pixel = None
+    capabilities = gsp_capability_snapshot_from_datoviz(
+        FakeDvzCapabilitySnapshot(), dvz=fake
+    )
+
+    assert not capabilities.supports_visual("pixel")
+    assert not capabilities.supports_view3d_capability("pixelvisual.v1")
+    assert not capabilities.supports_view3d_capability(
+        "pixelvisual.positions3d.data.view3d.v1"
+    )
+    assert capabilities.metadata["datoviz_pixelvisual_diagnostics"] == (
+        "missing callable dvz_pixel",
+    )
+    assert "s065_pixelvisual" not in capabilities.metadata
+
+
+def test_latest_datoviz_contract_requires_dvz_pixel() -> None:
+    symbols = {
+        name: object()
+        for name in REQUIRED_DATOVIZ_V04_DEV_SYMBOLS
+        if name != "dvz_pixel"
+    }
+    assert datoviz_current_api_missing_symbols(SimpleNamespace(**symbols)) == (
+        "dvz_pixel",
+    )
 
 
 def test_visual_attach_desc_rejects_stale_binding_missing_clip_and_viewport_rect():

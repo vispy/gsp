@@ -186,6 +186,11 @@ GSP_VISPY2_PRODUCER_MESH_TEXTURE2D_UNLIT_CAPABILITY = (
 GSP_VISPY2_PRODUCER_MESH_TEXTURE_FILTER_LINEAR_CAPABILITY = (
     "gsp_vispy2.producer.mesh.texture_filter.linear.v1"
 )
+PIXEL_VISUAL_CAPABILITY = "pixelvisual.v1"
+PIXEL_VISUAL_POSITIONS3D_DATA_VIEW3D_CAPABILITY = (
+    "pixelvisual.positions3d.data.view3d.v1"
+)
+PIXEL_VISUAL_EXACT_LOGICAL_SIZE_CAPABILITY = "pixelvisual.exact_logical_size.v1"
 MESH_NORMALS_FACE3D_CAPABILITY = "meshvisual.normals.face3d.v1"
 MESH_NORMAL_GENERATION_FACE_FLAT_CAPABILITY = (
     "meshvisual.normal_generation.face_flat.v1"
@@ -243,6 +248,39 @@ class PointVisual:
             slot=ScalarColorSlot.COLOR,
             domain=ScalarColorDomain.ITEM,
             field_name="colors",
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class PixelVisual:
+    """Screen-aligned square pixels with logical-pixel widths."""
+
+    id: str
+    positions: FloatArray
+    colors: ColorArray
+    pixel_size_px: FloatArray | float = 1.0
+    coordinate_space: CoordinateSpace = CoordinateSpace.DATA
+    transform: VisualTransformBinding | None = None
+
+    def __post_init__(self) -> None:
+        validate_id(self.id)
+        _validate_visual_transform(self.transform)
+        item_count = _validate_positions(self.positions)
+        _validate_rgba_values(self.colors, item_count, field_name="colors")
+        _validate_positive_values(
+            self.pixel_size_px, item_count, field_name="pixel_size_px"
+        )
+
+    def pixel_size_values(self) -> npt.NDArray[np.float32]:
+        """Return one logical-pixel width per item."""
+        if isinstance(self.pixel_size_px, np.ndarray):
+            return np.ascontiguousarray(
+                np.asarray(self.pixel_size_px, dtype=np.float32).reshape(-1)
+            )
+        return np.full(
+            (self.positions.shape[0],),
+            float(self.pixel_size_px),
+            dtype=np.float32,
         )
 
 

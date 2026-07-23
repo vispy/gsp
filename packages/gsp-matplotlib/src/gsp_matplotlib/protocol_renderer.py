@@ -51,6 +51,7 @@ from gsp.protocol.visuals import (
     MarkerShape,
     MarkerVisual,
     PathVisual,
+    PixelVisual,
     PointVisual,
     SegmentVisual,
     StrokeCap,
@@ -118,6 +119,7 @@ _TEXT_ANCHOR_Y_MPL = {
 
 ProtocolVisual = (
     PointVisual
+    | PixelVisual
     | MarkerVisual
     | SegmentVisual
     | PathVisual
@@ -281,6 +283,14 @@ def _render_protocol_visual(
             color_scales=color_scales,
             transform_resources=transform_resources,
         )
+    if isinstance(visual, PixelVisual):
+        return render_pixel_visual(
+            axes,
+            visual,
+            view=view,
+            view3d=view3d,
+            transform_resources=transform_resources,
+        )
     if isinstance(visual, TextVisual):
         return render_text_visual(
             axes, visual, view=view, transform_resources=transform_resources
@@ -360,6 +370,55 @@ def render_point_visual(
         offsets[:, 1],
         s=areas,
         c=colors,
+        transform=transform,
+    )
+    collection.set_gid(visual.id)
+    return collection
+
+
+def render_pixel_visual(
+    axes: matplotlib.axes.Axes,
+    visual: PixelVisual,
+    *,
+    view: View2D | None = None,
+    view3d: View3D | None = None,
+    transform_resources: Mapping[str, AffineTransform2DResource] | None = None,
+) -> matplotlib.collections.PathCollection:
+    """Render square pixels, projecting 3D anchors as a documented adaptation."""
+    if visual.positions.shape[1] == 3:
+        if visual.transform is not None:
+            raise NotImplementedError(
+                "Matplotlib projected PixelVisual does not support a 2D transform"
+            )
+        if visual.coordinate_space is not CoordinateSpace.DATA or view3d is None:
+            raise NotImplementedError(
+                "Matplotlib PixelVisual positions3d require DATA space and View3D"
+            )
+        aspect_ratio = _axes_pixel_aspect_ratio(axes)
+        projected = np.asarray(
+            [
+                project_view3d_data_point(
+                    view3d, tuple(point), aspect_ratio=aspect_ratio
+                )
+                for point in visual.positions
+            ],
+            dtype=np.float64,
+        )
+        offsets = panel_ndc_to_axes_fraction(projected[:, :2])
+        transform = axes.transAxes
+    else:
+        offsets, transform = _render_positions(
+            axes, visual, visual.positions, view, transform_resources
+        )
+    areas = _marker_areas_from_pixel_diameters(axes, visual.pixel_size_px)
+    colors = _rgba_for_matplotlib(visual.colors)
+    collection = axes.scatter(
+        offsets[:, 0],
+        offsets[:, 1],
+        marker="s",
+        s=areas,
+        color=colors,
+        linewidths=0.0,
         transform=transform,
     )
     collection.set_gid(visual.id)
@@ -727,6 +786,7 @@ def _path_subpath_arrays(
 def _render_positions(
     axes: matplotlib.axes.Axes,
     visual: PointVisual
+    | PixelVisual
     | MarkerVisual
     | SegmentVisual
     | PathVisual

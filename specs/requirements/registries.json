@@ -14,11 +14,14 @@
     "panel-query",
     "shutdown"
   ],
-  "visual_families": ["point", "marker", "segment", "path", "image", "text", "mesh"],
+  "visual_families": ["point", "pixel", "marker", "segment", "path", "image", "text", "mesh"],
   "capabilities": [
     "interaction.view2d.navigation.v1",
     "view3d.static.orthographic.v1",
     "view3d.static.perspective.v1",
+    "pixelvisual.v1",
+    "pixelvisual.positions3d.data.view3d.v1",
+    "pixelvisual.exact_logical_size.v1",
     "meshvisual.positions3d.data_view3d.v1",
     "meshvisual.positions3d.ndc.v1",
     "meshvisual.positions3d.opaque_depth.v1",

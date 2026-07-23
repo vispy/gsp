@@ -20,6 +20,7 @@ REQUIRED_DATOVIZ_V04_DEV_SYMBOLS: tuple[str, ...] = (
     "dvz_panel_add_visual",
     "dvz_panel_set_domain",
     "dvz_point",
+    "dvz_pixel",
     "dvz_image",
     "dvz_visual_set_data",
     "dvz_sampled_field_desc",

@@ -19,7 +19,7 @@ replaced; identifiers are never reused for different semantics.
 
 ## Core visual families
 
-`point`, `marker`, `segment`, `path`, `image`, `text`, and `mesh`.
+`point`, `pixel`, `marker`, `segment`, `path`, `image`, `text`, and `mesh`.
 
 ## Capability identifiers
 
@@ -30,6 +30,9 @@ The machine registry is `spec/requirements/registries.json`. Important accepted 
 | `interaction.view2d.navigation.v1` | canonical View2D navigation actions |
 | `view3d.static.orthographic.v1` | static orthographic View3D |
 | `view3d.static.perspective.v1` | static perspective View3D |
+| `pixelvisual.v1` | screen-aligned square PixelVisual |
+| `pixelvisual.positions3d.data.view3d.v1` | DATA-space 3D PixelVisual mapping |
+| `pixelvisual.exact_logical_size.v1` | exact logical-pixel square width |
 | `meshvisual.positions3d.data_view3d.v1` | DATA-space 3D mesh mapping |
 | `meshvisual.positions3d.ndc.v1` | NDC 3D mesh placement |
 | `meshvisual.positions3d.opaque_depth.v1` | strict bounded opaque depth |

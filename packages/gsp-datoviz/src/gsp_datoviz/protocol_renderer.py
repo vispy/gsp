@@ -54,6 +54,7 @@ from gsp.protocol import (
     NavigationResult,
     PathVisual,
     PanByAction,
+    PixelVisual,
     PointVisual,
     ResetViewAction,
     SegmentVisual,
@@ -1153,6 +1154,67 @@ class DatovizV04ProtocolRenderer:
                 color_scale=scale,
                 alpha=float(visual.color_encoding.alpha),
             )
+        return dvz_visual
+
+    def add_pixel_visual(self, visual: PixelVisual) -> Any:
+        """Create and attach a public Datoviz square-pixel visual."""
+        is_3d = visual.positions.shape[1] == 3
+        if is_3d:
+            if visual.transform is not None:
+                raise DatovizV04Unsupported(
+                    "Datoviz PixelVisual positions3d do not support a 2D transform"
+                )
+            if (
+                visual.coordinate_space is not CoordinateSpace.DATA
+                or self.view3d is None
+            ):
+                raise DatovizV04Unsupported(
+                    "Datoviz PixelVisual positions3d require DATA space and View3D"
+                )
+        elif visual.coordinate_space is CoordinateSpace.DATA and self.view is None:
+            raise DatovizV04Unsupported(
+                "Datoviz PixelVisual DATA positions2d require View2D"
+            )
+        positions = _positions_3d(
+            _adapt_visual_positions(
+                visual.id,
+                visual.positions,
+                visual.transform,
+                visual.coordinate_space,
+                self.view,
+                self.transform_resources,
+                cpu_map_data_to_view=self._cpu_map_data_visuals_to_view,
+            )
+        )
+        _record_transform_adaptation(
+            self.transform_adaptations, visual.id, visual.transform
+        )
+        colors = _rgba8_broadcast(visual.colors, positions.shape[0])
+        sizes = self._scale_canvas_px_array(visual.pixel_size_values())
+        dvz_visual = self.dvz.dvz_pixel(self.scene, 0)
+        _set_alpha_mode_if_translucent(self.dvz, dvz_visual, colors)
+        _set_visual_data(self.dvz, dvz_visual, "position", positions)
+        _set_visual_data(self.dvz, dvz_visual, "color", colors)
+        _set_visual_data(self.dvz, dvz_visual, "pixel_size_px", sizes)
+        _add_visual_to_panel(
+            self.dvz,
+            self.panel,
+            dvz_visual,
+            _visual_attach_desc(
+                self.dvz,
+                coord_space=self._visual_coord_space(visual.coordinate_space),
+                z_layer=0,
+            ),
+        )
+        self.visuals[visual.id] = dvz_visual
+        self._retain_view2d_position_upload(
+            visual.id,
+            dvz_visual,
+            "position",
+            visual.positions,
+            visual.transform,
+            visual.coordinate_space,
+        )
         return dvz_visual
 
     def update_point_visual(self, visual: PointVisual) -> None:
@@ -4696,6 +4758,17 @@ def _rgba8_image(image: npt.NDArray[Any]) -> npt.NDArray[np.uint8]:
         return np.ascontiguousarray(image)
     alpha = np.full((*image.shape[:2], 1), 255, dtype=np.uint8)
     return np.ascontiguousarray(np.concatenate([image, alpha], axis=2))
+
+
+def _rgba8_broadcast(
+    colors: npt.NDArray[Any], count: int
+) -> npt.NDArray[np.uint8]:
+    converted = _rgba8(colors)
+    if converted.shape == (4,):
+        return np.ascontiguousarray(
+            np.broadcast_to(converted, (count, 4)), dtype=np.uint8
+        )
+    return converted
 
 
 def _rgba8_scalar_image(

@@ -31,6 +31,8 @@ Screen-space widths and sizes are logical pixels unless a specific contract stat
 
 `PointVisual` represents circular point samples with per-item positions, sizes, and colors. `MarkerVisual` adds a semantic marker shape, angle, fill, and stroke. A backend must not substitute points for an unsupported marker shape without an adaptation declaration.
 
+`PixelVisual` represents screen-aligned square samples. Positions are finite `(N,2)` or `(N,3)` float arrays, colors are uniform `(4,)` or per-item `(N,4)` RGBA, and `pixel_size_px` is a finite strictly positive scalar or `(N,)` logical-pixel width. DATA-space `(N,3)` pixels require `View3D`; per-item state and backend handles are not protocol fields.
+
 ### PointVisual
 
 | Field | Type | Cardinality | Default |

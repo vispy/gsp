@@ -19,6 +19,7 @@ _DECLARED_CAPABILITIES = frozenset(
         "visual.markers",
         "visual.mesh",
         "visual.paths",
+        "visual.pixels",
         "visual.points",
         "visual.segments",
         "visual.text",
