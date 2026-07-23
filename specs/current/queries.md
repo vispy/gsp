@@ -116,3 +116,23 @@ returns the current and expected public snapshot/revision identities in a redact
 
 `GSP-QUERY-010`: query execution never mutates scene state. Internal caches are allowed but cannot
 change public revisions, ordering, or subsequent rendering semantics.
+
+## Session lifecycle and scene targeting
+
+Public session queries target completed renders owned by that session:
+
+- `scene_id=None` targets the most recently rendered scene.
+- An explicit `scene_id` targets the most recent render recorded for that scene identity. Rendering
+  the same scene identity again replaces its query target; other scene targets remain addressable.
+- Querying before any render, after session close, or with an unknown explicit scene identity is a
+  session-state error.
+- A known rendered scene whose content, scope, policy, or payload is not queryable returns a
+  structured `unsupported` result. It is not a session-state error and must not be reported as a
+  miss.
+
+`GSP-QUERY-011`: a provider advertises `query.panel` only when its runtime capability snapshot
+supports panel queries. Rendering support alone does not justify this provider capability.
+
+`GSP-QUERY-012`: when a public session query omits layout or view snapshot identity, the session
+binds each absent identity to the targeted render before dispatch. Explicit identities are preserved
+so stale-query detection remains observable.
