@@ -34,6 +34,7 @@ from gsp.protocol import (
     PointVisual,
     PixelVisual,
     SegmentVisual,
+    SphereVisual,
     TextVisual,
     Texture2D,
     TextureFilter,
@@ -180,6 +181,7 @@ class FakeDatovizV04:
     DVZ_VISUAL_COORD_VIEW = 0
     DVZ_VISUAL_COORD_DATA = 1
     DVZ_VISUAL_COORD_PANEL = 2
+    DVZ_SPHERE_MODE_RAYCAST_IMPOSTOR = 1
     DvzCameraDesc = object
     DvzCameraView = object
     DvzCameraProjection = object
@@ -275,6 +277,14 @@ class FakeDatovizV04:
     def dvz_pixel(self, scene, flags):
         self.calls.append(("pixel", scene, flags))
         return "pixel-visual"
+
+    def dvz_sphere(self, scene, flags):
+        self.calls.append(("sphere", scene, flags))
+        return "sphere-visual"
+
+    def dvz_sphere_set_mode(self, visual, mode):
+        self.calls.append(("sphere_set_mode", visual, mode))
+        return 0
 
     def dvz_image(self, scene, flags):
         self.calls.append(("image", scene, flags))
@@ -2728,14 +2738,223 @@ def test_datoviz_pixel_capabilities_require_public_pixel_symbol() -> None:
     assert "s065_pixelvisual" not in capabilities.metadata
 
 
-def test_latest_datoviz_contract_requires_dvz_pixel() -> None:
+def test_add_sphere_visual_uses_raycast_mode_and_data_unit_attributes() -> None:
+    fake = FakeDatovizV04WithRetainedView3D()
+    view3d = View3D(
+        id="view:spheres",
+        panel_id="panel:spheres",
+        camera=Camera3D(
+            eye=(3.0, 3.0, 3.0),
+            target=(0.0, 0.0, 0.0),
+            up=(0.0, 0.0, 1.0),
+        ),
+        projection=PerspectiveProjection3D(
+            fov_y_degrees=45.0,
+            near_far=(0.1, 100.0),
+        ),
+    )
+    renderer = DatovizV04ProtocolRenderer(dvz=fake, view3d=view3d)
+    visual = SphereVisual(
+        id="visual:spheres",
+        positions=np.array([[0.0, 0.0, 0.0], [1.0, -1.0, 0.5]], dtype=np.float32),
+        radii=np.array([0.25, 0.75], dtype=np.float32),
+        colors=np.array([[255, 0, 0, 255], [0, 128, 255, 255]], dtype=np.uint8),
+    )
+
+    renderer.add_sphere_visual(visual)
+
+    assert _calls(fake, "sphere") == [("sphere", "scene", 0)]
+    assert _calls(fake, "sphere_set_mode") == [("sphere_set_mode", "sphere-visual", 1)]
+    set_data = _calls(fake, "set_data")
+    assert [call[2] for call in set_data[-3:]] == ["position", "color", "radius"]
+    np.testing.assert_allclose(set_data[-3][3], visual.positions)
+    np.testing.assert_array_equal(set_data[-2][3], visual.colors)
+    np.testing.assert_allclose(set_data[-1][3], [0.25, 0.75])
+    assert _calls(fake, "add_visual")[-1][3].coord_space == fake.DVZ_VISUAL_COORD_DATA
+
+
+def test_add_sphere_visual_broadcasts_uniform_color_and_scalar_radius() -> None:
+    fake = FakeDatovizV04WithRetainedView3D()
+    renderer = DatovizV04ProtocolRenderer(
+        dvz=fake,
+        view3d=View3D(
+            id="view:sphere-broadcast",
+            panel_id="panel:sphere-broadcast",
+            camera=Camera3D(
+                eye=(3.0, 3.0, 3.0),
+                target=(0.0, 0.0, 0.0),
+                up=(0.0, 0.0, 1.0),
+            ),
+            projection=PerspectiveProjection3D(near_far=(0.1, 100.0)),
+        ),
+    )
+    visual = SphereVisual(
+        id="visual:sphere-broadcast",
+        positions=np.array([[0.0, 0.0, 0.0], [1.0, -1.0, 0.5]], dtype=np.float32),
+        radii=0.5,
+        colors=np.array([64, 128, 255, 255], dtype=np.uint8),
+    )
+
+    renderer.add_sphere_visual(visual)
+
+    set_data = _calls(fake, "set_data")
+    np.testing.assert_array_equal(
+        set_data[-2][3],
+        [[64, 128, 255, 255], [64, 128, 255, 255]],
+    )
+    np.testing.assert_allclose(set_data[-1][3], [0.5, 0.5])
+
+
+@pytest.mark.parametrize(
+    ("name", "message"),
+    [
+        ("dvz_sphere", "dvz_sphere"),
+        ("dvz_sphere_set_mode", "dvz_sphere_set_mode"),
+    ],
+)
+def test_add_sphere_visual_rejects_missing_public_callable(
+    name: str, message: str
+) -> None:
+    fake = FakeDatovizV04WithRetainedView3D()
+    setattr(fake, name, None)
+    renderer = DatovizV04ProtocolRenderer(
+        dvz=fake,
+        view3d=View3D(
+            id="view:sphere-missing-callable",
+            panel_id="panel:sphere-missing-callable",
+            camera=Camera3D(
+                eye=(3.0, 3.0, 3.0),
+                target=(0.0, 0.0, 0.0),
+                up=(0.0, 0.0, 1.0),
+            ),
+            projection=PerspectiveProjection3D(near_far=(0.1, 100.0)),
+        ),
+    )
+    visual = SphereVisual(
+        id="visual:sphere-missing-callable",
+        positions=np.array([[0.0, 0.0, 0.0]], dtype=np.float32),
+        radii=0.5,
+        colors=np.array([255, 0, 0, 255], dtype=np.uint8),
+    )
+
+    with pytest.raises(DatovizV04Unsupported, match=message):
+        renderer.add_sphere_visual(visual)
+
+    assert _calls(fake, "sphere") == []
+
+
+def test_add_sphere_visual_rejects_missing_raycast_enum(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake = FakeDatovizV04WithRetainedView3D()
+    renderer = DatovizV04ProtocolRenderer(
+        dvz=fake,
+        view3d=View3D(
+            id="view:sphere-missing-enum",
+            panel_id="panel:sphere-missing-enum",
+            camera=Camera3D(
+                eye=(3.0, 3.0, 3.0),
+                target=(0.0, 0.0, 0.0),
+                up=(0.0, 0.0, 1.0),
+            ),
+            projection=PerspectiveProjection3D(near_far=(0.1, 100.0)),
+        ),
+    )
+    monkeypatch.delattr(FakeDatovizV04, "DVZ_SPHERE_MODE_RAYCAST_IMPOSTOR")
+    visual = SphereVisual(
+        id="visual:sphere-missing-enum",
+        positions=np.array([[0.0, 0.0, 0.0]], dtype=np.float32),
+        radii=0.5,
+        colors=np.array([255, 0, 0, 255], dtype=np.uint8),
+    )
+
+    with pytest.raises(
+        DatovizV04Unsupported, match="DVZ_SPHERE_MODE_RAYCAST_IMPOSTOR"
+    ):
+        renderer.add_sphere_visual(visual)
+
+    assert _calls(fake, "sphere") == []
+
+
+@pytest.mark.parametrize(
+    ("factory", "error_type", "message"),
+    [
+        (lambda _scene, _flags: None, DatovizV04Unavailable, "dvz_sphere"),
+        (
+            lambda _visual, _mode: 1,
+            DatovizV04Unsupported,
+            "raycast mode setup failed",
+        ),
+    ],
+)
+def test_add_sphere_visual_reports_native_allocation_and_setter_failures(
+    factory: object,
+    error_type: type[Exception],
+    message: str,
+) -> None:
+    fake = FakeDatovizV04WithRetainedView3D()
+    if "dvz_sphere" in message:
+        fake.dvz_sphere = factory  # type: ignore[method-assign,assignment]
+    else:
+        fake.dvz_sphere_set_mode = factory  # type: ignore[method-assign,assignment]
+    renderer = DatovizV04ProtocolRenderer(
+        dvz=fake,
+        view3d=View3D(
+            id="view:sphere-native-failure",
+            panel_id="panel:sphere-native-failure",
+            camera=Camera3D(
+                eye=(3.0, 3.0, 3.0),
+                target=(0.0, 0.0, 0.0),
+                up=(0.0, 0.0, 1.0),
+            ),
+            projection=PerspectiveProjection3D(near_far=(0.1, 100.0)),
+        ),
+    )
+    visual = SphereVisual(
+        id="visual:sphere-native-failure",
+        positions=np.array([[0.0, 0.0, 0.0]], dtype=np.float32),
+        radii=0.5,
+        colors=np.array([255, 0, 0, 255], dtype=np.uint8),
+    )
+
+    with pytest.raises(error_type, match=message):
+        renderer.add_sphere_visual(visual)
+
+
+def test_datoviz_sphere_capabilities_require_complete_public_raycast_api() -> None:
+    ready = gsp_capability_snapshot_from_datoviz(
+        FakeDvzCapabilitySnapshot(), dvz=FakeDatovizV04WithRetainedView3D()
+    )
+    assert ready.supports_visual("sphere")
+    assert ready.supports_view3d_capability("spherevisual.v1")
+    assert ready.supports_view3d_capability("spherevisual.analytic_surface_depth.v1")
+
+    incomplete = FakeDatovizV04WithRetainedView3D()
+    incomplete.dvz_sphere_set_mode = None
+    caps = gsp_capability_snapshot_from_datoviz(
+        FakeDvzCapabilitySnapshot(), dvz=incomplete
+    )
+    assert not caps.supports_visual("sphere")
+    assert not caps.supports_view3d_capability("spherevisual.analytic_surface_depth.v1")
+
+
+@pytest.mark.parametrize(
+    "missing",
+    [
+        "dvz_pixel",
+        "dvz_sphere",
+        "dvz_sphere_set_mode",
+        "DVZ_SPHERE_MODE_RAYCAST_IMPOSTOR",
+    ],
+)
+def test_latest_datoviz_contract_requires_visual_symbols(missing: str) -> None:
     symbols = {
         name: object()
         for name in REQUIRED_DATOVIZ_V04_DEV_SYMBOLS
-        if name != "dvz_pixel"
+        if name != missing
     }
     assert datoviz_current_api_missing_symbols(SimpleNamespace(**symbols)) == (
-        "dvz_pixel",
+        missing,
     )
 
 

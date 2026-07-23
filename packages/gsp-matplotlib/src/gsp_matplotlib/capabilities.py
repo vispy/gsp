@@ -14,6 +14,7 @@ from gsp.protocol import (
     PIXEL_VISUAL_CAPABILITY,
     PIXEL_VISUAL_EXACT_LOGICAL_SIZE_CAPABILITY,
     PIXEL_VISUAL_POSITIONS3D_DATA_VIEW3D_CAPABILITY,
+    SPHERE_VISUAL_CAPABILITY,
     QUERY_VIEW3D_RAY_READBACK_CAPABILITY,
     QueryLayoutCapability,
     RenderTargetCapability,
@@ -63,6 +64,7 @@ def capability_snapshot() -> CapabilitySnapshot:
             "image",
             "text",
             "mesh",
+            "sphere",
         ),
         query_modes=("panel-query", "point-item", "image-texel"),
         navigation_placements=(NavigationPlacement.CLIENT_SIDE.value,),
@@ -76,6 +78,7 @@ def capability_snapshot() -> CapabilitySnapshot:
             PIXEL_VISUAL_CAPABILITY,
             PIXEL_VISUAL_EXACT_LOGICAL_SIZE_CAPABILITY,
             PIXEL_VISUAL_POSITIONS3D_DATA_VIEW3D_CAPABILITY,
+            SPHERE_VISUAL_CAPABILITY,
         ),
         output_formats=("png", "svg", "pdf"),
         extensions=(TILED_IMAGE_EXTENSION_CAPABILITY,),
@@ -96,6 +99,11 @@ def capability_snapshot() -> CapabilitySnapshot:
             "pixelvisual_3d": (
                 "adapted projected-square overlay; anchor projection and logical-pixel width "
                 "are preserved, GPU depth occlusion is not claimed"
+            ),
+            "spherevisual": (
+                "adapted projected circles from DATA radii with deterministic center-depth "
+                "painter ordering; perspective size is a camera-right view-plane approximation; "
+                "analytic surface depth is not claimed"
             ),
         },
         axis_providers=(matplotlib_axis_provider_capability(),),

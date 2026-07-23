@@ -55,6 +55,7 @@ from gsp.protocol import (
     PathVisual,
     PanByAction,
     PixelVisual,
+    SphereVisual,
     PointVisual,
     ResetViewAction,
     SegmentVisual,
@@ -1215,6 +1216,56 @@ class DatovizV04ProtocolRenderer:
             visual.transform,
             visual.coordinate_space,
         )
+        return dvz_visual
+
+    def add_sphere_visual(self, visual: SphereVisual) -> Any:
+        """Create accurate public Datoviz raycast sphere impostors."""
+        if self.view3d is None:
+            raise DatovizV04Unsupported(
+                "Datoviz SphereVisual DATA positions3d require View3D"
+            )
+        missing = tuple(
+            name
+            for name in ("dvz_sphere", "dvz_sphere_set_mode")
+            if not callable(getattr(self.dvz, name, None))
+        )
+        if missing:
+            raise DatovizV04Unsupported(
+                "Datoviz SphereVisual requires public callable(s): "
+                + ", ".join(missing)
+            )
+        if not hasattr(self.dvz, "DVZ_SPHERE_MODE_RAYCAST_IMPOSTOR"):
+            raise DatovizV04Unsupported(
+                "Datoviz SphereVisual requires "
+                "DVZ_SPHERE_MODE_RAYCAST_IMPOSTOR"
+            )
+        positions = np.ascontiguousarray(visual.positions, dtype=np.float32)
+        colors = _rgba8_broadcast(visual.colors, positions.shape[0])
+        radii = visual.radius_values()
+        dvz_visual = self.dvz.dvz_sphere(self.scene, 0)
+        if _is_null_handle(dvz_visual):
+            raise DatovizV04Unavailable("Datoviz dvz_sphere() failed")
+        _require_datoviz_success(
+            self.dvz.dvz_sphere_set_mode(
+                dvz_visual, self.dvz.DVZ_SPHERE_MODE_RAYCAST_IMPOSTOR
+            ),
+            "Datoviz accurate sphere raycast mode setup failed",
+        )
+        _set_alpha_mode_if_translucent(self.dvz, dvz_visual, colors)
+        _set_visual_data(self.dvz, dvz_visual, "position", positions)
+        _set_visual_data(self.dvz, dvz_visual, "color", colors)
+        _set_visual_data(self.dvz, dvz_visual, "radius", radii)
+        _add_visual_to_panel(
+            self.dvz,
+            self.panel,
+            dvz_visual,
+            _visual_attach_desc(
+                self.dvz,
+                coord_space=self._visual_coord_space(CoordinateSpace.DATA),
+                z_layer=0,
+            ),
+        )
+        self.visuals[visual.id] = dvz_visual
         return dvz_visual
 
     def update_point_visual(self, visual: PointVisual) -> None:

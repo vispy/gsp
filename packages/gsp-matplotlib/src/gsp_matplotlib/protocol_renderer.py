@@ -54,6 +54,7 @@ from gsp.protocol.visuals import (
     PixelVisual,
     PointVisual,
     SegmentVisual,
+    SphereVisual,
     StrokeCap,
     StrokeJoin,
     TextAnchorX,
@@ -120,6 +121,7 @@ _TEXT_ANCHOR_Y_MPL = {
 ProtocolVisual = (
     PointVisual
     | PixelVisual
+    | SphereVisual
     | MarkerVisual
     | SegmentVisual
     | PathVisual
@@ -291,6 +293,8 @@ def _render_protocol_visual(
             view3d=view3d,
             transform_resources=transform_resources,
         )
+    if isinstance(visual, SphereVisual):
+        return render_sphere_visual(axes, visual, view3d=view3d)
     if isinstance(visual, TextVisual):
         return render_text_visual(
             axes, visual, view=view, transform_resources=transform_resources
@@ -420,6 +424,72 @@ def render_pixel_visual(
         color=colors,
         linewidths=0.0,
         transform=transform,
+    )
+    collection.set_gid(visual.id)
+    return collection
+
+
+def render_sphere_visual(
+    axes: matplotlib.axes.Axes,
+    visual: SphereVisual,
+    *,
+    view3d: View3D | None = None,
+) -> matplotlib.collections.PathCollection:
+    """Project DATA-space spheres to deterministic screen circles.
+
+    This reference adaptation preserves projected centers, DATA-radius scaling, colors, and
+    deterministic center-depth painter ordering. Perspective radii use a camera-right,
+    view-plane approximation rather than an exact projected silhouette. It does not claim
+    analytic per-fragment sphere depth.
+    """
+    if view3d is None:
+        raise NotImplementedError(
+            "Matplotlib SphereVisual DATA positions3d require View3D"
+        )
+    aspect_ratio = _axes_pixel_aspect_ratio(axes)
+    basis = view3d.camera.basis()
+    projected = np.asarray(
+        [
+            project_view3d_data_point(view3d, tuple(point), aspect_ratio=aspect_ratio)
+            for point in visual.positions
+        ],
+        dtype=np.float64,
+    )
+    radii = visual.radius_values()
+    projected_edges = np.asarray(
+        [
+            project_view3d_data_point(
+                view3d,
+                tuple(
+                    np.asarray(point, dtype=np.float64)
+                    + np.asarray(basis.right, dtype=np.float64) * float(radius)
+                ),
+                aspect_ratio=aspect_ratio,
+            )
+            for point, radius in zip(visual.positions, radii, strict=True)
+        ],
+        dtype=np.float64,
+    )
+    axes_box = axes.get_position()
+    canvas_width_px, _ = _figure_canvas_size_px(axes.figure)
+    axes_width_px = max(float(axes_box.width) * canvas_width_px, 1.0)
+    diameters_px = (
+        np.abs(projected_edges[:, 0] - projected[:, 0]) * axes_width_px
+    ).astype(np.float32)
+    order = np.argsort(projected[:, 2], kind="stable")[::-1]
+    offsets = panel_ndc_to_axes_fraction(projected[order, :2])
+    colors = _rgba_for_matplotlib(visual.colors)
+    if colors.ndim == 1:
+        colors = np.broadcast_to(colors, (visual.positions.shape[0], 4))
+    areas = _marker_areas_from_pixel_diameters(axes, diameters_px[order])
+    collection = axes.scatter(
+        offsets[:, 0],
+        offsets[:, 1],
+        marker="o",
+        s=areas,
+        color=colors[order],
+        linewidths=0.0,
+        transform=axes.transAxes,
     )
     collection.set_gid(visual.id)
     return collection

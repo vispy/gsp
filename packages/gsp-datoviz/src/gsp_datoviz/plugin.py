@@ -22,6 +22,7 @@ _DECLARED_CAPABILITIES = frozenset(
         "visual.pixels",
         "visual.points",
         "visual.segments",
+        "visual.sphere",
         "visual.text",
         "texture.rgba8",
         "texture.filter.nearest",
@@ -70,6 +71,8 @@ class DatovizProvider:
         capabilities.update(snapshot.transform_capabilities)
         capabilities.update(snapshot.navigation_capabilities)
         capabilities.update(snapshot.view3d_capabilities)
+        if not snapshot.supports_visual("sphere"):
+            capabilities.discard("visual.sphere")
         return BackendInfo(
             name="datoviz",
             installed=True,

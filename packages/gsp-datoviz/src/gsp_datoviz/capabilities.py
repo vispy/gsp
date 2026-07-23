@@ -27,6 +27,8 @@ from gsp.protocol import (
     PIXEL_VISUAL_CAPABILITY,
     PIXEL_VISUAL_EXACT_LOGICAL_SIZE_CAPABILITY,
     PIXEL_VISUAL_POSITIONS3D_DATA_VIEW3D_CAPABILITY,
+    SPHERE_VISUAL_ANALYTIC_SURFACE_DEPTH_CAPABILITY,
+    SPHERE_VISUAL_CAPABILITY,
     QUERY_VIEW3D_MESH_TRIANGLE_PICK_CAPABILITY,
     QUERY_VIEW3D_RAY_READBACK_CAPABILITY,
     QueryCoordinateSpace,
@@ -481,6 +483,21 @@ def gsp_capability_snapshot_from_datoviz(
     )
     navigation_capabilities = ["interaction.view2d.navigation.v1"]
     pixel_ready = dvz is not None and callable(getattr(dvz, "dvz_pixel", None))
+    sphere_missing = tuple(
+        name
+        for name in (
+            "dvz_sphere",
+            "dvz_sphere_set_mode",
+            "DVZ_SPHERE_MODE_RAYCAST_IMPOSTOR",
+        )
+        if dvz is None
+        or (
+            not callable(getattr(dvz, name, None))
+            if name.startswith("dvz_")
+            else not hasattr(dvz, name)
+        )
+    )
+    sphere_ready = not sphere_missing and not view3d_diagnostics
     view3d_capabilities: tuple[str, ...] = (
         (
             PIXEL_VISUAL_CAPABILITY,
@@ -517,6 +534,20 @@ def gsp_capability_snapshot_from_datoviz(
                 *view3d_capabilities,
                 PIXEL_VISUAL_POSITIONS3D_DATA_VIEW3D_CAPABILITY,
             )
+        if sphere_ready:
+            view3d_capabilities = (
+                *view3d_capabilities,
+                SPHERE_VISUAL_CAPABILITY,
+                SPHERE_VISUAL_ANALYTIC_SURFACE_DEPTH_CAPABILITY,
+            )
+            metadata["s065_spherevisual"] = (
+                "public dvz_sphere with dense position/color/radius DATA attributes and "
+                "mandatory RAYCAST_IMPOSTOR mode preserving analytic surface depth"
+            )
+        else:
+            metadata["datoviz_spherevisual_diagnostics"] = tuple(
+                f"missing {name}" for name in sphere_missing
+            ) or tuple(view3d_diagnostics)
         if not texture2d_mesh_diagnostics:
             view3d_capabilities = (
                 *view3d_capabilities,
@@ -599,6 +630,7 @@ def gsp_capability_snapshot_from_datoviz(
         visual_families=(
             "point",
             *(("pixel",) if pixel_ready else ()),
+            *(("sphere",) if sphere_ready else ()),
             "marker",
             "segment",
             "path",

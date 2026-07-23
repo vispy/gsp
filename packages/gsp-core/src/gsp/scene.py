@@ -20,6 +20,7 @@ from .protocol import (
     PixelVisual,
     PointVisual,
     SegmentVisual,
+    SphereVisual,
     TextVisual,
     Texture2D,
     View2D,
@@ -30,6 +31,7 @@ from .protocol import (
 SceneVisual = (
     PointVisual
     | PixelVisual
+    | SphereVisual
     | MarkerVisual
     | SegmentVisual
     | PathVisual
@@ -62,6 +64,12 @@ class Scene:
         if self.view2d is not None and self.view3d is not None:
             raise ValueError("Scene cannot define both view2d and view3d")
         for visual in self.visuals:
+            if isinstance(visual, SphereVisual):
+                if self.view3d is None:
+                    raise ValueError(
+                        "SphereVisual DATA positions3d require Scene.view3d"
+                    )
+                continue
             if not isinstance(visual, PixelVisual):
                 continue
             if visual.positions.shape[1] == 3:

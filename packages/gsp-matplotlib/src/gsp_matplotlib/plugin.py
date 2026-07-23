@@ -24,6 +24,7 @@ _CAPABILITIES = frozenset(
         "visual.image",
         "visual.text",
         "visual.mesh",
+        "visual.sphere",
         "guides.axes",
         "guides.colorbar",
         "query.panel",

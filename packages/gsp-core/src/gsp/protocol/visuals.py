@@ -191,6 +191,10 @@ PIXEL_VISUAL_POSITIONS3D_DATA_VIEW3D_CAPABILITY = (
     "pixelvisual.positions3d.data.view3d.v1"
 )
 PIXEL_VISUAL_EXACT_LOGICAL_SIZE_CAPABILITY = "pixelvisual.exact_logical_size.v1"
+SPHERE_VISUAL_CAPABILITY = "spherevisual.v1"
+SPHERE_VISUAL_ANALYTIC_SURFACE_DEPTH_CAPABILITY = (
+    "spherevisual.analytic_surface_depth.v1"
+)
 MESH_NORMALS_FACE3D_CAPABILITY = "meshvisual.normals.face3d.v1"
 MESH_NORMAL_GENERATION_FACE_FLAT_CAPABILITY = (
     "meshvisual.normal_generation.face_flat.v1"
@@ -282,6 +286,35 @@ class PixelVisual:
             float(self.pixel_size_px),
             dtype=np.float32,
         )
+
+
+@dataclass(frozen=True, slots=True)
+class SphereVisual:
+    """Analytic DATA-space spheres with radii expressed in data units."""
+
+    id: str
+    positions: FloatArray
+    radii: FloatArray | float
+    colors: ColorArray
+    coordinate_space: CoordinateSpace = CoordinateSpace.DATA
+
+    def __post_init__(self) -> None:
+        validate_id(self.id)
+        item_count = _validate_positions(self.positions)
+        if self.positions.shape[1] != 3:
+            raise ValueError("SphereVisual positions must have shape (N, 3)")
+        if self.coordinate_space is not CoordinateSpace.DATA:
+            raise ValueError("SphereVisual requires CoordinateSpace.DATA")
+        _validate_positive_values(self.radii, item_count, field_name="radii")
+        _validate_rgba_values(self.colors, item_count, field_name="colors")
+
+    def radius_values(self) -> npt.NDArray[np.float32]:
+        """Return one DATA-space radius per sphere."""
+        if isinstance(self.radii, np.ndarray):
+            return np.ascontiguousarray(
+                np.asarray(self.radii, dtype=np.float32).reshape(-1)
+            )
+        return np.full((self.positions.shape[0],), float(self.radii), dtype=np.float32)
 
 
 @dataclass(frozen=True, slots=True)
