@@ -19,7 +19,7 @@ replaced; identifiers are never reused for different semantics.
 
 ## Core visual families
 
-`point`, `pixel`, `sphere`, `marker`, `segment`, `path`, `image`, `text`, and `mesh`.
+`point`, `pixel`, `sphere`, `vector`, `marker`, `segment`, `path`, `image`, `text`, and `mesh`.
 
 ## Capability identifiers
 
@@ -35,6 +35,9 @@ The machine registry is `spec/requirements/registries.json`. Important accepted 
 | `pixelvisual.exact_logical_size.v1` | exact logical-pixel square width |
 | `spherevisual.v1` | DATA-space sphere centers, radii, and colors |
 | `spherevisual.analytic_surface_depth.v1` | analytic per-fragment sphere surface depth |
+| `vectorvisual.straight.v1` | straight vectors with canonical resolved endpoints |
+| `vectorvisual.positions3d.data.view3d.v1` | DATA-space 3D VectorVisual mapping |
+| `vectorvisual.triangle_head.v1` | semantic inward/outward triangle vector caps |
 | `meshvisual.positions3d.data_view3d.v1` | DATA-space 3D mesh mapping |
 | `meshvisual.positions3d.ndc.v1` | NDC 3D mesh placement |
 | `meshvisual.positions3d.opaque_depth.v1` | strict bounded opaque depth |

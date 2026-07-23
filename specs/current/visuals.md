@@ -38,6 +38,12 @@ Screen-space widths and sizes are logical pixels unless a specific contract stat
 `(4,)` or per-item `(N,4)` RGBA. A sphere scene requires `View3D`; backend handles and tessellation
 or impostor choices are not protocol fields.
 
+`VectorVisual` represents independent straight vectors. Positions and vectors are matching finite
+`(N,2)` or `(N,3)` float arrays; every vector is nonzero. `scale` and `anchor` resolve canonical
+tail/head endpoints before backend lowering. Colors are uniform or per-item RGBA, widths are
+strictly positive logical pixels, and start/end caps use the registered six-value cap vocabulary.
+DATA-space `(N,3)` vectors require `View3D`.
+
 ### PointVisual
 
 | Field | Type | Cardinality | Default |
@@ -64,6 +70,23 @@ Analytic per-fragment surface depth is a separate
 `spherevisual.analytic_surface_depth.v1` capability. A center-depth painter ordering or a
 view-plane projected-circle approximation must be advertised as adapted behavior and does not
 satisfy the analytic-depth capability.
+
+### VectorVisual
+
+| Field | Type | Cardinality/default |
+|---|---|---|
+| `positions`, `vectors` | finite float arrays | matching `(N,2)` or `(N,3)` |
+| `colors` | RGBA | uniform `(4,)` or per-item `(N,4)` |
+| `widths_px` | positive finite float | scalar or `(N,)` logical-pixel width |
+| `scale` | positive finite float | scalar; default `1` |
+| `anchor` | `tail`, `center`, `head` | default `tail` |
+| `start_cap`, `end_cap` | `none`, `butt`, `round`, `triangle_in`, `triangle_out`, `square` | `butt`, `triangle_out` |
+
+`GSP-VIS-017`: canonical endpoints are resolved from position, scaled vector, and anchor before
+backend lowering; adapters must not apply scale or anchor a second time.
+`vectorvisual.straight.v1` preserves endpoints, colors, widths, and cap association. DATA-space 3D
+realization requires `vectorvisual.positions3d.data.view3d.v1`; triangle-cap realization is
+declared separately by `vectorvisual.triangle_head.v1`.
 
 ### MarkerVisual
 
