@@ -4287,6 +4287,107 @@ def test_datoviz_live_view3d_navigation_supports_pan_zoom_and_reset(
     ]
 
 
+def test_live_view3d_synthetic_lifecycle_is_exact_and_idempotent_for_25_cycles(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("GSP_DATOVIZ_ENABLE_EXPERIMENTAL_VIEW3D_NAV", "1")
+
+    for _cycle in range(25):
+        fake = FakeDatovizV04WithInteractiveRetainedView3D()
+        initial_view = _canonical_view3d_for_datoviz_query()
+        renderer = DatovizV04ProtocolRenderer(dvz=fake, view3d=initial_view)
+        renderer.add_mesh_visual(
+            MeshVisual(
+                id="visual:lifecycle-mesh",
+                positions=np.array(
+                    [[0.0, 0.0, 0.0], [0.5, 0.0, 0.0], [0.0, 0.5, 0.0]],
+                    dtype=np.float32,
+                ),
+                faces=np.array([[0, 1, 2]], dtype=np.uint32),
+                coordinate_space=CoordinateSpace.DATA,
+                color=np.array([255, 255, 255, 255], dtype=np.uint8),
+            )
+        )
+        binding = renderer.enable_gsp_view3d_navigation()
+
+        _emit_fake_datoviz_pointer(
+            fake,
+            fake.DvzPointerEventType.DVZ_POINTER_EVENT_PRESS,
+            400.0,
+            300.0,
+            button=fake.DvzPointerButton.DVZ_POINTER_BUTTON_LEFT,
+        )
+        _emit_fake_datoviz_pointer(
+            fake,
+            fake.DvzPointerEventType.DVZ_POINTER_EVENT_DRAG,
+            440.0,
+            320.0,
+        )
+        _emit_fake_datoviz_pointer(
+            fake,
+            fake.DvzPointerEventType.DVZ_POINTER_EVENT_RELEASE,
+            440.0,
+            320.0,
+            button=fake.DvzPointerButton.DVZ_POINTER_BUTTON_LEFT,
+        )
+        _emit_fake_datoviz_pointer(
+            fake,
+            fake.DvzPointerEventType.DVZ_POINTER_EVENT_PRESS,
+            440.0,
+            320.0,
+            button=fake.DvzPointerButton.DVZ_POINTER_BUTTON_RIGHT,
+        )
+        _emit_fake_datoviz_pointer(
+            fake,
+            fake.DvzPointerEventType.DVZ_POINTER_EVENT_DRAG,
+            470.0,
+            335.0,
+        )
+        _emit_fake_datoviz_pointer(
+            fake,
+            fake.DvzPointerEventType.DVZ_POINTER_EVENT_RELEASE,
+            470.0,
+            335.0,
+            button=fake.DvzPointerButton.DVZ_POINTER_BUTTON_RIGHT,
+        )
+        _emit_fake_datoviz_pointer(
+            fake,
+            fake.DvzPointerEventType.DVZ_POINTER_EVENT_WHEEL,
+            470.0,
+            335.0,
+            wheel_y=1.0,
+        )
+        _emit_fake_datoviz_pointer(
+            fake,
+            fake.DvzPointerEventType.DVZ_POINTER_EVENT_DOUBLE_CLICK,
+            470.0,
+            335.0,
+        )
+
+        assert renderer.view3d is not None
+        assert renderer.view3d.revision == initial_view.revision + 4
+        assert renderer.view3d.camera == initial_view.camera
+        assert renderer.view3d.projection == initial_view.projection
+        assert renderer.retained_view3d_update_stats.vertex_uploads == 1
+        assert renderer.retained_view3d_update_stats.index_uploads == 1
+        assert renderer.retained_view3d_update_stats.visual_rebuilds == 1
+
+        renderer.close()
+        renderer.close()
+
+        assert binding._closed
+        assert renderer.live_view3d_navigation is None
+        assert fake.input_callback is None
+        assert _calls(fake, "unsubscribe") == [
+            ("unsubscribe", "input-router", 1)
+        ]
+        assert _calls(fake, "app_destroy") == [("app_destroy", "app")]
+        assert _calls(fake, "destroy") == [("destroy", "scene")]
+        call_names = [call[0] for call in fake.calls]
+        assert call_names.index("unsubscribe") < call_names.index("app_destroy")
+        assert call_names.index("app_destroy") < call_names.index("destroy")
+
+
 def test_datoviz_live_view3d_pans_perspective_at_target_distance() -> None:
     view3d = View3D(
         id="view:datoviz-live-3d-perspective",

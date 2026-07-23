@@ -1076,6 +1076,9 @@ class DatovizV04ProtocolRenderer:
         if self.live_navigation is not None:
             self.live_navigation.close()
             self.live_navigation = None
+        if self.live_view3d_navigation is not None:
+            self.live_view3d_navigation.close()
+            self.live_view3d_navigation = None
         destroy_app = getattr(self.dvz, "dvz_app_destroy", None)
         if destroy_app is not None and self.app is not None:
             destroy_app(self.app)

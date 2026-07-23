@@ -17,6 +17,7 @@ from gsp.protocol import (
     SegmentVisual,
     TextVisual,
     TickSpecKind,
+    VIEW3D_NAVIGATION_ORBIT_PAN_ZOOM_CAPABILITY,
 )
 
 from .capabilities import datoviz_v04_capability_snapshot
@@ -34,6 +35,7 @@ class DatovizSession:
         self._renderers: list[DatovizV04ProtocolRenderer] = []
         self._renderer_scenes: dict[int, Scene] = {}
         self._interactive_view2d_renderers: set[int] = set()
+        self._interactive_view3d_renderers: set[int] = set()
         self._closed = False
 
     @property
@@ -73,6 +75,7 @@ class DatovizSession:
             raise ValueError("frame_count must be positive")
         renderer = self.render(scene)
         self._enable_interactive_view2d(renderer, scene)
+        self._enable_interactive_view3d(renderer, scene)
         if block:
             renderer.show(frame_count=frame_count)
         return renderer
@@ -82,7 +85,9 @@ class DatovizSession:
         if not self._renderers:
             raise RuntimeError("run() requires a rendered scene")
         renderer = self._renderers[-1]
-        self._enable_interactive_view2d(renderer, self._renderer_scenes[id(renderer)])
+        scene = self._renderer_scenes[id(renderer)]
+        self._enable_interactive_view2d(renderer, scene)
+        self._enable_interactive_view3d(renderer, scene)
         renderer.show(frame_count=0)
 
     def close(self) -> None:
@@ -113,6 +118,21 @@ class DatovizSession:
             return
         renderer.enable_gsp_view2d_navigation(scene.view2d)
         self._interactive_view2d_renderers.add(renderer_id)
+
+    def _enable_interactive_view3d(
+        self, renderer: DatovizV04ProtocolRenderer, scene: Scene
+    ) -> None:
+        renderer_id = id(renderer)
+        if renderer_id in self._interactive_view3d_renderers:
+            return
+        if scene.view3d is None or scene.view2d is not None:
+            return
+        if not self.capabilities.supports_view3d_capability(
+            VIEW3D_NAVIGATION_ORBIT_PAN_ZOOM_CAPABILITY
+        ):
+            return
+        renderer.enable_gsp_view3d_navigation(scene.view3d)
+        self._interactive_view3d_renderers.add(renderer_id)
 
     def _build_renderer(self, scene: Scene) -> DatovizV04ProtocolRenderer:
         renderer = DatovizV04ProtocolRenderer(

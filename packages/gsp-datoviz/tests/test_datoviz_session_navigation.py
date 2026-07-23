@@ -10,6 +10,7 @@ from gsp.protocol import (
     CoordinateSpace,
     MeshVisual,
     OrthographicProjection3D,
+    VIEW3D_NAVIGATION_ORBIT_PAN_ZOOM_CAPABILITY,
     View2D,
     View3D,
 )
@@ -17,14 +18,19 @@ from gsp_datoviz.session import DatovizSession
 
 
 class _FakeRenderer:
-    def __init__(self, view: View2D) -> None:
+    def __init__(self, view: View2D | View3D) -> None:
         self.view = view
         self.enable_calls: list[View2D | None] = []
+        self.enable_view3d_calls: list[View3D | None] = []
         self.show_calls: list[int] = []
         self.closed = False
 
     def enable_gsp_view2d_navigation(self, view: View2D | None = None) -> object:
         self.enable_calls.append(view)
+        return object()
+
+    def enable_gsp_view3d_navigation(self, view: View3D | None = None) -> object:
+        self.enable_view3d_calls.append(view)
         return object()
 
     def show(self, *, frame_count: int) -> None:
@@ -34,15 +40,31 @@ class _FakeRenderer:
         self.closed = True
 
 
-def _session(renderer: _FakeRenderer) -> DatovizSession:
+class _FakeCapabilities:
+    def __init__(self, *, live_view3d: bool = False) -> None:
+        self.live_view3d = live_view3d
+
+    def supports_view3d_capability(self, capability: str) -> bool:
+        return (
+            capability == VIEW3D_NAVIGATION_ORBIT_PAN_ZOOM_CAPABILITY
+            and self.live_view3d
+        )
+
+
+def _session(
+    renderer: _FakeRenderer, *, live_view3d: bool = False
+) -> DatovizSession:
     session = object.__new__(DatovizSession)
     session.request = None  # type: ignore[assignment]
     session._dvz = object()
-    session.capabilities = None  # type: ignore[assignment]
+    session.capabilities = _FakeCapabilities(  # type: ignore[assignment]
+        live_view3d=live_view3d
+    )
     session._diagnostics = []
     session._renderers = []
     session._renderer_scenes = {}
     session._interactive_view2d_renderers = set()
+    session._interactive_view3d_renderers = set()
     session._closed = False
     session._build_renderer = lambda scene: renderer  # type: ignore[method-assign]
     return session
@@ -135,10 +157,30 @@ def test_offscreen_render_accepts_static_view3d_mesh_scene(tmp_path: Any) -> Non
     assert scene.view3d is not None
     renderer = _FakeRenderer(scene.view3d)  # type: ignore[arg-type]
     renderer.capture_png_bytes = lambda: b"png"  # type: ignore[attr-defined]
-    session = _session(renderer)
+    session = _session(renderer, live_view3d=True)
     target = tmp_path / "mesh3d.png"
 
     session.render(scene, target=target)
 
     assert target.read_bytes() == b"png"
     assert renderer.enable_calls == []
+    assert renderer.enable_view3d_calls == []
+
+
+def test_interactive_view3d_is_enabled_only_from_advertised_session_capability() -> None:
+    scene = _mesh3d_scene()
+    assert scene.view3d is not None
+
+    static_renderer = _FakeRenderer(scene.view3d)
+    static_session = _session(static_renderer)
+    static_session.display(scene, block=False)
+    static_session.run()
+    assert static_renderer.enable_view3d_calls == []
+
+    live_renderer = _FakeRenderer(scene.view3d)
+    live_session = _session(live_renderer, live_view3d=True)
+    live_session.display(scene, block=False)
+    live_session.run()
+
+    assert live_renderer.enable_view3d_calls == [scene.view3d]
+    assert live_renderer.show_calls == [0]
