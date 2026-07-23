@@ -2,8 +2,17 @@ from __future__ import annotations
 
 from typing import Any
 
+import numpy as np
+
 import gsp
-from gsp.protocol import View2D
+from gsp.protocol import (
+    Camera3D,
+    CoordinateSpace,
+    MeshVisual,
+    OrthographicProjection3D,
+    View2D,
+    View3D,
+)
 from gsp_datoviz.session import DatovizSession
 
 
@@ -51,6 +60,34 @@ def _scene() -> gsp.Scene:
     )
 
 
+def _mesh3d_scene() -> gsp.Scene:
+    return gsp.Scene(
+        id="scene:mesh3d",
+        visuals=(
+            MeshVisual(
+                id="visual:mesh3d",
+                positions=np.asarray(
+                    [[-1.0, -1.0, 0.0], [1.0, -1.0, 0.0], [0.0, 1.0, 0.0]],
+                    dtype=np.float32,
+                ),
+                faces=np.asarray([[0, 1, 2]], dtype=np.uint32),
+                color=np.asarray([70, 130, 220, 255], dtype=np.uint8),
+                coordinate_space=CoordinateSpace.DATA,
+            ),
+        ),
+        view3d=View3D(
+            id="view:main",
+            panel_id="panel:main",
+            camera=Camera3D(
+                eye=(3.0, 3.0, 3.0),
+                target=(0.0, 0.0, 0.0),
+                up=(0.0, 0.0, 1.0),
+            ),
+            projection=OrthographicProjection3D(),
+        ),
+    )
+
+
 def test_interactive_2d_display_enables_canonical_navigation_exactly_once() -> None:
     scene = _scene()
     assert scene.view2d is not None
@@ -90,4 +127,18 @@ def test_offscreen_render_does_not_enable_interactive_navigation(tmp_path: Any) 
 
     session.render(scene, target=tmp_path / "frame.png")
 
+    assert renderer.enable_calls == []
+
+
+def test_offscreen_render_accepts_static_view3d_mesh_scene(tmp_path: Any) -> None:
+    scene = _mesh3d_scene()
+    assert scene.view3d is not None
+    renderer = _FakeRenderer(scene.view3d)  # type: ignore[arg-type]
+    renderer.capture_png_bytes = lambda: b"png"  # type: ignore[attr-defined]
+    session = _session(renderer)
+    target = tmp_path / "mesh3d.png"
+
+    session.render(scene, target=target)
+
+    assert target.read_bytes() == b"png"
     assert renderer.enable_calls == []

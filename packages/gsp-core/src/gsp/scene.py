@@ -25,7 +25,9 @@ from .protocol import (
     VisualAttachment,
 )
 
-SceneVisual = PointVisual | MarkerVisual | SegmentVisual | PathVisual | ImageVisual | TextVisual | MeshVisual
+SceneVisual = (
+    PointVisual | MarkerVisual | SegmentVisual | PathVisual | ImageVisual | TextVisual | MeshVisual
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,3 +48,7 @@ class Scene:
     transforms: tuple[AffineTransform2DResource, ...] = ()
     canvas_size: CanvasSize | None = None
 
+    def __post_init__(self) -> None:
+        """Reject an ambiguous scene while preserving viewless NDC scenes."""
+        if self.view2d is not None and self.view3d is not None:
+            raise ValueError("Scene cannot define both view2d and view3d")
