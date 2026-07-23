@@ -176,7 +176,11 @@ over behavior must be explicit when supported.
 
 ## Text
 
-`TextVisual` contains strings, positions, logical-pixel size, anchors, rotation, color, and generic font role. Guide labels and titles remain guides rather than ordinary text visuals. Unicode shaping, bidirectional text, exact font matching, and multiline behavior require explicit support.
+`TextVisual` contains strings, positions, logical-pixel size, anchors, rotation, color, and a
+generic font role. Two-dimensional DATA text requires `View2D`; two-dimensional NDC text is
+viewless. Three-dimensional text is DATA-only screen-facing overlay text, requires `View3D`, and
+does not accept a 2D visual transform. Guide labels and titles remain guides rather than ordinary
+text visuals.
 
 ### TextVisual
 
@@ -194,6 +198,13 @@ over behavior must be explicit when supported.
 `GSP-VIS-010`: anchor semantics refer to the resolved text layout box. A backend that cannot shape
 or measure the requested text may adapt only under an advertised font/text capability and reports
 the deviation. Guide text retains guide identity.
+
+`GSP-VIS-019`: `textvisual.billboard3d.v1` preserves the projected DATA anchor, logical-pixel font
+size, RGBA, layout-box anchor, display-plane rotation, item order, and visual overlay order across
+retained camera updates. Billboard text is a logical overlay and does not imply fragment depth
+occlusion. `textvisual.billboard3d.depth_occlusion.v1` is registered but remains unadvertised until
+strict depth behavior is proven. Multiline layout, rich text, exact font files, shaping guarantees,
+glyph identity, atlas access, and text/glyph query are deferred.
 
 ## Meshes
 

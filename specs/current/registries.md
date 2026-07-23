@@ -46,6 +46,8 @@ The machine registry is `spec/requirements/registries.json`. Important accepted 
 | `primitivevisual.line_strip` | connected line strip |
 | `primitivevisual.triangle_list` | independent triangle triples |
 | `primitivevisual.triangle_strip` | alternating-winding triangle strip |
+| `textvisual.billboard3d.v1` | screen-facing logical overlay text anchored in 3D DATA |
+| `textvisual.billboard3d.depth_occlusion.v1` | strict billboard fragment-depth occlusion; registered, not implied |
 | `meshvisual.positions3d.data_view3d.v1` | DATA-space 3D mesh mapping |
 | `meshvisual.positions3d.ndc.v1` | NDC 3D mesh placement |
 | `meshvisual.positions3d.opaque_depth.v1` | strict bounded opaque depth |

@@ -34,6 +34,8 @@
     "primitivevisual.line_strip",
     "primitivevisual.triangle_list",
     "primitivevisual.triangle_strip",
+    "textvisual.billboard3d.v1",
+    "textvisual.billboard3d.depth_occlusion.v1",
     "meshvisual.positions3d.data_view3d.v1",
     "meshvisual.positions3d.ndc.v1",
     "meshvisual.positions3d.opaque_depth.v1",

@@ -64,7 +64,10 @@ spheres, vectors, bounded primitives, markers, segments, paths, images, text, an
 coordinate space, geometry, styling inputs, and referenced resources explicitly. DATA-space
 three-dimensional spheres and vectors require an explicit `View3D`; vector scale and anchor are
 resolved to canonical endpoints before backend lowering. Primitive topology and optional public
-indices remain semantic records and never expose raw backend draw state.
+indices remain semantic records and never expose raw backend draw state. Two-dimensional DATA text
+requires `View2D`, while NDC text is viewless. Three-dimensional text requires DATA coordinates and
+`View3D`, rejects 2D visual transforms, and participates as ordered screen-facing overlay text
+rather than depth-occluded geometry.
 
 ### Visual attachment
 
