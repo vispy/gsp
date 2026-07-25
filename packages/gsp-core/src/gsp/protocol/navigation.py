@@ -42,6 +42,7 @@ class NavigationDiagnosticCode(str, Enum):
     NAVIGATION_NONFINITE = "GSP_NAVIGATION_NONFINITE"
     NAVIGATION_INVALID_ZOOM_FACTOR = "GSP_NAVIGATION_INVALID_ZOOM_FACTOR"
     NAVIGATION_INVALID_PANEL_RECT = "GSP_NAVIGATION_INVALID_PANEL_RECT"
+    NAVIGATION_OUTSIDE_PLOT = "GSP_NAVIGATION_OUTSIDE_PLOT"
     NAVIGATION_RESET_UNAVAILABLE = "GSP_NAVIGATION_RESET_UNAVAILABLE"
 
 
@@ -288,7 +289,7 @@ class NavigationPointerEvent:
 
 
 class View2DNavigationInputAdapter:
-    """Convert resolved pointer events into deterministic S035 navigation actions."""
+    """Convert data-plot pointer events into deterministic S035 navigation actions."""
 
     __slots__ = (
         "_controller_id",
@@ -334,11 +335,11 @@ class View2DNavigationInputAdapter:
 
     @property
     def panel_rect(self) -> LogicalPixelRect:
-        """Return the current target-panel logical-pixel rectangle."""
+        """Return the current data-plot logical-pixel rectangle."""
         return self._panel_rect
 
     def set_panel_rect(self, panel_rect: LogicalPixelRect) -> None:
-        """Update the resolved panel rectangle used by helper coordinate conversions."""
+        """Update the resolved data-plot rectangle used by coordinate conversions."""
         _validate_panel_rect(panel_rect)
         self._panel_rect = panel_rect
 
@@ -357,6 +358,11 @@ class View2DNavigationInputAdapter:
     def handle_pointer_event(self, event: NavigationPointerEvent) -> NavigationAction | None:
         """Return a semantic navigation action for one pointer event, if any."""
         if event.kind is NavigationPointerEventKind.BUTTON_PRESS:
+            if not _rect_contains_coordinate(
+                self._panel_rect, (event.x_px, event.y_px)
+            ):
+                self._clear_drag()
+                return None
             if event.left_button:
                 self._drag_last_px = (event.x_px, event.y_px)
                 self._drag_start_px = (event.x_px, event.y_px)
@@ -376,8 +382,16 @@ class View2DNavigationInputAdapter:
         if event.kind is NavigationPointerEventKind.MOUSE_MOVE:
             return self._handle_mouse_move(event)
         if event.kind is NavigationPointerEventKind.WHEEL:
+            if not _rect_contains_coordinate(
+                self._panel_rect, (event.x_px, event.y_px)
+            ):
+                return None
             return self._handle_wheel(event)
         if event.kind is NavigationPointerEventKind.DOUBLE_CLICK:
+            if not _rect_contains_coordinate(
+                self._panel_rect, (event.x_px, event.y_px)
+            ):
+                return None
             self._zoom = (1.0, 1.0)
             self._clear_drag()
             return ResetViewAction(
@@ -470,7 +484,7 @@ class View2DNavigationInputAdapter:
 
 
 def pan_view2d(view: View2D, panel_rect: LogicalPixelRect, dx_px: float, dy_px: float) -> View2D:
-    """Return the View2D produced by panning in resolved logical pixels."""
+    """Return the View2D produced by panning relative to the resolved data plot."""
     _validate_panel_rect(panel_rect)
     _validate_finite("dx_px", dx_px)
     _validate_finite("dy_px", dy_px)
@@ -496,9 +510,14 @@ def zoom_view2d_about(
     factor_x: float,
     factor_y: float,
 ) -> View2D:
-    """Return the View2D produced by zooming about a resolved logical-pixel anchor."""
+    """Zoom about an absolute logical-pixel anchor in the resolved data plot."""
     _validate_panel_rect(panel_rect)
     _validate_pair("anchor_px", anchor_px)
+    if not _rect_contains_coordinate(panel_rect, anchor_px):
+        raise ValueError(
+            f"{NavigationDiagnosticCode.NAVIGATION_OUTSIDE_PLOT.value}: "
+            "zoom anchor must be inside the closed plot rectangle"
+        )
     _validate_zoom_factor("factor_x", factor_x)
     _validate_zoom_factor("factor_y", factor_y)
     tx = (anchor_px[0] - panel_rect.x) / panel_rect.width
@@ -573,6 +592,15 @@ def _validate_pair(field_name: str, value: tuple[float, float]) -> None:
         raise ValueError(f"{field_name} must contain two values")
     _validate_finite(f"{field_name}[0]", value[0])
     _validate_finite(f"{field_name}[1]", value[1])
+
+
+def _rect_contains_coordinate(
+    rect: LogicalPixelRect, coordinate: tuple[float, float]
+) -> bool:
+    return (
+        rect.x <= coordinate[0] <= rect.x + rect.width
+        and rect.y <= coordinate[1] <= rect.y + rect.height
+    )
 
 
 def _validate_zoom_factor(field_name: str, value: float) -> None:

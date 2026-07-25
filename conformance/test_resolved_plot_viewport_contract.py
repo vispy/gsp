@@ -2,18 +2,25 @@ import pytest
 
 from gsp.protocol import (
     Camera3D,
+    LogicalCoordinateRegion,
     LogicalPixelRect,
     PerspectiveAspectRatioSource,
     PerspectiveProjection3D,
     RenderTarget,
     ResolvedLayoutSnapshot,
     View3D,
+    View3DNavigationAction,
+    View3DNavigationActionKind,
+    Zoom3DPayload,
+    apply_view3d_navigation_action,
+    classify_logical_coordinate,
     logical_coordinate_in_data_viewport,
     panel_ndc_to_plot_logical_px,
     plot_logical_px_to_panel_ndc,
     project_view3d_data_point,
     resolve_view3d_projection_snapshot,
     unproject_view3d_panel_ndc_point,
+    zoom_view3d,
 )
 
 
@@ -103,7 +110,12 @@ def test_title_lane_is_outside_data_viewport_but_inside_outer_panel() -> None:
     assert 100.0 <= title_coordinate[0] <= 700.0
     assert 50.0 <= title_coordinate[1] <= 550.0
     assert not logical_coordinate_in_data_viewport(layout, title_coordinate)
-    assert plot_logical_px_to_panel_ndc(layout, title_coordinate)[1] > 1.0
+    assert (
+        classify_logical_coordinate(layout, title_coordinate)
+        is LogicalCoordinateRegion.PANEL_GUIDE_LANE
+    )
+    with pytest.raises(ValueError, match="closed plot_rect_px"):
+        plot_logical_px_to_panel_ndc(layout, title_coordinate)
 
 
 def test_effective_plot_viewport_and_layout_identity_change_projection_identity() -> None:
@@ -127,6 +139,9 @@ def test_effective_plot_viewport_and_layout_identity_change_projection_identity(
     full_projection = resolve_view3d_projection_snapshot(
         view, layout_snapshot=full
     )
+    repeated_projection = resolve_view3d_projection_snapshot(
+        view, layout_snapshot=full
+    )
     inset_projection = resolve_view3d_projection_snapshot(
         view, layout_snapshot=inset
     )
@@ -136,6 +151,9 @@ def test_effective_plot_viewport_and_layout_identity_change_projection_identity(
 
     assert full_projection.view_projection_snapshot_id != (
         inset_projection.view_projection_snapshot_id
+    )
+    assert full_projection.view_projection_snapshot_id == (
+        repeated_projection.view_projection_snapshot_id
     )
     assert full_projection.view_projection_snapshot_id != (
         stale_projection.view_projection_snapshot_id
@@ -164,3 +182,62 @@ def test_authored_aspect_wins_and_legacy_id_only_path_is_diagnosed() -> None:
         is PerspectiveAspectRatioSource.COMPATIBILITY_DEFAULT
     )
     assert "layout_geometry_missing" in legacy.diagnostics[0]
+
+
+def test_layout_resolved_navigation_refreshes_identity_and_rejects_stale_layout() -> None:
+    view = _view()
+    layout = _layout(
+        "layout:current",
+        panel=LogicalPixelRect(0.0, 0.0, 800.0, 600.0),
+        plot=LogicalPixelRect(100.0, 80.0, 600.0, 450.0),
+    )
+    current = resolve_view3d_projection_snapshot(view, layout_snapshot=layout)
+    action = View3DNavigationAction(
+        kind=View3DNavigationActionKind.ZOOM,
+        view_id=view.id,
+        base_view_revision=view.revision,
+        base_view_projection_snapshot_id=current.view_projection_snapshot_id,
+        base_layout_snapshot_id=layout.snapshot_id,
+        payload=Zoom3DPayload(scale=2.0),
+    )
+
+    result = apply_view3d_navigation_action(view, action, layout_snapshot=layout)
+
+    assert result.accepted
+    assert result.view is not None
+    updated = resolve_view3d_projection_snapshot(
+        result.view, layout_snapshot=layout
+    )
+    assert result.view_projection_snapshot_id == updated.view_projection_snapshot_id
+
+    stale_layout = _layout(
+        "layout:changed",
+        panel=layout.panel_rect_px,
+        plot=LogicalPixelRect(120.0, 80.0, 560.0, 450.0),
+    )
+    rejected = apply_view3d_navigation_action(
+        view, action, layout_snapshot=stale_layout
+    )
+    assert not rejected.accepted
+    assert "snapshot_mismatch" in rejected.diagnostics[0]
+
+
+def test_guide_lane_cannot_construct_ray_or_mesh_pick_ndc() -> None:
+    layout = _layout(
+        "layout:guide-lane",
+        panel=LogicalPixelRect(0.0, 0.0, 800.0, 600.0),
+        plot=LogicalPixelRect(100.0, 100.0, 600.0, 450.0),
+    )
+    coordinate = (400.0, 50.0)
+
+    assert (
+        classify_logical_coordinate(layout, coordinate)
+        is LogicalCoordinateRegion.PANEL_GUIDE_LANE
+    )
+    with pytest.raises(ValueError, match="closed plot_rect_px"):
+        plot_logical_px_to_panel_ndc(layout, coordinate)
+    with pytest.raises(ValueError, match="closed data plot"):
+        zoom_view3d(
+            _view(),
+            Zoom3DPayload(scale=2.0, anchor_panel_ndc_xy=(0.0, 1.01)),
+        )

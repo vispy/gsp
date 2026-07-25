@@ -1,10 +1,12 @@
 import pytest
 
 from gsp.protocol import (
+    LogicalCoordinateRegion,
     LogicalPixelRect,
     PixelOrigin,
     RenderTarget,
     ResolvedLayoutSnapshot,
+    classify_logical_coordinate,
     logical_coordinate_in_data_viewport,
     panel_ndc_to_plot_logical_px,
     plot_logical_px_to_panel_ndc,
@@ -76,7 +78,29 @@ def test_bottom_left_pixel_origin_round_trip_preserves_panel_ndc_orientation() -
     )
 
 
-def test_resolved_plot_aspect_and_outside_plot_classification() -> None:
+@pytest.mark.parametrize("origin", list(PixelOrigin))
+def test_exact_plot_corners_center_and_closed_edges(origin: PixelOrigin) -> None:
+    snapshot = _snapshot(
+        plot=LogicalPixelRect(100.0, 75.0, 600.0, 450.0),
+        origin=origin,
+    )
+    top_y_ndc = 1.0 if origin is PixelOrigin.TOP_LEFT else -1.0
+    bottom_y_ndc = -top_y_ndc
+
+    assert panel_ndc_to_plot_logical_px(
+        snapshot, (-1.0, top_y_ndc)
+    ) == pytest.approx((100.0, 75.0))
+    assert panel_ndc_to_plot_logical_px(
+        snapshot, (1.0, bottom_y_ndc)
+    ) == pytest.approx((700.0, 525.0))
+    assert panel_ndc_to_plot_logical_px(snapshot, (0.0, 0.0)) == pytest.approx(
+        (400.0, 300.0)
+    )
+    assert logical_coordinate_in_data_viewport(snapshot, (100.0, 75.0))
+    assert logical_coordinate_in_data_viewport(snapshot, (700.0, 525.0))
+
+
+def test_resolved_plot_aspect_and_three_way_coordinate_classification() -> None:
     snapshot = _snapshot(
         panel=LogicalPixelRect(100.0, 50.0, 600.0, 500.0),
         plot=LogicalPixelRect(140.0, 110.0, 520.0, 400.0),
@@ -87,11 +111,28 @@ def test_resolved_plot_aspect_and_outside_plot_classification() -> None:
     assert logical_coordinate_in_data_viewport(snapshot, (660.0, 510.0))
     assert not logical_coordinate_in_data_viewport(snapshot, (120.0, 80.0))
     assert not logical_coordinate_in_data_viewport(snapshot, (680.0, 530.0))
+    assert (
+        classify_logical_coordinate(snapshot, (140.0, 110.0))
+        is LogicalCoordinateRegion.DATA_PLOT
+    )
+    assert (
+        classify_logical_coordinate(snapshot, (120.0, 80.0))
+        is LogicalCoordinateRegion.PANEL_GUIDE_LANE
+    )
+    assert (
+        classify_logical_coordinate(snapshot, (90.0, 80.0))
+        is LogicalCoordinateRegion.OUTSIDE_PANEL
+    )
 
 
 @pytest.mark.parametrize(
     ("panel", "plot", "message"),
     [
+        (
+            LogicalPixelRect(0.0, 0.0, 0.0, 600.0),
+            LogicalPixelRect(0.0, 0.0, 0.0, 600.0),
+            "panel_rect_px must have positive",
+        ),
         (
             LogicalPixelRect(-1.0, 0.0, 100.0, 100.0),
             LogicalPixelRect(0.0, 0.0, 50.0, 50.0),
@@ -125,3 +166,17 @@ def test_plot_helpers_reject_empty_data_viewport() -> None:
         resolved_plot_aspect_ratio(snapshot)
     with pytest.raises(ValueError, match="positive width and height"):
         plot_logical_px_to_panel_ndc(snapshot, (100.0, 100.0))
+    assert (
+        classify_logical_coordinate(snapshot, (100.0, 100.0))
+        is LogicalCoordinateRegion.PANEL_GUIDE_LANE
+    )
+
+
+def test_plot_conversion_rejects_guide_lane_instead_of_extrapolating() -> None:
+    snapshot = _snapshot(
+        panel=LogicalPixelRect(100.0, 50.0, 600.0, 500.0),
+        plot=LogicalPixelRect(140.0, 110.0, 520.0, 400.0),
+    )
+
+    with pytest.raises(ValueError, match="inside the closed plot_rect_px"):
+        plot_logical_px_to_panel_ndc(snapshot, (120.0, 80.0))

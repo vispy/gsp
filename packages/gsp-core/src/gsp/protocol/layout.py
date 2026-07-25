@@ -51,6 +51,14 @@ class LayoutDiagnosticStatus(str, Enum):
     GRID_CLIP_NOT_ENFORCED = "grid_clip_not_enforced"
 
 
+class LogicalCoordinateRegion(str, Enum):
+    """Resolved panel region containing one absolute logical coordinate."""
+
+    OUTSIDE_PANEL = "outside-panel"
+    PANEL_GUIDE_LANE = "panel-guide-lane"
+    DATA_PLOT = "data-plot"
+
+
 GuideBoxKind = Literal[
     "axis",
     "axis_label",
@@ -214,6 +222,8 @@ class ResolvedLayoutSnapshot:
         _validate_rect_inside_render_target(
             "panel_rect_px", self.panel_rect_px, self.render_target
         )
+        if self.panel_rect_px.width <= 0.0 or self.panel_rect_px.height <= 0.0:
+            raise ValueError("panel_rect_px must have positive width and height")
         _validate_rect_inside_render_target(
             "plot_rect_px", self.plot_rect_px, self.render_target
         )
@@ -271,6 +281,8 @@ def plot_logical_px_to_panel_ndc(
     x_px, y_px = _validate_logical_coordinate(coordinate_px)
     plot = snapshot.plot_rect_px
     _validate_nonempty_plot_rect(plot)
+    if not _rect_contains_coordinate(plot, x_px, y_px):
+        raise ValueError("coordinate_px must be inside the closed plot_rect_px")
     x_ndc = -1.0 + 2.0 * (x_px - plot.x) / plot.width
     y_fraction = (y_px - plot.y) / plot.height
     y_ndc = (
@@ -309,13 +321,28 @@ def logical_coordinate_in_data_viewport(
     snapshot: ResolvedLayoutSnapshot, coordinate_px: tuple[float, float]
 ) -> bool:
     """Return whether a logical coordinate lies in the closed plot rectangle."""
+    return (
+        classify_logical_coordinate(snapshot, coordinate_px)
+        is LogicalCoordinateRegion.DATA_PLOT
+    )
+
+
+def classify_logical_coordinate(
+    snapshot: ResolvedLayoutSnapshot, coordinate_px: tuple[float, float]
+) -> LogicalCoordinateRegion:
+    """Classify an absolute render-target logical coordinate for query routing."""
     _validate_layout_snapshot(snapshot)
     x_px, y_px = _validate_logical_coordinate(coordinate_px)
+    if not _rect_contains_coordinate(snapshot.panel_rect_px, x_px, y_px):
+        return LogicalCoordinateRegion.OUTSIDE_PANEL
     plot = snapshot.plot_rect_px
-    return (
-        plot.x <= x_px <= plot.x + plot.width
-        and plot.y <= y_px <= plot.y + plot.height
-    )
+    if (
+        plot.width > 0.0
+        and plot.height > 0.0
+        and _rect_contains_coordinate(plot, x_px, y_px)
+    ):
+        return LogicalCoordinateRegion.DATA_PLOT
+    return LogicalCoordinateRegion.PANEL_GUIDE_LANE
 
 
 def _validate_layout_snapshot(snapshot: ResolvedLayoutSnapshot) -> None:
@@ -357,6 +384,15 @@ def _rect_contains_rect(outer: LogicalPixelRect, inner: LogicalPixelRect) -> boo
         and inner.y >= outer.y
         and inner.x + inner.width <= outer.x + outer.width
         and inner.y + inner.height <= outer.y + outer.height
+    )
+
+
+def _rect_contains_coordinate(
+    rect: LogicalPixelRect, x: float, y: float
+) -> bool:
+    return (
+        rect.x <= x <= rect.x + rect.width
+        and rect.y <= y <= rect.y + rect.height
     )
 
 

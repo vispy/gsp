@@ -703,6 +703,13 @@ def zoom_view3d(view: View3D, payload: Zoom3DPayload) -> View3D:
         raise TypeError("view must be a View3D")
     if not isinstance(payload, Zoom3DPayload):
         raise TypeError("payload must be a Zoom3DPayload")
+    if payload.anchor_panel_ndc_xy is not None and not _panel_ndc_in_data_viewport(
+        payload.anchor_panel_ndc_xy
+    ):
+        raise ValueError(
+            f"{View3DDiagnosticCode.VIEW3D_NAVIGATION_INVALID_ZOOM.value}: "
+            "anchor_panel_ndc_xy must be inside the closed data plot"
+        )
     if isinstance(view.projection, PerspectiveProjection3D):
         if payload.anchor_panel_ndc_xy is not None:
             raise ValueError(
@@ -753,30 +760,37 @@ def apply_view3d_navigation_action(
     view: View3D,
     action: View3DNavigationAction,
     *,
-    layout_snapshot_id: str,
+    layout_snapshot: ResolvedLayoutSnapshot | None = None,
+    layout_snapshot_id: str | None = None,
 ) -> View3DNavigationResult:
     """Apply one S037 navigation action with strict revision/snapshot freshness."""
     if not isinstance(view, View3D):
         raise TypeError("view must be a View3D")
     if not isinstance(action, View3DNavigationAction):
         raise TypeError("action must be a View3DNavigationAction")
-    validate_id(layout_snapshot_id)
+    resolved_layout_id, _ = _resolve_projection_layout_context(
+        view,
+        layout_snapshot=layout_snapshot,
+        layout_snapshot_id=layout_snapshot_id,
+    )
     current_snapshot = resolve_view3d_projection_snapshot(
-        view, layout_snapshot_id=layout_snapshot_id
+        view,
+        layout_snapshot=layout_snapshot,
+        layout_snapshot_id=layout_snapshot_id,
     )
     mismatch_diagnostic = View3DDiagnosticCode.VIEW3D_NAVIGATION_SNAPSHOT_MISMATCH.value
     if action.view_id != view.id:
         return _reject_view3d_navigation(
             view,
             action,
-            layout_snapshot_id=layout_snapshot_id,
+            layout_snapshot_id=resolved_layout_id,
             diagnostics=(f"{mismatch_diagnostic}: action view_id does not match",),
         )
     if action.base_view_revision != view.revision:
         return _reject_view3d_navigation(
             view,
             action,
-            layout_snapshot_id=layout_snapshot_id,
+            layout_snapshot_id=resolved_layout_id,
             diagnostics=(f"{mismatch_diagnostic}: stale view revision",),
         )
     if (
@@ -786,17 +800,17 @@ def apply_view3d_navigation_action(
         return _reject_view3d_navigation(
             view,
             action,
-            layout_snapshot_id=layout_snapshot_id,
+            layout_snapshot_id=resolved_layout_id,
             diagnostics=(f"{mismatch_diagnostic}: stale projection snapshot",),
         )
     if (
         action.base_layout_snapshot_id is not None
-        and action.base_layout_snapshot_id != layout_snapshot_id
+        and action.base_layout_snapshot_id != resolved_layout_id
     ):
         return _reject_view3d_navigation(
             view,
             action,
-            layout_snapshot_id=layout_snapshot_id,
+            layout_snapshot_id=resolved_layout_id,
             diagnostics=(f"{mismatch_diagnostic}: stale layout snapshot",),
         )
 
@@ -806,7 +820,7 @@ def apply_view3d_navigation_action(
         return _reject_view3d_navigation(
             view,
             action,
-            layout_snapshot_id=layout_snapshot_id,
+            layout_snapshot_id=resolved_layout_id,
             diagnostics=(
                 f"{View3DDiagnosticCode.VIEW3D_NAVIGATION_INVALID_RESULT.value}: "
                 f"{error}",
@@ -814,7 +828,9 @@ def apply_view3d_navigation_action(
         )
 
     updated_snapshot = resolve_view3d_projection_snapshot(
-        updated, layout_snapshot_id=layout_snapshot_id
+        updated,
+        layout_snapshot=layout_snapshot,
+        layout_snapshot_id=layout_snapshot_id,
     )
     return View3DNavigationResult(
         accepted=True,
@@ -824,7 +840,7 @@ def apply_view3d_navigation_action(
         camera=updated.camera,
         projection=updated.projection,
         view=updated,
-        layout_snapshot_id=layout_snapshot_id,
+        layout_snapshot_id=resolved_layout_id,
         view_projection_snapshot_id=updated_snapshot.view_projection_snapshot_id,
         action_kind=action.kind,
     )
@@ -1173,6 +1189,10 @@ def _resolve_snapshot_aspect_ratio(
             "aspect_ratio=None resolved to compatibility aspect 1.0",
         ),
     )
+
+
+def _panel_ndc_in_data_viewport(coordinate: Float2) -> bool:
+    return -1.0 <= coordinate[0] <= 1.0 and -1.0 <= coordinate[1] <= 1.0
 
 
 def _format_float2(value: Float2) -> str:

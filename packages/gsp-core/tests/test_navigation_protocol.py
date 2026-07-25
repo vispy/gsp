@@ -237,6 +237,31 @@ def test_zoom_view2d_about_preserves_reversed_limits():
     assert zoomed.y_range == pytest.approx((60.0, 20.0))
 
 
+def test_navigation_uses_plot_extents_and_rejects_guide_lane_anchor():
+    view = View2D(
+        id="view:main",
+        panel_id="panel:main",
+        x_range=(0.0, 100.0),
+        y_range=(0.0, 100.0),
+    )
+    plot_rect = LogicalPixelRect(x=100.0, y=100.0, width=200.0, height=100.0)
+
+    panned = pan_view2d(view, plot_rect, dx_px=20.0, dy_px=20.0)
+
+    assert panned.x_range == pytest.approx((-10.0, 90.0))
+    assert panned.y_range == pytest.approx((-20.0, 80.0))
+    with pytest.raises(
+        ValueError, match=NavigationDiagnosticCode.NAVIGATION_OUTSIDE_PLOT.value
+    ):
+        zoom_view2d_about(
+            view,
+            plot_rect,
+            anchor_px=(50.0, 150.0),
+            factor_x=2.0,
+            factor_y=2.0,
+        )
+
+
 def test_navigation_math_rejects_invalid_panel_rect():
     view = View2D(id="view:main", panel_id="panel:main")
     panel_rect = LogicalPixelRect(x=0.0, y=0.0, width=0.0, height=100.0)
@@ -368,6 +393,35 @@ def test_navigation_input_adapter_emits_wheel_zoom_and_tracks_accepted_revision(
     assert next_zoom.factor_y == pytest.approx(expected_next_factor_y)
 
 
+def test_navigation_input_adapter_ignores_pointer_anchors_outside_plot():
+    adapter = View2DNavigationInputAdapter(
+        controller_id="nav:main",
+        view2d_revision="view-rev:1",
+        panel_rect=LogicalPixelRect(x=100.0, y=100.0, width=200.0, height=100.0),
+    )
+
+    assert (
+        adapter.handle_pointer_event(
+            NavigationPointerEvent(
+                kind=NavigationPointerEventKind.WHEEL,
+                x_px=50.0,
+                y_px=150.0,
+                scroll_steps=1.0,
+            )
+        )
+        is None
+    )
+    assert (
+        adapter.handle_pointer_event(
+            NavigationPointerEvent(
+                kind=NavigationPointerEventKind.BUTTON_PRESS,
+                x_px=50.0,
+                y_px=150.0,
+                left_button=True,
+            )
+        )
+        is None
+    )
 def test_navigation_input_adapter_emits_right_drag_axis_zoom_actions():
     panel_rect = LogicalPixelRect(x=10.0, y=20.0, width=400.0, height=200.0)
     adapter = View2DNavigationInputAdapter(
