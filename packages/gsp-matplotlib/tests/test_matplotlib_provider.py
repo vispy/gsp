@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+import struct
 import sys
 from dataclasses import replace
 from pathlib import Path
@@ -13,6 +14,7 @@ from gsp.backends import SessionRequest
 from gsp.protocol import (
     AdaptationOutcome,
     Camera3D,
+    CanvasSize,
     CoordinateSpace,
     GUIDE_QUERY_PAYLOAD_KIND,
     MeshVisual,
@@ -107,6 +109,20 @@ def test_matplotlib_session_captures_static_perspective_mesh(tmp_path: Path) -> 
 
     assert target.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
     assert len(result.axes.collections) == 1
+
+
+def test_matplotlib_session_preserves_pixel_exact_png_dimensions(tmp_path: Path) -> None:
+    scene = gsp.Scene(
+        id="scene:pixel-exact",
+        canvas_size=CanvasSize.pixel_exact(800, 600),
+    )
+    target = tmp_path / "pixel-exact.png"
+
+    with gsp.open_session("matplotlib", require={"output.file"}) as session:
+        session.render(scene, target=target)
+
+    header = target.read_bytes()[:24]
+    assert struct.unpack(">II", header[16:24]) == (800, 600)
 
 
 def test_matplotlib_session_deterministically_rerenders_revised_view3d_state() -> None:

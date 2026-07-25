@@ -185,6 +185,7 @@ class MatplotlibSession:
                 view=scene.view2d,
             )
         if target is not None:
+            savefig_kwargs.setdefault("dpi", result.figure.dpi)
             result.figure.savefig(target, **savefig_kwargs)
         return result
 

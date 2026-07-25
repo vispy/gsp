@@ -228,6 +228,10 @@ def render_protocol_scene_with_layout(
         axes.set_ylim(view.y_range)
         axes.set_aspect("equal" if view.aspect_policy.value == "equal" else "auto")
         render_axis_guides(axes, view, axis_guide_tuple)
+    elif view3d is not None and not axis_guide_tuple:
+        # View3D has no implicit semantic axes.  Keep panel text guides, but do
+        # not leak Matplotlib's default 2D frame into the rendered scene.
+        axes.set_axis_off()
     render_panel_text_guides(axes, panel_text_guide_tuple)
     for guide in colorbar_guides:
         render_colorbar_guide(axes, guide, color_scales=color_scale_map)

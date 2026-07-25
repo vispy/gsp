@@ -317,7 +317,7 @@ def gsp_capability_snapshot_from_datoviz(
         else ("resolved_layout_snapshot_unsupported", *frame_snapshot_diagnostics)
     )
     guide_layout_diagnostics = (
-        "panel_text_guide_as_screen_text",
+        "panel_text_title_unsupported_no_public_renderer_path",
         "axis_style_mapping_partial",
         *grid_clip_audit_diagnostics,
         *frame_snapshot_audit_diagnostics,
@@ -362,7 +362,7 @@ def gsp_capability_snapshot_from_datoviz(
             "resolved_layout_produce": frame_snapshot_status,
             "resolved_layout_consume": "none",
             "layout_strict": False,
-            "panel_text_title": "adapted: panel_text_guide_as_screen_text",
+            "panel_text_title": "unsupported",
             "axis_style_mapping": "partial"
             if dvz is not None and hasattr(dvz, "dvz_axis_set_style")
             else "unsupported",
@@ -374,7 +374,7 @@ def gsp_capability_snapshot_from_datoviz(
             "guide_query": guide_query_supported,
             "all_rendered_guides": guide_query_supported,
             "diagnostics": (
-                "panel_text_guide_as_screen_text",
+                "panel_text_title_unsupported_no_public_renderer_path",
                 "axis_style_mapping_partial",
                 *grid_clip_audit_diagnostics,
                 *frame_snapshot_audit_diagnostics,
@@ -762,7 +762,7 @@ def gsp_capability_snapshot_from_datoviz(
             resolved_layout_consume="none",
             layout_strict=False,
             diagnostics=(
-                "panel_text_guide_as_screen_text",
+                "panel_text_title_unsupported_no_public_renderer_path",
                 "axis_style_mapping_partial",
                 *frame_snapshot_audit_diagnostics,
                 "layout_strict_false",
@@ -778,7 +778,7 @@ def gsp_capability_snapshot_from_datoviz(
             axis_grid=True,
             axis_grid_clip_to_plot_rect=grid_clip_supported,
             axis_query=guide_query_supported,
-            panel_text_title="adapted",
+            panel_text_title="unsupported",
             panel_text_participates_in_layout=False,
             panel_text_query=False,
             colorbar="adapted",

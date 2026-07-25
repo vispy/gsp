@@ -220,6 +220,71 @@ def test_render_protocol_scene_with_layout_accepts_view3d_mesh():
         plt.close(result.figure)
 
 
+def test_view3d_without_semantic_axis_guides_hides_native_frame_but_keeps_title():
+    view3d = View3D(
+        id="view:main",
+        panel_id="panel:main",
+        camera=Camera3D(
+            eye=(0.0, 0.0, 1.0),
+            target=(0.0, 0.0, 0.0),
+            up=(0.0, 1.0, 0.0),
+        ),
+        projection=OrthographicProjection3D(
+            xlim=(-1.0, 1.0),
+            ylim=(-1.0, 1.0),
+            near_far=(0.0, 2.0),
+        ),
+    )
+    title = PanelTextGuide(
+        id="guide:title",
+        panel_id=view3d.panel_id,
+        role=PanelTextRole.TITLE,
+        text="Semantic View3D title",
+    )
+
+    result = render_protocol_scene_with_layout(
+        visuals=(), view3d=view3d, panel_text_guides=(title,)
+    )
+    try:
+        assert result.axes.axison is False
+        assert result.axes.get_title() == title.text
+    finally:
+        plt.close(result.figure)
+
+
+def test_view2d_semantic_guides_keep_native_frame_visible():
+    view = View2D(
+        id="view:main",
+        panel_id="panel:main",
+        x_range=(-1.0, 1.0),
+        y_range=(-1.0, 1.0),
+    )
+    guides = (
+        AxisGuide(
+            id="guide:x",
+            view_id=view.id,
+            dimension=AxisDimension.X,
+            side=AxisSide.BOTTOM,
+        ),
+        AxisGuide(
+            id="guide:y",
+            view_id=view.id,
+            dimension=AxisDimension.Y,
+            side=AxisSide.LEFT,
+        ),
+    )
+
+    result = render_protocol_scene_with_layout(
+        visuals=(), view=view, axis_guides=guides
+    )
+    try:
+        assert result.axes.axison is True
+        assert result.axes.spines["bottom"].get_visible()
+        assert result.axes.spines["left"].get_visible()
+    finally:
+        plt.close(result.figure)
+
+
 def test_render_protocol_scene_with_reference_canvas_resolves_matplotlib_size():
     view = View2D(
         id="view:main",

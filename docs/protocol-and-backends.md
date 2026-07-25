@@ -80,19 +80,25 @@ per-glyph picking are not claimed. View3D ray construction is separate from item
 | Vector | Deterministic line/marker-cap adaptation | Public dense vector visual |
 | Primitive | Collection adaptation; no GPU raster parity | Public primitive topology/index binding |
 | Billboard text | Projected overlay; backend fonts | Projected retained overlay; default backend font |
-| Titles and guides | Native axes/title layout | Native/adapted guides; partial layout snapshot |
+| Titles and guides | Native semantic axes/title layout | Native/adapted axes; panel title unsupported |
 | Query | Bounded reference paths and structured unsupported results | Proven point-only query and separate ray context |
 | Live View3D | Programmatic camera snapshots only | Experimental opt-in; human review required |
 
-Titles, tick layout, fonts, glyph metrics, antialiasing, and output raster dimensions are
-backend-native, not pixel-parity contracts. Matplotlib M283 captures are 640×480; Datoviz M283
-offscreen captures use the native 800×600 target. Compare semantic content, not exact pixels.
+Titles, tick layout, fonts, glyph metrics, and antialiasing remain backend-specific rather than
+pixel-parity contracts. The M285 gallery requests one pixel-exact 800×600 canvas for both
+backends, and its installed-wheel validator rejects any other PNG dimensions. Matplotlib
+suppresses its default native 2D frame for View3D scenes without semantic axis guides while
+preserving semantic panel titles. The qualified Datoviz binding has no public adapter path for
+`PanelTextGuide`, so the capability snapshot reports
+`panel_text_title_unsupported_no_public_renderer_path` instead of claiming a title adaptation.
 
 ## Evidence
 
 The VisPy2 `examples/validate_gallery.py` harness copies the gallery scripts outside both source
 trees, verifies wheel-installed imports, enforces 20-second process-group timeouts with one
-Datoviz retry, and hashes fourteen captures. M283 successfully produced and visually reviewed
-seven Matplotlib and seven Datoviz PNGs. One earlier Datoviz invocation hung without output;
+Datoviz retry, requires all fourteen PNGs to be exactly 800×600, and records dimensions and
+hashes. M285 regenerated the seven Matplotlib PNGs; the seven Datoviz PNGs remain explicitly
+labelled M284 carry-forwards until an unsandboxed run completes. One earlier Datoviz invocation
+hung without output;
 repeated isolated reruns did not reproduce a backend defect. That event remains lifecycle-stress
 evidence for M284 rather than a reason to weaken capabilities.

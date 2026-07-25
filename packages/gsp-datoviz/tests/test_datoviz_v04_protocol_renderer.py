@@ -1860,7 +1860,12 @@ def test_capability_snapshot_defers_query_support():
     audit = caps.metadata["s034_guide_layout_audit"]
     assert audit["layout_strict"] is False
     assert audit["resolved_layout_produce"] == "none"
-    assert audit["panel_text_title"] == "adapted: panel_text_guide_as_screen_text"
+    assert audit["panel_text_title"] == "unsupported"
+    assert caps.guide_layout_capability.panel_text_title == "unsupported"
+    assert (
+        "panel_text_title_unsupported_no_public_renderer_path"
+        in caps.guide_layout_capability.diagnostics
+    )
     assert audit["axis_style_fields"] == DATOVIZ_S034_AXIS_STYLE_FIELDS
     assert audit["grid_clip_to_plot_rect"] == "unsupported"
     assert "grid_clip_not_enforced" in audit["diagnostics"]
