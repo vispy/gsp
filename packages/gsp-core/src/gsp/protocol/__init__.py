@@ -162,7 +162,14 @@ from .navigation import (
     pan_view2d,
     zoom_view2d_about,
 )
-from .panels import AspectPolicy, Panel, View2D, VisualAttachment, VisualCoordinateSpace
+from .panels import (
+    AspectPolicy,
+    Panel,
+    View2D,
+    VisualAttachment,
+    VisualCoordinateSpace,
+    resolve_panel_viewport_rect,
+)
 from .view3d import (
     CAMERA3D_EPSILON,
     MESH3D_DATA_VIEW3D_CAPABILITY,
@@ -543,6 +550,7 @@ __all__ = [
     "ResolvedGuideBox",
     "ResolvedCanvas",
     "ResolvedLayoutSnapshot",
+    "resolve_panel_viewport_rect",
     "ResolvedTicks",
     "S020_CREDENTIAL_POLICIES",
     "S020_EXECUTABLE_LOCALITIES",

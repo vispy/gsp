@@ -6,9 +6,12 @@ from gsp.protocol import (
     LogicalPixelRect,
     PerspectiveAspectRatioSource,
     PerspectiveProjection3D,
+    PixelOrigin,
+    Panel,
     RenderTarget,
     ResolvedLayoutSnapshot,
     View3D,
+    View2D,
     View3DNavigationAction,
     View3DNavigationActionKind,
     Zoom3DPayload,
@@ -16,11 +19,14 @@ from gsp.protocol import (
     classify_logical_coordinate,
     logical_coordinate_in_data_viewport,
     panel_ndc_to_plot_logical_px,
+    pan_view2d,
     plot_logical_px_to_panel_ndc,
     project_view3d_data_point,
     resolve_view3d_projection_snapshot,
+    resolve_panel_viewport_rect,
     unproject_view3d_panel_ndc_point,
     zoom_view3d,
+    zoom_view2d_about,
 )
 
 
@@ -54,6 +60,66 @@ def _view(*, authored_aspect: float | None = None) -> View3D:
             aspect_ratio=authored_aspect,
         ),
     )
+
+
+def test_normalized_panel_intent_and_view2d_origin_are_executable() -> None:
+    panel = Panel(
+        id="panel:main",
+        figure_id="figure:main",
+        viewport_rect=(0.125, 0.1, 0.75, 0.8),
+    )
+    view = View2D(
+        id="view:main",
+        panel_id=panel.id,
+        x_range=(0.0, 100.0),
+        y_range=(0.0, 100.0),
+    )
+    top_left = ResolvedLayoutSnapshot(
+        snapshot_id="layout:top-left",
+        view_id=view.id,
+        render_target=RenderTarget(800.0, 600.0, pixel_origin=PixelOrigin.TOP_LEFT),
+        panel_rect_px=resolve_panel_viewport_rect(panel, RenderTarget(800.0, 600.0)),
+        plot_rect_px=LogicalPixelRect(140.0, 100.0, 520.0, 400.0),
+    )
+    bottom_left = ResolvedLayoutSnapshot(
+        snapshot_id="layout:bottom-left",
+        view_id=view.id,
+        render_target=RenderTarget(800.0, 600.0, pixel_origin=PixelOrigin.BOTTOM_LEFT),
+        panel_rect_px=top_left.panel_rect_px,
+        plot_rect_px=top_left.plot_rect_px,
+    )
+
+    assert top_left.panel_rect_px == LogicalPixelRect(100.0, 60.0, 600.0, 480.0)
+    assert zoom_view2d_about(
+        view,
+        top_left.plot_rect_px,
+        (400.0, 100.0),
+        1.0,
+        2.0,
+        layout_snapshot=top_left,
+    ).y_range == pytest.approx((50.0, 100.0))
+    assert zoom_view2d_about(
+        view,
+        bottom_left.plot_rect_px,
+        (400.0, 100.0),
+        1.0,
+        2.0,
+        layout_snapshot=bottom_left,
+    ).y_range == pytest.approx((0.0, 50.0))
+    assert pan_view2d(
+        view,
+        top_left.plot_rect_px,
+        0.0,
+        40.0,
+        layout_snapshot=top_left,
+    ).y_range == pytest.approx((10.0, 110.0))
+    assert pan_view2d(
+        view,
+        bottom_left.plot_rect_px,
+        0.0,
+        40.0,
+        layout_snapshot=bottom_left,
+    ).y_range == pytest.approx((-10.0, 90.0))
 
 
 @pytest.mark.parametrize(

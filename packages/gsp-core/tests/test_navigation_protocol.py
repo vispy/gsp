@@ -16,6 +16,9 @@ from gsp.protocol import (
     NavigationPointerEventKind,
     NavigationResult,
     PanByAction,
+    PixelOrigin,
+    RenderTarget,
+    ResolvedLayoutSnapshot,
     ResetViewAction,
     SetViewAction,
     TransportKind,
@@ -260,6 +263,86 @@ def test_navigation_uses_plot_extents_and_rejects_guide_lane_anchor():
             factor_x=2.0,
             factor_y=2.0,
         )
+
+
+def _navigation_layout(origin: PixelOrigin) -> ResolvedLayoutSnapshot:
+    return ResolvedLayoutSnapshot(
+        snapshot_id=f"layout:{origin.value}",
+        view_id="view:main",
+        render_target=RenderTarget(800.0, 600.0, pixel_origin=origin),
+        panel_rect_px=LogicalPixelRect(100.0, 50.0, 600.0, 500.0),
+        plot_rect_px=LogicalPixelRect(140.0, 100.0, 520.0, 400.0),
+    )
+
+
+def test_view2d_navigation_resolved_layout_honors_pixel_origin() -> None:
+    view = View2D(
+        id="view:main",
+        panel_id="panel:main",
+        x_range=(0.0, 100.0),
+        y_range=(0.0, 100.0),
+    )
+    top_left = _navigation_layout(PixelOrigin.TOP_LEFT)
+    bottom_left = _navigation_layout(PixelOrigin.BOTTOM_LEFT)
+    top_edge = (400.0, 100.0)
+
+    top_zoom = zoom_view2d_about(
+        view,
+        top_left.plot_rect_px,
+        anchor_px=top_edge,
+        factor_x=1.0,
+        factor_y=2.0,
+        layout_snapshot=top_left,
+    )
+    bottom_zoom = zoom_view2d_about(
+        view,
+        bottom_left.plot_rect_px,
+        anchor_px=top_edge,
+        factor_x=1.0,
+        factor_y=2.0,
+        layout_snapshot=bottom_left,
+    )
+    top_pan = pan_view2d(
+        view,
+        top_left.plot_rect_px,
+        dx_px=0.0,
+        dy_px=40.0,
+        layout_snapshot=top_left,
+    )
+    bottom_pan = pan_view2d(
+        view,
+        bottom_left.plot_rect_px,
+        dx_px=0.0,
+        dy_px=40.0,
+        layout_snapshot=bottom_left,
+    )
+
+    assert top_zoom.y_range == pytest.approx((50.0, 100.0))
+    assert bottom_zoom.y_range == pytest.approx((0.0, 50.0))
+    assert top_pan.y_range == pytest.approx((10.0, 110.0))
+    assert bottom_pan.y_range == pytest.approx((-10.0, 90.0))
+
+
+def test_navigation_input_adapter_consumes_layout_plot_and_origin() -> None:
+    layout = _navigation_layout(PixelOrigin.BOTTOM_LEFT)
+    adapter = View2DNavigationInputAdapter(
+        controller_id="nav:main",
+        view2d_revision="view-rev:1",
+        layout_snapshot=layout,
+    )
+
+    assert adapter.panel_rect == layout.plot_rect_px
+    assert adapter.pixel_origin is PixelOrigin.BOTTOM_LEFT
+    action = adapter.handle_pointer_event(
+        NavigationPointerEvent(
+            kind=NavigationPointerEventKind.WHEEL,
+            x_px=400.0,
+            y_px=100.0,
+            scroll_steps=1.0,
+        )
+    )
+    assert isinstance(action, ZoomAboutAction)
+    assert action.layout_snapshot_id == layout.snapshot_id
 
 
 def test_navigation_math_rejects_invalid_panel_rect():

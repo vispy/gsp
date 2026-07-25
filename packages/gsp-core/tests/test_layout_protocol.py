@@ -33,6 +33,19 @@ def _snapshot(
     )
 
 
+def test_render_target_coerces_valid_pixel_origin_string() -> None:
+    target = RenderTarget(800.0, 600.0, pixel_origin="bottom-left")  # type: ignore[arg-type]
+
+    assert target.pixel_origin is PixelOrigin.BOTTOM_LEFT
+
+
+@pytest.mark.parametrize("invalid", ("leftish", 7, object()))
+def test_render_target_rejects_invalid_pixel_origin(invalid: object) -> None:
+    error = ValueError if isinstance(invalid, str) else TypeError
+    with pytest.raises(error, match="pixel_origin"):
+        RenderTarget(800.0, 600.0, pixel_origin=invalid)  # type: ignore[arg-type]
+
+
 @pytest.mark.parametrize(
     ("panel", "plot"),
     [

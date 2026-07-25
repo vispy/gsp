@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+import math
 
 from .ids import validate_id
+from .layout import LogicalPixelRect, RenderTarget
 from .transforms import TransformDiagnosticCode, ViewKind, validate_view2d_limits
 
 
@@ -35,11 +37,35 @@ class Panel:
     def __post_init__(self) -> None:
         validate_id(self.id)
         validate_id(self.figure_id)
+        if len(self.viewport_rect) != 4:
+            raise ValueError("panel viewport_rect must contain four values")
         x, y, width, height = self.viewport_rect
+        for index, value in enumerate(self.viewport_rect):
+            if not isinstance(value, (int, float)):
+                raise TypeError(f"panel viewport_rect[{index}] must be a number")
+            if not math.isfinite(value):
+                raise ValueError(f"panel viewport_rect[{index}] must be finite")
         if width <= 0 or height <= 0:
             raise ValueError("panel viewport width and height must be positive")
         if x < 0 or y < 0:
             raise ValueError("panel viewport origin must be non-negative")
+        if x + width > 1.0 or y + height > 1.0:
+            raise ValueError("panel viewport_rect must be contained by the normalized render target")
+
+
+def resolve_panel_viewport_rect(panel: Panel, render_target: RenderTarget) -> LogicalPixelRect:
+    """Resolve normalized outer-panel allocation intent into logical pixels."""
+    if not isinstance(panel, Panel):
+        raise TypeError("panel must be a Panel")
+    if not isinstance(render_target, RenderTarget):
+        raise TypeError("render_target must be a RenderTarget")
+    x, y, width, height = panel.viewport_rect
+    return LogicalPixelRect(
+        x=x * render_target.logical_width_px,
+        y=y * render_target.logical_height_px,
+        width=width * render_target.logical_width_px,
+        height=height * render_target.logical_height_px,
+    )
 
 
 @dataclass(frozen=True, slots=True)

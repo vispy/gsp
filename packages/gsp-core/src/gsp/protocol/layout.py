@@ -118,6 +118,15 @@ class RenderTarget:
         _validate_positive("device_scale", self.device_scale)
         if self.dpi is not None:
             _validate_positive("dpi", self.dpi)
+        if isinstance(self.pixel_origin, str):
+            try:
+                object.__setattr__(self, "pixel_origin", PixelOrigin(self.pixel_origin))
+            except ValueError as exc:
+                raise ValueError(
+                    f"pixel_origin must be one of {[origin.value for origin in PixelOrigin]}"
+                ) from exc
+        elif not isinstance(self.pixel_origin, PixelOrigin):
+            raise TypeError("pixel_origin must be a PixelOrigin or its string value")
         if not self.query_coordinate_space:
             raise ValueError("query_coordinate_space must not be empty")
 

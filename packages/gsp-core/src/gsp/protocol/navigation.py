@@ -8,7 +8,7 @@ import math
 import sys
 
 from .ids import validate_id
-from .layout import LogicalPixelRect
+from .layout import LogicalPixelRect, PixelOrigin, ResolvedLayoutSnapshot
 from .panels import View2D
 
 
@@ -299,6 +299,7 @@ class View2DNavigationInputAdapter:
         "_drag_last_px",
         "_layout_snapshot_id",
         "_panel_rect",
+        "_pixel_origin",
         "_profile",
         "_view2d_revision",
         "_zoom",
@@ -309,18 +310,24 @@ class View2DNavigationInputAdapter:
         *,
         controller_id: str,
         view2d_revision: str,
-        panel_rect: LogicalPixelRect,
+        panel_rect: LogicalPixelRect | None = None,
         layout_snapshot_id: str | None = None,
+        layout_snapshot: ResolvedLayoutSnapshot | None = None,
+        pixel_origin: PixelOrigin | None = None,
     ) -> None:
         validate_id(controller_id)
         validate_id(view2d_revision)
-        if layout_snapshot_id is not None:
-            validate_id(layout_snapshot_id)
-        _validate_panel_rect(panel_rect)
+        panel_rect, pixel_origin, layout_snapshot_id = _resolve_navigation_geometry(
+            panel_rect,
+            layout_snapshot=layout_snapshot,
+            pixel_origin=pixel_origin,
+            layout_snapshot_id=layout_snapshot_id,
+        )
         self._controller_id = controller_id
         self._view2d_revision = view2d_revision
         self._layout_snapshot_id = layout_snapshot_id
         self._panel_rect = panel_rect
+        self._pixel_origin = pixel_origin
         self._profile = _DatovizPanzoomProfile.for_platform()
         self._zoom = (1.0, 1.0)
         self._drag_last_px: tuple[float, float] | None = None
@@ -338,10 +345,28 @@ class View2DNavigationInputAdapter:
         """Return the current data-plot logical-pixel rectangle."""
         return self._panel_rect
 
+    @property
+    def pixel_origin(self) -> PixelOrigin | None:
+        """Return the resolved origin, or None for the rect-only compatibility path."""
+        return self._pixel_origin
+
     def set_panel_rect(self, panel_rect: LogicalPixelRect) -> None:
         """Update the resolved data-plot rectangle used by coordinate conversions."""
         _validate_panel_rect(panel_rect)
         self._panel_rect = panel_rect
+        self._pixel_origin = None
+
+    def set_layout_snapshot(self, layout_snapshot: ResolvedLayoutSnapshot) -> None:
+        """Update the resolved data-plot rectangle, origin, and freshness identity."""
+        panel_rect, pixel_origin, layout_snapshot_id = _resolve_navigation_geometry(
+            None,
+            layout_snapshot=layout_snapshot,
+            pixel_origin=None,
+            layout_snapshot_id=None,
+        )
+        self._panel_rect = panel_rect
+        self._pixel_origin = pixel_origin
+        self._layout_snapshot_id = layout_snapshot_id
 
     def update_view2d_revision(self, view2d_revision: str) -> None:
         """Update the revision token used by subsequent emitted actions."""
@@ -483,15 +508,33 @@ class View2DNavigationInputAdapter:
         self._drag_kind = None
 
 
-def pan_view2d(view: View2D, panel_rect: LogicalPixelRect, dx_px: float, dy_px: float) -> View2D:
-    """Return the View2D produced by panning relative to the resolved data plot."""
-    _validate_panel_rect(panel_rect)
+def pan_view2d(
+    view: View2D,
+    panel_rect: LogicalPixelRect,
+    dx_px: float,
+    dy_px: float,
+    *,
+    layout_snapshot: ResolvedLayoutSnapshot | None = None,
+    pixel_origin: PixelOrigin | None = None,
+) -> View2D:
+    """Return the View2D produced by panning relative to the resolved data plot.
+
+    Rect-only calls retain the historical bottom-left-compatible y behavior.
+    A layout snapshot supplies authoritative plot geometry and pixel origin.
+    """
+    panel_rect, pixel_origin, _ = _resolve_navigation_geometry(
+        panel_rect,
+        layout_snapshot=layout_snapshot,
+        pixel_origin=pixel_origin,
+        layout_snapshot_id=None,
+    )
     _validate_finite("dx_px", dx_px)
     _validate_finite("dy_px", dy_px)
     x0, x1 = view.x_range
     y0, y1 = view.y_range
     data_dx = -dx_px / panel_rect.width * (x1 - x0)
-    data_dy = -dy_px / panel_rect.height * (y1 - y0)
+    y_sign = 1.0 if pixel_origin is PixelOrigin.TOP_LEFT else -1.0
+    data_dy = y_sign * dy_px / panel_rect.height * (y1 - y0)
     return View2D(
         id=view.id,
         panel_id=view.panel_id,
@@ -509,9 +552,21 @@ def zoom_view2d_about(
     anchor_px: tuple[float, float],
     factor_x: float,
     factor_y: float,
+    *,
+    layout_snapshot: ResolvedLayoutSnapshot | None = None,
+    pixel_origin: PixelOrigin | None = None,
 ) -> View2D:
-    """Zoom about an absolute logical-pixel anchor in the resolved data plot."""
-    _validate_panel_rect(panel_rect)
+    """Zoom about an absolute logical-pixel anchor in the resolved data plot.
+
+    Rect-only calls retain the historical bottom-left-compatible y behavior.
+    A layout snapshot supplies authoritative plot geometry and pixel origin.
+    """
+    panel_rect, pixel_origin, _ = _resolve_navigation_geometry(
+        panel_rect,
+        layout_snapshot=layout_snapshot,
+        pixel_origin=pixel_origin,
+        layout_snapshot_id=None,
+    )
     _validate_pair("anchor_px", anchor_px)
     if not _rect_contains_coordinate(panel_rect, anchor_px):
         raise ValueError(
@@ -521,7 +576,12 @@ def zoom_view2d_about(
     _validate_zoom_factor("factor_x", factor_x)
     _validate_zoom_factor("factor_y", factor_y)
     tx = (anchor_px[0] - panel_rect.x) / panel_rect.width
-    ty = (anchor_px[1] - panel_rect.y) / panel_rect.height
+    logical_y_fraction = (anchor_px[1] - panel_rect.y) / panel_rect.height
+    ty = (
+        1.0 - logical_y_fraction
+        if pixel_origin is PixelOrigin.TOP_LEFT
+        else logical_y_fraction
+    )
     x0, x1 = view.x_range
     y0, y1 = view.y_range
     anchor_data_x = x0 + tx * (x1 - x0)
@@ -585,6 +645,42 @@ def _validate_panel_rect(panel_rect: LogicalPixelRect) -> None:
             f"{NavigationDiagnosticCode.NAVIGATION_INVALID_PANEL_RECT.value}: "
             "panel rectangle width and height must be positive"
         )
+
+
+def _resolve_navigation_geometry(
+    panel_rect: LogicalPixelRect | None,
+    *,
+    layout_snapshot: ResolvedLayoutSnapshot | None,
+    pixel_origin: PixelOrigin | None,
+    layout_snapshot_id: str | None,
+) -> tuple[LogicalPixelRect, PixelOrigin | None, str | None]:
+    if layout_snapshot is not None:
+        if not isinstance(layout_snapshot, ResolvedLayoutSnapshot):
+            raise TypeError("layout_snapshot must be a ResolvedLayoutSnapshot")
+        if (
+            layout_snapshot_id is not None
+            and layout_snapshot_id != layout_snapshot.snapshot_id
+        ):
+            raise ValueError(
+                f"{NavigationDiagnosticCode.NAVIGATION_STALE_LAYOUT.value}: "
+                "layout snapshot id does not match supplied layout geometry"
+            )
+        if pixel_origin is not None and pixel_origin is not layout_snapshot.render_target.pixel_origin:
+            raise ValueError("pixel_origin conflicts with layout_snapshot.render_target.pixel_origin")
+        if panel_rect is not None and panel_rect != layout_snapshot.plot_rect_px:
+            raise ValueError("panel_rect conflicts with layout_snapshot.plot_rect_px")
+        panel_rect = layout_snapshot.plot_rect_px
+        pixel_origin = layout_snapshot.render_target.pixel_origin
+        layout_snapshot_id = layout_snapshot.snapshot_id
+    else:
+        if layout_snapshot_id is not None:
+            validate_id(layout_snapshot_id)
+        if pixel_origin is not None and not isinstance(pixel_origin, PixelOrigin):
+            raise TypeError("pixel_origin must be a PixelOrigin")
+    if panel_rect is None:
+        raise TypeError("panel_rect is required without layout_snapshot")
+    _validate_panel_rect(panel_rect)
+    return panel_rect, pixel_origin, layout_snapshot_id
 
 
 def _validate_pair(field_name: str, value: tuple[float, float]) -> None:

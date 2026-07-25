@@ -1014,7 +1014,7 @@ def _validate_unit_interval(
 def _resolve_perspective_aspect_ratio(
     projection: PerspectiveProjection3D, aspect_ratio: float | None
 ) -> float:
-    resolved = aspect_ratio if aspect_ratio is not None else projection.aspect_ratio
+    resolved = projection.aspect_ratio if projection.aspect_ratio is not None else aspect_ratio
     if resolved is None:
         return 1.0
     _validate_finite(

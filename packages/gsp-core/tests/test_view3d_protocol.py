@@ -866,6 +866,62 @@ def test_view3d_perspective_projection_uses_resolved_aspect_ratio():
     ) == pytest.approx((1.0, 1.0, -1.0))
 
 
+def test_low_level_projection_math_preserves_authored_perspective_aspect() -> None:
+    explicit = View3D(
+        id="view:explicit-aspect",
+        panel_id="panel:main",
+        camera=Camera3D(
+            eye=(0.0, 0.0, 0.0),
+            target=(0.0, 0.0, -1.0),
+            up=(0.0, 1.0, 0.0),
+        ),
+        projection=PerspectiveProjection3D(
+            fov_y_degrees=90.0,
+            near_far=(1.0, 10.0),
+            aspect_ratio=2.0,
+        ),
+    )
+
+    projected = project_view3d_data_point(
+        explicit, (2.0, 1.0, -1.0), aspect_ratio=1.0
+    )
+    unprojected = unproject_view3d_panel_ndc_point(
+        explicit, (1.0, 1.0, -1.0), aspect_ratio=1.0
+    )
+
+    assert projected == pytest.approx((1.0, 1.0, -1.0))
+    assert unprojected == pytest.approx((2.0, 1.0, -1.0))
+
+
+def test_low_level_projection_math_uses_supplied_then_compatibility_aspect() -> None:
+    implicit = View3D(
+        id="view:implicit-aspect",
+        panel_id="panel:main",
+        camera=Camera3D(
+            eye=(0.0, 0.0, 0.0),
+            target=(0.0, 0.0, -1.0),
+            up=(0.0, 1.0, 0.0),
+        ),
+        projection=PerspectiveProjection3D(
+            fov_y_degrees=90.0,
+            near_far=(1.0, 10.0),
+        ),
+    )
+
+    assert project_view3d_data_point(
+        implicit, (2.0, 1.0, -1.0), aspect_ratio=2.0
+    ) == pytest.approx((1.0, 1.0, -1.0))
+    assert unproject_view3d_panel_ndc_point(
+        implicit, (1.0, 1.0, -1.0), aspect_ratio=2.0
+    ) == pytest.approx((2.0, 1.0, -1.0))
+    assert project_view3d_data_point(
+        implicit, (1.0, 1.0, -1.0)
+    ) == pytest.approx((1.0, 1.0, -1.0))
+    assert unproject_view3d_panel_ndc_point(
+        implicit, (1.0, 1.0, -1.0)
+    ) == pytest.approx((1.0, 1.0, -1.0))
+
+
 def test_view3d_unprojects_perspective_panel_ndc3_to_data_space():
     view = View3D(
         id="view:perspective-unproject",
