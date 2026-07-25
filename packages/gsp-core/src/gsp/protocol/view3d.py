@@ -9,6 +9,7 @@ import math
 from typing import Any, TypeVar
 
 from .ids import validate_id
+from .layout import ResolvedLayoutSnapshot, resolved_plot_aspect_ratio
 from .transforms import ViewKind
 
 CAMERA3D_EPSILON = 1.0e-12
@@ -45,6 +46,14 @@ class DepthMode3D(str, Enum):
     OPAQUE_LESS = "opaque_less"
 
 
+class PerspectiveAspectRatioSource(str, Enum):
+    """Provenance of the effective perspective aspect in a resolved snapshot."""
+
+    EXPLICIT = "explicit"
+    RESOLVED_LAYOUT = "resolved_layout"
+    COMPATIBILITY_DEFAULT = "compatibility_default"
+
+
 class View3DDiagnosticCode(str, Enum):
     """Structured S036 View3D diagnostic vocabulary."""
 
@@ -52,6 +61,9 @@ class View3DDiagnosticCode(str, Enum):
     VIEW3D_PROJECTION_UNSUPPORTED = "view3d_projection_unsupported"
     VIEW3D_INVALID_CAMERA_DEGENERATE = "view3d_invalid_camera_degenerate"
     VIEW3D_INVALID_PROJECTION = "view3d_invalid_projection"
+    VIEW3D_PROJECTION_LAYOUT_GEOMETRY_MISSING = (
+        "view3d_projection_layout_geometry_missing"
+    )
     MESH3D_REQUIRES_VIEW3D = "mesh3d_requires_view3d"
     MESH3D_COORDINATE_SPACE_UNSUPPORTED = "mesh3d_coordinate_space_unsupported"
     MESH3D_TRANSFORM_UNSUPPORTED = "mesh3d_transform_unsupported"
@@ -113,6 +125,8 @@ class View3DProjectionSnapshot:
     ylim: Float2 | None = None
     fov_y_degrees: float | None = None
     aspect_ratio: float | None = None
+    aspect_ratio_source: PerspectiveAspectRatioSource | None = None
+    diagnostics: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         validate_id(self.view_id)
@@ -123,6 +137,21 @@ class View3DProjectionSnapshot:
             raise ValueError("view_revision must be non-negative")
         if not isinstance(self.projection_kind, Projection3DKind):
             raise TypeError("projection_kind must be a Projection3DKind")
+        if self.projection_kind is Projection3DKind.PERSPECTIVE:
+            if self.aspect_ratio is None or self.aspect_ratio <= 0.0:
+                raise ValueError("perspective snapshots require a positive aspect_ratio")
+            if not math.isfinite(self.aspect_ratio):
+                raise ValueError("perspective snapshot aspect_ratio must be finite")
+            if not isinstance(
+                self.aspect_ratio_source, PerspectiveAspectRatioSource
+            ):
+                raise TypeError(
+                    "perspective snapshots require a PerspectiveAspectRatioSource"
+                )
+        elif self.aspect_ratio is not None or self.aspect_ratio_source is not None:
+            raise ValueError(
+                "orthographic snapshots must not contain perspective aspect state"
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -563,19 +592,41 @@ def unproject_view3d_panel_ndc_point(
 
 
 def resolve_view3d_projection_snapshot(
-    view: View3D, *, layout_snapshot_id: str
+    view: View3D,
+    *,
+    layout_snapshot: ResolvedLayoutSnapshot | None = None,
+    layout_snapshot_id: str | None = None,
 ) -> View3DProjectionSnapshot:
-    """Return a deterministic S036 projection snapshot for one view/layout pair."""
+    """Return a deterministic projection snapshot for one view/layout pair.
+
+    ``layout_snapshot_id`` without ``layout_snapshot`` preserves the pre-S065 call
+    shape. A perspective projection without an authored aspect then resolves to
+    1.0 and carries a compatibility diagnostic.
+    """
     if not isinstance(view, View3D):
         raise TypeError("view must be a View3D")
-    validate_id(layout_snapshot_id)
+    resolved_layout_id, plot_rect_state = _resolve_projection_layout_context(
+        view,
+        layout_snapshot=layout_snapshot,
+        layout_snapshot_id=layout_snapshot_id,
+    )
+    aspect_ratio, aspect_source, diagnostics = _resolve_snapshot_aspect_ratio(
+        view, layout_snapshot
+    )
     basis = view.camera.basis()
-    snapshot_id = _projection_snapshot_id(view, layout_snapshot_id, basis)
+    snapshot_id = _projection_snapshot_id(
+        view,
+        resolved_layout_id,
+        basis,
+        effective_aspect_ratio=aspect_ratio,
+        aspect_ratio_source=aspect_source,
+        plot_rect_state=plot_rect_state,
+    )
     return View3DProjectionSnapshot(
         view_id=view.id,
         panel_id=view.panel_id,
         view_revision=view.revision,
-        layout_snapshot_id=layout_snapshot_id,
+        layout_snapshot_id=resolved_layout_id,
         view_projection_snapshot_id=snapshot_id,
         eye=view.camera.eye,
         target=view.camera.target,
@@ -594,9 +645,9 @@ def resolve_view3d_projection_snapshot(
         fov_y_degrees=view.projection.fov_y_degrees
         if isinstance(view.projection, PerspectiveProjection3D)
         else None,
-        aspect_ratio=view.projection.aspect_ratio
-        if isinstance(view.projection, PerspectiveProjection3D)
-        else None,
+        aspect_ratio=aspect_ratio,
+        aspect_ratio_source=aspect_source,
+        diagnostics=diagnostics,
     )
 
 
@@ -1025,7 +1076,13 @@ def _rotate3(value: Float3, axis: Float3, angle_radians: float) -> Float3:
 
 
 def _projection_snapshot_id(
-    view: View3D, layout_snapshot_id: str, basis: Camera3DBasis
+    view: View3D,
+    layout_snapshot_id: str,
+    basis: Camera3DBasis,
+    *,
+    effective_aspect_ratio: float | None,
+    aspect_ratio_source: PerspectiveAspectRatioSource | None,
+    plot_rect_state: str,
 ) -> str:
     parts = (
         view.id,
@@ -1040,11 +1097,82 @@ def _projection_snapshot_id(
         _format_float3(basis.forward),
         view.projection.kind.value,
         _format_projection_parameters(view.projection),
+        ""
+        if effective_aspect_ratio is None
+        else f"{effective_aspect_ratio:.17g}",
+        "" if aspect_ratio_source is None else aspect_ratio_source.value,
+        plot_rect_state,
         _format_float2(view.projection.near_far),
         view.depth_mode.value,
     )
     digest = hashlib.sha256("|".join(parts).encode("ascii")).hexdigest()[:16]
     return f"view3d-projection:{digest}"
+
+
+def _resolve_projection_layout_context(
+    view: View3D,
+    *,
+    layout_snapshot: ResolvedLayoutSnapshot | None,
+    layout_snapshot_id: str | None,
+) -> tuple[str, str]:
+    if layout_snapshot is not None:
+        if not isinstance(layout_snapshot, ResolvedLayoutSnapshot):
+            raise TypeError("layout_snapshot must be a ResolvedLayoutSnapshot")
+        if (
+            layout_snapshot.view_id is not None
+            and layout_snapshot.view_id != view.id
+        ):
+            raise ValueError("layout_snapshot view_id does not match the View3D")
+        if (
+            layout_snapshot_id is not None
+            and layout_snapshot_id != layout_snapshot.snapshot_id
+        ):
+            raise ValueError(
+                "layout_snapshot_id does not match layout_snapshot.snapshot_id"
+            )
+        plot = layout_snapshot.plot_rect_px
+        return (
+            layout_snapshot.snapshot_id,
+            ",".join(
+                f"{value:.17g}"
+                for value in (plot.x, plot.y, plot.width, plot.height)
+            ),
+        )
+    if layout_snapshot_id is None:
+        raise TypeError("layout_snapshot or layout_snapshot_id is required")
+    validate_id(layout_snapshot_id)
+    return (layout_snapshot_id, "")
+
+
+def _resolve_snapshot_aspect_ratio(
+    view: View3D, layout_snapshot: ResolvedLayoutSnapshot | None
+) -> tuple[
+    float | None,
+    PerspectiveAspectRatioSource | None,
+    tuple[str, ...],
+]:
+    if not isinstance(view.projection, PerspectiveProjection3D):
+        return (None, None, ())
+    if view.projection.aspect_ratio is not None:
+        return (
+            view.projection.aspect_ratio,
+            PerspectiveAspectRatioSource.EXPLICIT,
+            (),
+        )
+    if layout_snapshot is not None:
+        return (
+            resolved_plot_aspect_ratio(layout_snapshot),
+            PerspectiveAspectRatioSource.RESOLVED_LAYOUT,
+            (),
+        )
+    return (
+        1.0,
+        PerspectiveAspectRatioSource.COMPATIBILITY_DEFAULT,
+        (
+            f"{View3DDiagnosticCode.VIEW3D_PROJECTION_LAYOUT_GEOMETRY_MISSING.value}: "
+            "aspect_ratio=None resolved to compatibility aspect 1.0",
+        ),
+    )
 
 
 def _format_float2(value: Float2) -> str:

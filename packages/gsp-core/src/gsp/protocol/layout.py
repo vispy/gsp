@@ -211,6 +211,14 @@ class ResolvedLayoutSnapshot:
         validate_id(self.snapshot_id)
         if self.view_id is not None:
             validate_id(self.view_id)
+        _validate_rect_inside_render_target(
+            "panel_rect_px", self.panel_rect_px, self.render_target
+        )
+        _validate_rect_inside_render_target(
+            "plot_rect_px", self.plot_rect_px, self.render_target
+        )
+        if not _rect_contains_rect(self.panel_rect_px, self.plot_rect_px):
+            raise ValueError("plot_rect_px must be contained by panel_rect_px")
         if len(self.data_to_screen_transform) not in (6, 9):
             raise ValueError("data_to_screen_transform must contain 6 or 9 finite values")
         for value in self.data_to_screen_transform:
@@ -253,6 +261,103 @@ def logical_px_to_points(logical_px: float, dpi: float) -> float:
     _validate_finite("logical_px", logical_px)
     _validate_positive("dpi", dpi)
     return logical_px * 72.0 / dpi
+
+
+def plot_logical_px_to_panel_ndc(
+    snapshot: ResolvedLayoutSnapshot, coordinate_px: tuple[float, float]
+) -> tuple[float, float]:
+    """Map a render-target logical coordinate through the resolved data viewport."""
+    _validate_layout_snapshot(snapshot)
+    x_px, y_px = _validate_logical_coordinate(coordinate_px)
+    plot = snapshot.plot_rect_px
+    _validate_nonempty_plot_rect(plot)
+    x_ndc = -1.0 + 2.0 * (x_px - plot.x) / plot.width
+    y_fraction = (y_px - plot.y) / plot.height
+    y_ndc = (
+        1.0 - 2.0 * y_fraction
+        if snapshot.render_target.pixel_origin is PixelOrigin.TOP_LEFT
+        else -1.0 + 2.0 * y_fraction
+    )
+    return (x_ndc, y_ndc)
+
+
+def panel_ndc_to_plot_logical_px(
+    snapshot: ResolvedLayoutSnapshot, panel_ndc: tuple[float, float]
+) -> tuple[float, float]:
+    """Map panel NDC through the resolved data viewport into logical coordinates."""
+    _validate_layout_snapshot(snapshot)
+    x_ndc, y_ndc = _validate_logical_coordinate(panel_ndc)
+    plot = snapshot.plot_rect_px
+    _validate_nonempty_plot_rect(plot)
+    x_px = plot.x + (x_ndc + 1.0) * 0.5 * plot.width
+    y_fraction = (
+        (1.0 - y_ndc) * 0.5
+        if snapshot.render_target.pixel_origin is PixelOrigin.TOP_LEFT
+        else (y_ndc + 1.0) * 0.5
+    )
+    return (x_px, plot.y + y_fraction * plot.height)
+
+
+def resolved_plot_aspect_ratio(snapshot: ResolvedLayoutSnapshot) -> float:
+    """Return the positive width/height aspect of the resolved data viewport."""
+    _validate_layout_snapshot(snapshot)
+    _validate_nonempty_plot_rect(snapshot.plot_rect_px)
+    return snapshot.plot_rect_px.width / snapshot.plot_rect_px.height
+
+
+def logical_coordinate_in_data_viewport(
+    snapshot: ResolvedLayoutSnapshot, coordinate_px: tuple[float, float]
+) -> bool:
+    """Return whether a logical coordinate lies in the closed plot rectangle."""
+    _validate_layout_snapshot(snapshot)
+    x_px, y_px = _validate_logical_coordinate(coordinate_px)
+    plot = snapshot.plot_rect_px
+    return (
+        plot.x <= x_px <= plot.x + plot.width
+        and plot.y <= y_px <= plot.y + plot.height
+    )
+
+
+def _validate_layout_snapshot(snapshot: ResolvedLayoutSnapshot) -> None:
+    if not isinstance(snapshot, ResolvedLayoutSnapshot):
+        raise TypeError("snapshot must be a ResolvedLayoutSnapshot")
+
+
+def _validate_logical_coordinate(
+    coordinate: tuple[float, float],
+) -> tuple[float, float]:
+    if len(coordinate) != 2:
+        raise ValueError("coordinate must contain two values")
+    x, y = coordinate
+    _validate_finite("coordinate[0]", x)
+    _validate_finite("coordinate[1]", y)
+    return (x, y)
+
+
+def _validate_nonempty_plot_rect(rect: LogicalPixelRect) -> None:
+    if rect.width <= 0.0 or rect.height <= 0.0:
+        raise ValueError("plot_rect_px must have positive width and height")
+
+
+def _validate_rect_inside_render_target(
+    field_name: str, rect: LogicalPixelRect, render_target: RenderTarget
+) -> None:
+    if rect.x < 0.0 or rect.y < 0.0:
+        raise ValueError(f"{field_name} origin must be non-negative")
+    if (
+        rect.x + rect.width > render_target.logical_width_px
+        or rect.y + rect.height > render_target.logical_height_px
+    ):
+        raise ValueError(f"{field_name} must be inside the render target")
+
+
+def _rect_contains_rect(outer: LogicalPixelRect, inner: LogicalPixelRect) -> bool:
+    return (
+        inner.x >= outer.x
+        and inner.y >= outer.y
+        and inner.x + inner.width <= outer.x + outer.width
+        and inner.y + inner.height <= outer.y + outer.height
+    )
 
 
 def _validate_finite(field_name: str, value: float) -> None:
