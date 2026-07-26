@@ -182,14 +182,18 @@ def render_protocol_scene_with_layout(
     panel_viewport_rect: tuple[float, float, float, float] | None = None,
 ) -> MatplotlibProtocolRenderResult:
     """Render a protocol scene and report the resolved layout snapshot used."""
+    axis_guide_tuple = tuple(axis_guides)
     panel_text_guide_tuple = tuple(panel_text_guides)
+    colorbar_guide_tuple = tuple(colorbar_guides)
     if layout_snapshot is not None:
         _validate_consumed_layout_view(layout_snapshot, view=view, view3d=view3d)
         _validate_consumed_layout_inputs(
             layout_snapshot,
             canvas_size=canvas_size,
             panel_viewport_rect=panel_viewport_rect,
+            axis_guides=axis_guide_tuple,
             panel_text_guides=panel_text_guide_tuple,
+            colorbar_guides=colorbar_guide_tuple,
         )
         canvas_size = _consumed_canvas_size(layout_snapshot)
         device_scale = layout_snapshot.render_target.device_scale
@@ -245,7 +249,6 @@ def render_protocol_scene_with_layout(
             view3d=view3d,
         )
 
-    axis_guide_tuple = tuple(axis_guides)
     if view is not None:
         axes.set_xlim(view.x_range)
         axes.set_ylim(view.y_range)
@@ -260,7 +263,7 @@ def render_protocol_scene_with_layout(
         _place_consumed_title_artists(
             figure, axes, panel_text_guide_tuple, layout_snapshot
         )
-    for guide in colorbar_guides:
+    for guide in colorbar_guide_tuple:
         render_colorbar_guide(axes, guide, color_scales=color_scale_map)
 
     if layout_snapshot is None:
@@ -281,6 +284,7 @@ def render_protocol_scene_with_layout(
         # Draw after the final artist placement, but retain the consumed snapshot
         # as the authoritative render/query geometry and identity.
         figure.canvas.draw()
+        _assert_consumed_plot_rect_unchanged(axes, layout_snapshot)
         snapshot = layout_snapshot
     projection_snapshot = (
         resolve_view3d_projection_snapshot(view3d, layout_snapshot=snapshot)
@@ -326,7 +330,9 @@ def _consumed_canvas_size(snapshot: ResolvedLayoutSnapshot) -> CanvasSize:
         raise ValueError(
             "Matplotlib layout consumption requires integer logical render-target dimensions"
         )
-    return CanvasSize.pixel_exact(int(width), int(height))
+    return CanvasSize.host_logical_px(int(width), int(height)).with_requested_device_scale(
+        target.device_scale
+    )
 
 
 def _validate_consumed_layout_inputs(
@@ -334,7 +340,9 @@ def _validate_consumed_layout_inputs(
     *,
     canvas_size: CanvasSize | None,
     panel_viewport_rect: tuple[float, float, float, float] | None,
+    axis_guides: tuple[AxisGuide, ...],
     panel_text_guides: tuple[PanelTextGuide, ...],
+    colorbar_guides: tuple[ColorbarGuide, ...],
 ) -> None:
     target = snapshot.render_target
     if canvas_size is not None:
@@ -363,6 +371,14 @@ def _validate_consumed_layout_inputs(
             raise ValueError(
                 "panel_viewport_rect conflicts with the consumed layout panel rectangle"
             )
+    if colorbar_guides:
+        raise ValueError(
+            "consumed Matplotlib layout does not support native ColorbarGuide rendering"
+        )
+    if any(guide.view_id != snapshot.view_id for guide in axis_guides):
+        raise ValueError(
+            "supplied AxisGuide view_id must match the consumed layout view_id"
+        )
     title_guides = tuple(
         guide for guide in panel_text_guides if guide.role.value == "title"
     )
@@ -399,6 +415,35 @@ def _place_axes_at_consumed_plot_rect(
         ),
         which="both",
     )
+
+
+def _assert_consumed_plot_rect_unchanged(
+    axes: matplotlib.axes.Axes,
+    snapshot: ResolvedLayoutSnapshot,
+) -> None:
+    """Fail closed if a native artist reclaims consumed plot geometry."""
+    target = snapshot.render_target
+    plot = snapshot.plot_rect_px
+    expected_left = plot.x / target.logical_width_px
+    expected_bottom = (
+        1.0 - (plot.y + plot.height) / target.logical_height_px
+        if target.pixel_origin is PixelOrigin.TOP_LEFT
+        else plot.y / target.logical_height_px
+    )
+    expected = (
+        expected_left,
+        expected_bottom,
+        plot.width / target.logical_width_px,
+        plot.height / target.logical_height_px,
+    )
+    observed = tuple(float(value) for value in axes.get_position().bounds)
+    if not all(
+        math.isclose(actual, wanted, rel_tol=0.0, abs_tol=1.0e-9)
+        for actual, wanted in zip(observed, expected, strict=True)
+    ):
+        raise ValueError(
+            "native Matplotlib artists changed the consumed plot rectangle"
+        )
 
 
 def _place_native_axes_inside_panel(

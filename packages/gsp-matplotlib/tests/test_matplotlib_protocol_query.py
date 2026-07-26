@@ -679,6 +679,40 @@ def test_query_view3d_mesh_triangle_pick_reports_miss_and_invalid_outside_panel(
     assert outside.diagnostic == View3DMeshPickDiagnosticCode.INVALID_OUTSIDE_PANEL.value
 
 
+def test_mesh_pick_consumed_layout_rejects_guide_lane_before_outer_bounds():
+    view = _canonical_query_view3d()
+    layout = ResolvedLayoutSnapshot(
+        snapshot_id="layout:mesh-guide-lane",
+        render_target=RenderTarget(200, 200, pixel_origin=PixelOrigin.TOP_LEFT),
+        panel_rect_px=LogicalPixelRect(0, 0, 200, 200),
+        plot_rect_px=LogicalPixelRect(50, 80, 100, 100),
+        view_id=view.id,
+    )
+    snapshot = resolve_view3d_projection_snapshot(view, layout_snapshot=layout)
+    mesh = MeshVisual(
+        id="visual:mesh-guide-lane",
+        positions=np.array(
+            [[-0.5, -0.5, 0.0], [0.5, -0.5, 0.0], [0.0, 0.5, 0.0]],
+            dtype=np.float32,
+        ),
+        faces=np.array([[0, 1, 2]], dtype=np.uint32),
+        coordinate_space=CoordinateSpace.DATA,
+        color=np.array([255, 0, 0, 255], dtype=np.uint8),
+    )
+
+    result = query_view3d_mesh_triangle_pick(
+        View3DMeshTrianglePickRequest(view_id=view.id, panel_xy=(100.0, 40.0)),
+        [QueryVisualEntry(mesh)],
+        view=view,
+        snapshot=snapshot,
+        panel_bounds=(0.0, 200.0, 0.0, 200.0),
+        layout_snapshot=layout,
+    )
+
+    assert result.status is QueryStatus.INVALID
+    assert result.diagnostic == View3DMeshPickDiagnosticCode.INVALID_OUTSIDE_PANEL.value
+
+
 def test_query_view3d_mesh_triangle_pick_reports_stale_pick_scene_snapshot():
     view = _canonical_query_view3d()
     snapshot = resolve_view3d_projection_snapshot(

@@ -328,6 +328,7 @@ def query_view3d_mesh_triangle_pick(
         view=view,
         snapshot=snapshot,
         panel_bounds=panel_bounds,
+        layout_snapshot=layout_snapshot,
         pick_scene_snapshot_id=actual_pick_scene_snapshot_id,
         geometry_payload=geometry_payload,
     )
@@ -958,6 +959,7 @@ def _validate_mesh_pick_request(
     view: View3D,
     snapshot: View3DProjectionSnapshot,
     panel_bounds: tuple[float, float, float, float],
+    layout_snapshot: ResolvedLayoutSnapshot | None,
     pick_scene_snapshot_id: str,
     geometry_payload: bool = False,
 ) -> QueryResult | None:
@@ -997,7 +999,13 @@ def _validate_mesh_pick_request(
             ),
             geometry_payload=geometry_payload,
         )
-    if not _contains(panel_bounds, request.panel_xy):
+    coordinate_is_outside_data_plot = (
+        classify_logical_coordinate(layout_snapshot, request.panel_xy)
+        is not LogicalCoordinateRegion.DATA_PLOT
+        if layout_snapshot is not None
+        else not _contains(panel_bounds, request.panel_xy)
+    )
+    if coordinate_is_outside_data_plot:
         return _mesh_pick_result(
             request,
             QueryStatus.INVALID,

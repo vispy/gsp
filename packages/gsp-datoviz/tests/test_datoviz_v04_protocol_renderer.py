@@ -1871,6 +1871,120 @@ def test_renderer_consumed_bottom_left_layout_converts_native_panel_and_query_y(
     assert renderer._native_query_coordinate((400.0, 250.0)) == (200.0, 0.0)
 
 
+@pytest.mark.parametrize("aspect_ratio", [None, 2.0])
+def test_renderer_consumed_perspective_accepts_omitted_or_matching_aspect(
+    aspect_ratio: float | None,
+):
+    fake = FakeDatovizV04WithRetainedView3D()
+    view = View3D(
+        id="view:consumed-perspective",
+        panel_id="panel:consumed-perspective",
+        camera=Camera3D(
+            eye=(0.0, 0.0, 2.0),
+            target=(0.0, 0.0, 0.0),
+            up=(0.0, 1.0, 0.0),
+        ),
+        projection=PerspectiveProjection3D(
+            near_far=(0.1, 10.0), aspect_ratio=aspect_ratio
+        ),
+    )
+    layout = ResolvedLayoutSnapshot(
+        snapshot_id=f"layout:perspective:{aspect_ratio}",
+        render_target=RenderTarget(800, 600),
+        panel_rect_px=LogicalPixelRect(0, 0, 800, 600),
+        plot_rect_px=LogicalPixelRect(200, 150, 400, 200),
+        view_id=view.id,
+    )
+
+    renderer = DatovizV04ProtocolRenderer(
+        dvz=fake, view3d=view, consumed_layout_snapshot=layout
+    )
+
+    assert renderer.authoritative_layout_snapshot() is layout
+    assert _calls(fake, "scene") == [("scene",)]
+
+
+def test_renderer_consumed_perspective_rejects_conflicting_aspect_before_resources():
+    fake = FakeDatovizV04WithRetainedView3D()
+    view = View3D(
+        id="view:conflicting-perspective",
+        panel_id="panel:conflicting-perspective",
+        camera=Camera3D(
+            eye=(0.0, 0.0, 2.0),
+            target=(0.0, 0.0, 0.0),
+            up=(0.0, 1.0, 0.0),
+        ),
+        projection=PerspectiveProjection3D(
+            near_far=(0.1, 10.0), aspect_ratio=1.0
+        ),
+    )
+    layout = ResolvedLayoutSnapshot(
+        snapshot_id="layout:conflicting-perspective",
+        render_target=RenderTarget(800, 600),
+        panel_rect_px=LogicalPixelRect(0, 0, 800, 600),
+        plot_rect_px=LogicalPixelRect(200, 150, 400, 200),
+        view_id=view.id,
+    )
+
+    with pytest.raises(DatovizV04Unsupported, match="aspect_ratio equal"):
+        DatovizV04ProtocolRenderer(
+            dvz=fake, view3d=view, consumed_layout_snapshot=layout
+        )
+
+    assert _calls(fake, "scene") == []
+    assert _calls(fake, "figure") == []
+
+
+def test_consumed_mesh_cpu_fallback_projects_with_plot_aspect():
+    fake = FakeDatovizV04WithRetainedView3D()
+    view = View3D(
+        id="view:fallback-perspective",
+        panel_id="panel:fallback-perspective",
+        camera=Camera3D(
+            eye=(0.0, 0.0, 2.0),
+            target=(0.0, 0.0, 0.0),
+            up=(0.0, 1.0, 0.0),
+        ),
+        projection=PerspectiveProjection3D(near_far=(0.1, 10.0)),
+    )
+    layout = ResolvedLayoutSnapshot(
+        snapshot_id="layout:fallback-perspective",
+        render_target=RenderTarget(800, 600),
+        panel_rect_px=LogicalPixelRect(0, 0, 800, 600),
+        plot_rect_px=LogicalPixelRect(200, 150, 400, 200),
+        view_id=view.id,
+    )
+    renderer = DatovizV04ProtocolRenderer(
+        dvz=fake, view3d=view, consumed_layout_snapshot=layout
+    )
+    fake.dvz_panel_set_view3d_desc = None
+    visual = MeshVisual(
+        id="visual:fallback-perspective",
+        positions=np.array(
+            [[-0.5, -0.5, 0.0], [0.5, -0.5, 0.0], [0.0, 0.5, 0.0]],
+            dtype=np.float32,
+        ),
+        faces=np.array([[0, 1, 2]], dtype=np.uint32),
+        coordinate_space=CoordinateSpace.DATA,
+        color=np.array([255, 0, 0, 255], dtype=np.uint8),
+    )
+
+    renderer.add_mesh_visual(visual)
+
+    uploaded = next(
+        call[3]
+        for call in _calls(fake, "set_data")
+        if call[2] == "position"
+    )
+    expected = np.asarray(
+        [
+            project_view3d_data_point(view, tuple(point), aspect_ratio=2.0)
+            for point in visual.positions
+        ]
+    )
+    np.testing.assert_allclose(uploaded, expected)
+
+
 def test_renderer_consumed_layout_fails_before_resources_without_public_descriptor():
     fake = FakeDatovizV04()
     fake.dvz_panel_desc = None  # type: ignore[method-assign]

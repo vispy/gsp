@@ -1050,6 +1050,9 @@ class DatovizV04ProtocolRenderer:
                 view=self.view,
                 view3d=self.view3d,
             )
+            _validate_consumed_perspective_aspect(
+                self.consumed_layout_snapshot, self.view3d
+            )
             expected_bounds = _consumed_layout_native_panel_bounds(
                 self.consumed_layout_snapshot
             )
@@ -1845,13 +1848,13 @@ class DatovizV04ProtocolRenderer:
                 np.asarray(visual.positions, dtype=np.float32)
             )
         elif is_3d_mesh:
+            panel_width, panel_height = _panel_pixel_size(
+                self.width, self.height, self.panel_bounds
+            )
             adapted_positions = _datoviz_mesh3d_panel_ndc_positions(
                 visual,
                 view3d=self.view3d,
-                aspect_ratio=(
-                    self.resolved_canvas.host_logical_width
-                    / self.resolved_canvas.host_logical_height
-                ),
+                aspect_ratio=panel_width / panel_height,
             )
             if visual.depth_test is not DepthMode.DISABLED:
                 face_order = _mesh3d_face_depth_order(
@@ -5827,6 +5830,29 @@ def _validate_renderer_consumed_layout_view(
         raise ValueError("consumed layout view_id does not match the renderer view")
     if active_view is None and snapshot.view_id is not None:
         raise ValueError("viewless renderer cannot consume a view-bound layout snapshot")
+
+
+def _validate_consumed_perspective_aspect(
+    snapshot: ResolvedLayoutSnapshot,
+    view3d: View3D | None,
+) -> None:
+    """Qualify Datoviz's aspect-less retained perspective camera."""
+    if view3d is None or not isinstance(
+        view3d.projection, PerspectiveProjection3D
+    ):
+        return
+    authored_aspect = view3d.projection.aspect_ratio
+    if authored_aspect is None:
+        return
+    plot = snapshot.plot_rect_px
+    plot_aspect = plot.width / plot.height
+    if not math.isclose(
+        authored_aspect, plot_aspect, rel_tol=1.0e-12, abs_tol=1.0e-12
+    ):
+        raise DatovizV04Unsupported(
+            "Datoviz consumed perspective layout requires omitted aspect_ratio "
+            "or aspect_ratio equal to plot_rect_px width/height"
+        )
 
 
 def _consumed_layout_native_panel_bounds(

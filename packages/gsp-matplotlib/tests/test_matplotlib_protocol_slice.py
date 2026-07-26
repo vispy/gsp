@@ -307,6 +307,113 @@ def test_matplotlib_consumed_inset_plot_overrides_native_subplot_margins():
         plt.close(result.figure)
 
 
+def test_matplotlib_consumed_scale_two_preserves_logical_and_physical_geometry():
+    view = View2D(id="view:scale-two", panel_id="panel:scale-two")
+    layout = ResolvedLayoutSnapshot(
+        snapshot_id="layout:scale-two",
+        render_target=RenderTarget(
+            800, 600, device_scale=2.0, pixel_origin=PixelOrigin.TOP_LEFT
+        ),
+        panel_rect_px=LogicalPixelRect(0, 0, 800, 600),
+        plot_rect_px=LogicalPixelRect(100, 50, 400, 200),
+        view_id=view.id,
+    )
+
+    result = render_protocol_scene_with_layout(
+        visuals=(), view=view, layout_snapshot=layout
+    )
+    try:
+        canvas = result.resolved_canvas
+        assert (canvas.canvas_width_px, canvas.canvas_height_px) == (800, 600)
+        assert (canvas.host_logical_width, canvas.host_logical_height) == (800, 600)
+        assert (canvas.framebuffer_width, canvas.framebuffer_height) == (1600, 1200)
+        assert result.figure.canvas.get_width_height() == (1600, 1200)
+        bbox = result.axes.get_window_extent()
+        assert (bbox.x0, bbox.y0, bbox.width, bbox.height) == pytest.approx(
+            (200.0, 700.0, 800.0, 400.0)
+        )
+    finally:
+        plt.close(result.figure)
+
+
+def test_matplotlib_consumed_axis_guide_cannot_shrink_plot():
+    view = View2D(id="view:consumed-axis", panel_id="panel:consumed-axis")
+    layout = ResolvedLayoutSnapshot(
+        snapshot_id="layout:consumed-axis",
+        render_target=RenderTarget(800, 600),
+        panel_rect_px=LogicalPixelRect(40, 30, 720, 540),
+        plot_rect_px=LogicalPixelRect(200, 150, 400, 200),
+        view_id=view.id,
+    )
+    guide = AxisGuide(
+        id="guide:consumed-axis",
+        view_id=view.id,
+        dimension=AxisDimension.X,
+        side=AxisSide.BOTTOM,
+        label_text="x",
+    )
+
+    result = render_protocol_scene_with_layout(
+        visuals=(), view=view, axis_guides=(guide,), layout_snapshot=layout
+    )
+    try:
+        bbox = result.axes.get_window_extent()
+        assert (bbox.x0, bbox.y0, bbox.width, bbox.height) == pytest.approx(
+            (200.0, 250.0, 400.0, 200.0)
+        )
+    finally:
+        plt.close(result.figure)
+
+
+def test_matplotlib_consumed_colorbar_rejects_before_artist_mutation():
+    view = View2D(id="view:consumed-colorbar", panel_id="panel:consumed-colorbar")
+    layout = ResolvedLayoutSnapshot(
+        snapshot_id="layout:consumed-colorbar",
+        render_target=RenderTarget(800, 600),
+        panel_rect_px=LogicalPixelRect(0, 0, 800, 600),
+        plot_rect_px=LogicalPixelRect(100, 100, 600, 400),
+        view_id=view.id,
+    )
+    guide = ColorbarGuide(
+        id="guide:consumed-colorbar",
+        panel_id=view.panel_id,
+        color_scale_id="scale:consumed-colorbar",
+    )
+
+    with pytest.raises(ValueError, match="ColorbarGuide"):
+        render_protocol_scene_with_layout(
+            visuals=(),
+            view=view,
+            colorbar_guides=(guide,),
+            layout_snapshot=layout,
+        )
+
+
+def test_matplotlib_consumed_title_requires_resolved_title_box():
+    view = View2D(id="view:consumed-title", panel_id="panel:consumed-title")
+    layout = ResolvedLayoutSnapshot(
+        snapshot_id="layout:consumed-title",
+        render_target=RenderTarget(800, 600),
+        panel_rect_px=LogicalPixelRect(0, 0, 800, 600),
+        plot_rect_px=LogicalPixelRect(100, 100, 600, 400),
+        view_id=view.id,
+    )
+    title = PanelTextGuide(
+        id="guide:consumed-title",
+        panel_id=view.panel_id,
+        role=PanelTextRole.TITLE,
+        text="No resolved box",
+    )
+
+    with pytest.raises(ValueError, match="matching resolved title geometry"):
+        render_protocol_scene_with_layout(
+            visuals=(),
+            view=view,
+            panel_text_guides=(title,),
+            layout_snapshot=layout,
+        )
+
+
 @pytest.mark.parametrize(
     ("origin", "expected_display_bottom"),
     [
