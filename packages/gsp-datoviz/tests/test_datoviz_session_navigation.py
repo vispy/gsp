@@ -22,6 +22,8 @@ from gsp.protocol import (
     PixelVisual,
     PointVisual,
     Panel,
+    PanelTextGuide,
+    PanelTextRole,
     PrimitiveTopology,
     PrimitiveVisual,
     QueryCoordinateSpace,
@@ -235,6 +237,44 @@ def test_datoviz_consumed_layout_rejects_canvas_mismatch_before_renderer_build()
         session.render(scene, layout_snapshot=layout)
 
     assert session._renderers == []
+
+
+def test_datoviz_consumed_layout_omits_title_with_diagnostic() -> None:
+    base = _mesh3d_scene()
+    assert base.view3d is not None
+    panel = Panel(id=base.view3d.panel_id, figure_id="figure:layout")
+    scene = gsp.Scene(
+        id=base.id,
+        visuals=base.visuals,
+        panels=(panel,),
+        view3d=base.view3d,
+        panel_text_guides=(
+            PanelTextGuide(
+                id="guide:title",
+                panel_id=panel.id,
+                role=PanelTextRole.TITLE,
+                text="Programmatic camera",
+            ),
+        ),
+        canvas_size=CanvasSize.pixel_exact(800, 600),
+    )
+    layout = ResolvedLayoutSnapshot(
+        snapshot_id="layout:shared-title",
+        render_target=RenderTarget(800, 600),
+        panel_rect_px=LogicalPixelRect(0, 0, 800, 600),
+        plot_rect_px=LogicalPixelRect(100, 72, 620, 462),
+        view_id=base.view3d.id,
+    )
+    renderer = _FakeRenderer(base.view3d)
+    session = _session(renderer)
+    session._build_renderer = (  # type: ignore[method-assign]
+        lambda scene, *, layout_snapshot=None: renderer
+    )
+
+    assert session.render(scene, layout_snapshot=layout) is renderer  # type: ignore[comparison-overlap]
+    assert session.diagnostics == (
+        "panel_text_title_unsupported_no_public_renderer_path",
+    )
 
 
 def test_run_after_noninteractive_render_enables_navigation_once() -> None:

@@ -68,6 +68,10 @@ class DatovizSession:
         if not isinstance(scene, Scene):
             raise TypeError("render() requires a gsp.Scene")
         _validate_consumed_layout_scene(scene, layout_snapshot)
+        if layout_snapshot is not None and scene.panel_text_guides:
+            self._diagnostics.append(
+                "panel_text_title_unsupported_no_public_renderer_path"
+            )
         if kwargs:
             raise TypeError(f"unsupported Datoviz render options: {sorted(kwargs)!r}")
         renderer = (
@@ -406,10 +410,10 @@ def _validate_consumed_layout_scene(
             "layout_snapshot panel_rect_px does not match the scene panel allocation"
         )
     _validate_scene_canvas_target(scene.canvas_size, layout_snapshot)
-    if scene.axis_guides or scene.panel_text_guides or scene.colorbar_guides:
+    if scene.axis_guides or scene.colorbar_guides:
         raise ValueError(
             "consumed Datoviz layout does not prove native guide geometry; "
-            "PanelTextGuide remains unsupported"
+            "axis and colorbar guide geometry remains unproven"
         )
 
 
