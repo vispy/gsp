@@ -999,13 +999,30 @@ def _validate_mesh_pick_request(
             ),
             geometry_payload=geometry_payload,
         )
-    coordinate_is_outside_data_plot = (
-        classify_logical_coordinate(layout_snapshot, request.panel_xy)
-        is not LogicalCoordinateRegion.DATA_PLOT
-        if layout_snapshot is not None
-        else not _contains(panel_bounds, request.panel_xy)
-    )
-    if coordinate_is_outside_data_plot:
+    if layout_snapshot is not None:
+        coordinate_region = classify_logical_coordinate(
+            layout_snapshot, request.panel_xy
+        )
+        if coordinate_region is LogicalCoordinateRegion.PANEL_GUIDE_LANE:
+            return QueryResult(
+                request_id=(
+                    f"query:{request.view_id}:mesh-pick-geometry"
+                    if geometry_payload
+                    else f"query:{request.view_id}:mesh-pick"
+                ),
+                status=QueryStatus.MISS,
+                hit=False,
+                panel_coordinate=request.panel_xy,
+                diagnostic="query coordinate is outside the consumed data viewport",
+                layout_snapshot_id=snapshot.layout_snapshot_id,
+                view_snapshot_id=snapshot.view_projection_snapshot_id,
+            )
+        coordinate_is_outside_panel = (
+            coordinate_region is LogicalCoordinateRegion.OUTSIDE_PANEL
+        )
+    else:
+        coordinate_is_outside_panel = not _contains(panel_bounds, request.panel_xy)
+    if coordinate_is_outside_panel:
         return _mesh_pick_result(
             request,
             QueryStatus.INVALID,

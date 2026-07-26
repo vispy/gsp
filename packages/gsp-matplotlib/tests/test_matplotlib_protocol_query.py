@@ -679,7 +679,7 @@ def test_query_view3d_mesh_triangle_pick_reports_miss_and_invalid_outside_panel(
     assert outside.diagnostic == View3DMeshPickDiagnosticCode.INVALID_OUTSIDE_PANEL.value
 
 
-def test_mesh_pick_consumed_layout_rejects_guide_lane_before_outer_bounds():
+def test_mesh_pick_consumed_layout_distinguishes_guide_lane_from_outside_panel():
     view = _canonical_query_view3d()
     layout = ResolvedLayoutSnapshot(
         snapshot_id="layout:mesh-guide-lane",
@@ -700,7 +700,7 @@ def test_mesh_pick_consumed_layout_rejects_guide_lane_before_outer_bounds():
         color=np.array([255, 0, 0, 255], dtype=np.uint8),
     )
 
-    result = query_view3d_mesh_triangle_pick(
+    guide_lane = query_view3d_mesh_triangle_pick(
         View3DMeshTrianglePickRequest(view_id=view.id, panel_xy=(100.0, 40.0)),
         [QueryVisualEntry(mesh)],
         view=view,
@@ -708,9 +708,32 @@ def test_mesh_pick_consumed_layout_rejects_guide_lane_before_outer_bounds():
         panel_bounds=(0.0, 200.0, 0.0, 200.0),
         layout_snapshot=layout,
     )
+    outside_panel = query_view3d_mesh_triangle_pick(
+        View3DMeshTrianglePickRequest(view_id=view.id, panel_xy=(201.0, 100.0)),
+        [QueryVisualEntry(mesh)],
+        view=view,
+        snapshot=snapshot,
+        panel_bounds=(0.0, 200.0, 0.0, 200.0),
+        layout_snapshot=layout,
+    )
 
-    assert result.status is QueryStatus.INVALID
-    assert result.diagnostic == View3DMeshPickDiagnosticCode.INVALID_OUTSIDE_PANEL.value
+    assert guide_lane.status is QueryStatus.MISS
+    assert guide_lane.hit is False
+    assert guide_lane.panel_coordinate == (100.0, 40.0)
+    assert guide_lane.visual_coordinate is None
+    assert guide_lane.extension_payload_kind is None
+    assert guide_lane.extension_payload is None
+    assert guide_lane.diagnostic == "query coordinate is outside the consumed data viewport"
+    assert guide_lane.layout_snapshot_id == layout.snapshot_id
+    assert (
+        guide_lane.view_snapshot_id
+        == snapshot.view_projection_snapshot_id
+    )
+    assert outside_panel.status is QueryStatus.INVALID
+    assert (
+        outside_panel.diagnostic
+        == View3DMeshPickDiagnosticCode.INVALID_OUTSIDE_PANEL.value
+    )
 
 
 def test_query_view3d_mesh_triangle_pick_reports_stale_pick_scene_snapshot():
