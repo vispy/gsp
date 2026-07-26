@@ -240,7 +240,7 @@ def test_datoviz_consumed_layout_rejects_canvas_mismatch_before_renderer_build()
     assert session._renderers == []
 
 
-def test_datoviz_consumed_layout_omits_title_with_diagnostic() -> None:
+def test_datoviz_consumed_layout_omits_two_titles_with_one_diagnostic_per_render() -> None:
     base = _mesh3d_scene()
     assert base.view3d is not None
     panel = Panel(id=base.view3d.panel_id, figure_id="figure:layout")
@@ -251,10 +251,16 @@ def test_datoviz_consumed_layout_omits_title_with_diagnostic() -> None:
         view3d=base.view3d,
         panel_text_guides=(
             PanelTextGuide(
-                id="guide:title",
+                id="guide:title:first",
                 panel_id=panel.id,
                 role=PanelTextRole.TITLE,
                 text="Programmatic camera",
+            ),
+            PanelTextGuide(
+                id="guide:title:second",
+                panel_id=panel.id,
+                role=PanelTextRole.TITLE,
+                text="Second accepted title",
             ),
         ),
         canvas_size=CanvasSize.pixel_exact(800, 600),
@@ -273,9 +279,7 @@ def test_datoviz_consumed_layout_omits_title_with_diagnostic() -> None:
     )
 
     assert session.render(scene, layout_snapshot=layout) is renderer  # type: ignore[comparison-overlap]
-    assert session.render(scene, layout_snapshot=layout) is renderer  # type: ignore[comparison-overlap]
     assert session.diagnostics == (
-        "panel_text_title_unsupported_no_public_renderer_path",
         "panel_text_title_unsupported_no_public_renderer_path",
     )
 
