@@ -301,6 +301,7 @@ class View2DNavigationInputAdapter:
         "_panel_rect",
         "_pixel_origin",
         "_profile",
+        "_snapshot_backed",
         "_view2d_revision",
         "_zoom",
     )
@@ -328,6 +329,7 @@ class View2DNavigationInputAdapter:
         self._layout_snapshot_id = layout_snapshot_id
         self._panel_rect = panel_rect
         self._pixel_origin = pixel_origin
+        self._snapshot_backed = layout_snapshot is not None
         self._profile = _DatovizPanzoomProfile.for_platform()
         self._zoom = (1.0, 1.0)
         self._drag_last_px: tuple[float, float] | None = None
@@ -351,7 +353,16 @@ class View2DNavigationInputAdapter:
         return self._pixel_origin
 
     def set_panel_rect(self, panel_rect: LogicalPixelRect) -> None:
-        """Update the resolved data-plot rectangle used by coordinate conversions."""
+        """Update legacy rect-only geometry while preserving its opaque layout ID.
+
+        Snapshot-backed geometry must instead be replaced atomically with
+        :meth:`set_layout_snapshot`.
+        """
+        if self._snapshot_backed:
+            raise ValueError(
+                "set_panel_rect cannot replace snapshot-backed geometry; "
+                "use set_layout_snapshot"
+            )
         _validate_panel_rect(panel_rect)
         self._panel_rect = panel_rect
         self._pixel_origin = None
@@ -367,6 +378,7 @@ class View2DNavigationInputAdapter:
         self._panel_rect = panel_rect
         self._pixel_origin = pixel_origin
         self._layout_snapshot_id = layout_snapshot_id
+        self._snapshot_backed = True
 
     def update_view2d_revision(self, view2d_revision: str) -> None:
         """Update the revision token used by subsequent emitted actions."""

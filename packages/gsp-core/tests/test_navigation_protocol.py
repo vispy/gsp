@@ -284,12 +284,12 @@ def test_view2d_navigation_resolved_layout_honors_pixel_origin() -> None:
     )
     top_left = _navigation_layout(PixelOrigin.TOP_LEFT)
     bottom_left = _navigation_layout(PixelOrigin.BOTTOM_LEFT)
-    top_edge = (400.0, 100.0)
+    origin_side_edge = (400.0, 100.0)
 
     top_zoom = zoom_view2d_about(
         view,
         top_left.plot_rect_px,
-        anchor_px=top_edge,
+        anchor_px=origin_side_edge,
         factor_x=1.0,
         factor_y=2.0,
         layout_snapshot=top_left,
@@ -297,7 +297,7 @@ def test_view2d_navigation_resolved_layout_honors_pixel_origin() -> None:
     bottom_zoom = zoom_view2d_about(
         view,
         bottom_left.plot_rect_px,
-        anchor_px=top_edge,
+        anchor_px=origin_side_edge,
         factor_x=1.0,
         factor_y=2.0,
         layout_snapshot=bottom_left,
@@ -343,6 +343,90 @@ def test_navigation_input_adapter_consumes_layout_plot_and_origin() -> None:
     )
     assert isinstance(action, ZoomAboutAction)
     assert action.layout_snapshot_id == layout.snapshot_id
+
+
+def test_navigation_input_adapter_legacy_rect_update_preserves_opaque_id() -> None:
+    updated_rect = LogicalPixelRect(20.0, 30.0, 300.0, 150.0)
+    adapter = View2DNavigationInputAdapter(
+        controller_id="nav:main",
+        view2d_revision="view-rev:1",
+        panel_rect=LogicalPixelRect(10.0, 20.0, 400.0, 200.0),
+        layout_snapshot_id="layout:legacy",
+        pixel_origin=PixelOrigin.TOP_LEFT,
+    )
+
+    adapter.set_panel_rect(updated_rect)
+    action = adapter.handle_pointer_event(
+        NavigationPointerEvent(
+            kind=NavigationPointerEventKind.WHEEL,
+            x_px=170.0,
+            y_px=105.0,
+            scroll_steps=1.0,
+        )
+    )
+
+    assert adapter.panel_rect == updated_rect
+    assert adapter.pixel_origin is None
+    assert isinstance(action, ZoomAboutAction)
+    assert action.layout_snapshot_id == "layout:legacy"
+
+
+def test_navigation_input_adapter_rejects_partial_snapshot_geometry_update() -> None:
+    layout = _navigation_layout(PixelOrigin.TOP_LEFT)
+    adapter = View2DNavigationInputAdapter(
+        controller_id="nav:main",
+        view2d_revision="view-rev:1",
+        layout_snapshot=layout,
+    )
+
+    with pytest.raises(ValueError, match="use set_layout_snapshot"):
+        adapter.set_panel_rect(LogicalPixelRect(20.0, 30.0, 300.0, 150.0))
+
+    action = adapter.handle_pointer_event(
+        NavigationPointerEvent(
+            kind=NavigationPointerEventKind.WHEEL,
+            x_px=400.0,
+            y_px=100.0,
+            scroll_steps=1.0,
+        )
+    )
+    assert adapter.panel_rect == layout.plot_rect_px
+    assert adapter.pixel_origin is PixelOrigin.TOP_LEFT
+    assert isinstance(action, ZoomAboutAction)
+    assert action.layout_snapshot_id == layout.snapshot_id
+
+
+def test_navigation_input_adapter_snapshot_update_is_atomic() -> None:
+    updated = ResolvedLayoutSnapshot(
+        snapshot_id="layout:updated",
+        view_id="view:main",
+        render_target=RenderTarget(800.0, 600.0, pixel_origin=PixelOrigin.BOTTOM_LEFT),
+        panel_rect_px=LogicalPixelRect(50.0, 40.0, 700.0, 520.0),
+        plot_rect_px=LogicalPixelRect(90.0, 80.0, 620.0, 440.0),
+    )
+    adapter = View2DNavigationInputAdapter(
+        controller_id="nav:main",
+        view2d_revision="view-rev:1",
+        panel_rect=LogicalPixelRect(10.0, 20.0, 400.0, 200.0),
+        layout_snapshot_id="layout:legacy",
+    )
+
+    adapter.set_layout_snapshot(updated)
+    with pytest.raises(ValueError, match="use set_layout_snapshot"):
+        adapter.set_panel_rect(LogicalPixelRect(20.0, 30.0, 300.0, 150.0))
+    action = adapter.handle_pointer_event(
+        NavigationPointerEvent(
+            kind=NavigationPointerEventKind.WHEEL,
+            x_px=400.0,
+            y_px=300.0,
+            scroll_steps=1.0,
+        )
+    )
+
+    assert adapter.panel_rect == updated.plot_rect_px
+    assert adapter.pixel_origin is PixelOrigin.BOTTOM_LEFT
+    assert isinstance(action, ZoomAboutAction)
+    assert action.layout_snapshot_id == updated.snapshot_id
 
 
 def test_navigation_math_rejects_invalid_panel_rect():
