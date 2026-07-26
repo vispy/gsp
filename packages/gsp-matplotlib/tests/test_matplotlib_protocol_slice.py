@@ -467,6 +467,30 @@ def test_matplotlib_producer_honors_inset_outer_panel_allocation():
         plt.close(result.figure)
 
 
+def test_matplotlib_scaled_display_keeps_inset_plot_inside_logical_panel():
+    fig = plt.figure(figsize=(6.4, 4.8), dpi=200)
+    setattr(fig, "_original_dpi", 100.0)
+    result = render_protocol_scene_with_layout(
+        visuals=(),
+        figure=fig,
+        panel_viewport_rect=(0.1, 0.1, 0.8, 0.8),
+        device_scale=2.0,
+    )
+    try:
+        snapshot = result.layout_snapshot
+        panel = snapshot.panel_rect_px
+        plot = snapshot.plot_rect_px
+
+        assert snapshot.render_target.logical_width_px == 640
+        assert snapshot.render_target.logical_height_px == 480
+        assert snapshot.render_target.device_scale == 2
+        assert panel == LogicalPixelRect(64, 48, 512, 384)
+        assert panel.x <= plot.x <= plot.x + plot.width <= panel.x + panel.width
+        assert panel.y <= plot.y <= plot.y + plot.height <= panel.y + panel.height
+    finally:
+        plt.close(result.figure)
+
+
 def test_consumed_plot_size_does_not_scale_screen_space_visual_sizes():
     view = View2D(id="view:size-invariance", panel_id="panel:size-invariance")
     rgba = np.array([[255, 255, 255, 255]], dtype=np.uint8)
@@ -689,6 +713,10 @@ def test_render_protocol_scene_with_reference_canvas_resolves_matplotlib_size():
         assert result.resolved_canvas.framebuffer_width == 1440
         assert result.resolved_canvas.framebuffer_height == 810
         assert result.resolved_canvas.framebuffer_per_canvas_px == 1.5
+        assert result.layout_snapshot.render_target.logical_width_px == 960
+        assert result.layout_snapshot.render_target.logical_height_px == 540
+        assert result.layout_snapshot.render_target.dpi == 144
+        assert result.layout_snapshot.render_target.device_scale == 1
         np.testing.assert_allclose(
             result.figure.get_size_inches(), np.array([10.0, 5.625])
         )

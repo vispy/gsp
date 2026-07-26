@@ -1,10 +1,13 @@
 """Tests for Matplotlib realization of semantic guide objects."""
 
+from dataclasses import replace
+
 import matplotlib
 
 matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
+import numpy as np
 
 import pytest
 from gsp.protocol import (
@@ -12,6 +15,7 @@ from gsp.protocol import (
     AxisGuide,
     AxisGuideStyle,
     AxisSide,
+    CanvasSize,
     LogicalPixelRect,
     PanelTextGuide,
     PanelTextGuideStyle,
@@ -31,6 +35,14 @@ from gsp.protocol import (
 from gsp_matplotlib.guides import render_axis_guides, render_panel_text_guides
 from gsp_matplotlib.layout import resolve_matplotlib_layout_snapshot
 from gsp_matplotlib.layout_query import query_resolved_layout_guides
+
+
+def _simulated_retina_canvas():
+    return CanvasSize.host_logical_px(640, 480).resolve(
+        output_dpi=100,
+        device_scale=2,
+        host_content_scale=2,
+    )
 
 
 def test_render_axis_guides_uses_explicit_gsp_ticks_and_labels():
@@ -310,6 +322,203 @@ def test_resolve_matplotlib_layout_snapshot_records_device_scale_metadata():
         assert snapshot.render_target.device_scale == 2.0
         assert snapshot.render_target.framebuffer_width_px == 640
         assert snapshot.render_target.framebuffer_height_px == 480
+    finally:
+        plt.close(fig)
+
+
+def test_resolve_matplotlib_layout_snapshot_normalizes_simulated_retina_geometry():
+    fig, ax = plt.subplots(figsize=(6.4, 4.8), dpi=200)
+    view = View2D(
+        id="view:retina",
+        panel_id="panel:retina",
+        x_range=(0.0, 1.0),
+        y_range=(0.0, 1.0),
+    )
+    guides = (
+        AxisGuide(
+            id="guide:retina:x",
+            view_id=view.id,
+            dimension=AxisDimension.X,
+            side=AxisSide.BOTTOM,
+            label_text="x",
+        ),
+        AxisGuide(
+            id="guide:retina:y",
+            view_id=view.id,
+            dimension=AxisDimension.Y,
+            side=AxisSide.LEFT,
+            label_text="y",
+        ),
+    )
+    title = PanelTextGuide(
+        id="guide:retina:title",
+        panel_id=view.panel_id,
+        role=PanelTextRole.TITLE,
+        text="Retina",
+    )
+    try:
+        setattr(fig, "_gsp_resolved_canvas", _simulated_retina_canvas())
+        render_axis_guides(ax, view, guides)
+        render_panel_text_guides(ax, (title,))
+
+        snapshot = resolve_matplotlib_layout_snapshot(
+            fig,
+            ax,
+            snapshot_id="layout:retina",
+            view=view,
+            axis_guides=guides,
+            panel_text_guides=(title,),
+            device_scale=1.0,
+        )
+
+        assert snapshot.render_target.logical_width_px == 640
+        assert snapshot.render_target.logical_height_px == 480
+        assert snapshot.render_target.device_scale == 2
+        assert snapshot.render_target.dpi == 100
+        assert snapshot.panel_rect_px == LogicalPixelRect(0, 0, 640, 480)
+        assert (
+            snapshot.plot_rect_px.x,
+            snapshot.plot_rect_px.y,
+            snapshot.plot_rect_px.width,
+            snapshot.plot_rect_px.height,
+        ) == pytest.approx(
+            (80, 57.6, 496, 369.6)
+        )
+        assert snapshot.grid_clip_rect_px == snapshot.plot_rect_px
+        assert snapshot.guide_boxes
+        for box in snapshot.guide_boxes:
+            assert 0 <= box.rect_px.x <= 640
+            assert 0 <= box.rect_px.y <= 480
+            assert box.rect_px.x + box.rect_px.width <= 640
+            assert box.rect_px.y + box.rect_px.height <= 480
+
+        transform = np.asarray(snapshot.data_to_screen_transform).reshape(3, 3)
+        top_left = transform @ np.array([0.0, 1.0, 1.0])
+        bottom_right = transform @ np.array([1.0, 0.0, 1.0])
+        np.testing.assert_allclose(
+            top_left[:2],
+            (snapshot.plot_rect_px.x, snapshot.plot_rect_px.y),
+        )
+        np.testing.assert_allclose(
+            bottom_right[:2],
+            (
+                snapshot.plot_rect_px.x + snapshot.plot_rect_px.width,
+                snapshot.plot_rect_px.y + snapshot.plot_rect_px.height,
+            ),
+        )
+    finally:
+        plt.close(fig)
+
+
+def test_resolve_matplotlib_layout_snapshot_uses_original_dpi_without_resolved_canvas():
+    fig, ax = plt.subplots(figsize=(6.4, 4.8), dpi=200)
+    try:
+        setattr(fig, "_original_dpi", 100.0)
+
+        snapshot = resolve_matplotlib_layout_snapshot(
+            fig,
+            ax,
+            snapshot_id="layout:retina-direct",
+        )
+
+        assert snapshot.render_target.logical_width_px == 640
+        assert snapshot.render_target.logical_height_px == 480
+        assert snapshot.render_target.dpi == 100
+        assert (
+            snapshot.plot_rect_px.x,
+            snapshot.plot_rect_px.y,
+            snapshot.plot_rect_px.width,
+            snapshot.plot_rect_px.height,
+        ) == pytest.approx(
+            (80, 57.6, 496, 369.6)
+        )
+    finally:
+        plt.close(fig)
+
+
+def test_resolve_matplotlib_layout_snapshot_uses_independent_display_factors():
+    fig, ax = plt.subplots(figsize=(6.4, 3.6), dpi=200)
+    try:
+        setattr(fig, "_gsp_resolved_canvas", _simulated_retina_canvas())
+
+        snapshot = resolve_matplotlib_layout_snapshot(
+            fig,
+            ax,
+            snapshot_id="layout:anisotropic-display",
+        )
+
+        assert (
+            snapshot.plot_rect_px.x,
+            snapshot.plot_rect_px.y,
+            snapshot.plot_rect_px.width,
+            snapshot.plot_rect_px.height,
+        ) == pytest.approx((80, 57.6, 496, 369.6))
+    finally:
+        plt.close(fig)
+
+
+def test_resolve_matplotlib_layout_snapshot_preserves_ordinary_agg_geometry():
+    fig, ax = plt.subplots(figsize=(6.4, 4.8), dpi=100)
+    try:
+        fig.canvas.draw()
+        native = ax.get_window_extent(fig.canvas.get_renderer())
+
+        snapshot = resolve_matplotlib_layout_snapshot(
+            fig,
+            ax,
+            snapshot_id="layout:agg",
+        )
+
+        assert (
+            snapshot.plot_rect_px.x,
+            snapshot.plot_rect_px.y,
+            snapshot.plot_rect_px.width,
+            snapshot.plot_rect_px.height,
+        ) == pytest.approx(
+            (
+                native.x0,
+                fig.bbox.height - native.y1,
+                native.width,
+                native.height,
+            )
+        )
+    finally:
+        plt.close(fig)
+
+
+def test_resolve_matplotlib_layout_snapshot_rejects_unequal_resolved_device_scale():
+    fig, ax = plt.subplots(figsize=(6.4, 4.8), dpi=200)
+    try:
+        resolved = replace(
+            _simulated_retina_canvas(),
+            device_scale_y=1.5,
+        )
+        setattr(fig, "_gsp_resolved_canvas", resolved)
+
+        with pytest.raises(ValueError, match="equal resolved device_scale"):
+            resolve_matplotlib_layout_snapshot(
+                fig,
+                ax,
+                snapshot_id="layout:anisotropic",
+            )
+    finally:
+        plt.close(fig)
+
+
+def test_resolve_matplotlib_layout_snapshot_rejects_invalid_resolved_device_scale():
+    fig, ax = plt.subplots(figsize=(6.4, 4.8), dpi=200)
+    try:
+        resolved = _simulated_retina_canvas()
+        object.__setattr__(resolved, "device_scale_x", -1.0)
+        object.__setattr__(resolved, "device_scale_y", -1.0)
+        setattr(fig, "_gsp_resolved_canvas", resolved)
+
+        with pytest.raises(ValueError, match="device_scale.*finite and positive"):
+            resolve_matplotlib_layout_snapshot(
+                fig,
+                ax,
+                snapshot_id="layout:invalid-scale",
+            )
     finally:
         plt.close(fig)
 
