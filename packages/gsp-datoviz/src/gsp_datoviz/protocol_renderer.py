@@ -977,6 +977,7 @@ class DatovizV04ProtocolRenderer:
     view3d: View3D | None = None
     transform_resources: Mapping[str, AffineTransform2DResource] | None = None
     panel_bounds: tuple[float, float, float, float] | None = None
+    consumed_layout_snapshot: ResolvedLayoutSnapshot | None = None
     scene: Any = field(init=False)
     figure: Any = field(init=False)
     panel: Any = field(init=False)
@@ -1073,6 +1074,8 @@ class DatovizV04ProtocolRenderer:
         The adapter only copies geometry and identities reported by Datoviz. Missing guide/query
         semantics remain explicit diagnostics and are intentionally not synthesized here.
         """
+        if self.consumed_layout_snapshot is not None:
+            return self.consumed_layout_snapshot
         return _resolve_datoviz_partial_layout_snapshot(
             self.dvz,
             self.panel,
@@ -1080,6 +1083,10 @@ class DatovizV04ProtocolRenderer:
             view=self.view,
             snapshot_id_prefix=snapshot_id_prefix,
         )
+
+    def authoritative_layout_snapshot(self) -> ResolvedLayoutSnapshot | None:
+        """Return the consumed GSP layout retained independently of the native panel."""
+        return self.consumed_layout_snapshot
 
     def _canvas_px_scale(self) -> float:
         return self.resolved_canvas.framebuffer_per_canvas_px
@@ -2305,7 +2312,7 @@ class DatovizV04ProtocolRenderer:
         view: View2D | None = None,
         *,
         controller_id: str = "nav:datoviz-live",
-        layout_snapshot_id: str = "layout:datoviz-live",
+        layout_snapshot_id: str | None = None,
     ) -> "_DatovizLiveView2DNavigation":
         """Enable Datoviz pointer input as canonical S035 View2D navigation."""
         diagnostics = datoviz_v04_live_input_diagnostics(self.dvz)
@@ -2324,13 +2331,18 @@ class DatovizV04ProtocolRenderer:
             raise DatovizV04Unavailable("Datoviz live input router is unavailable")
         if self.live_navigation is not None:
             self.live_navigation.close()
+        effective_layout_snapshot_id = (
+            self.consumed_layout_snapshot.snapshot_id
+            if self.consumed_layout_snapshot is not None
+            else layout_snapshot_id or "layout:datoviz-live"
+        )
         self.live_navigation = _DatovizLiveView2DNavigation(
             renderer=self,
             router=router,
             live_view=live_view,
             view=target_view,
             controller_id=controller_id,
-            layout_snapshot_id=layout_snapshot_id,
+            layout_snapshot_id=effective_layout_snapshot_id,
         )
         self.live_navigation.subscription_id = self.dvz.dvz_input_subscribe_event(
             router, self.live_navigation.handle_input_event, None
@@ -2342,7 +2354,7 @@ class DatovizV04ProtocolRenderer:
         view3d: View3D | None = None,
         *,
         controller_id: str = "nav:datoviz-live-3d",
-        layout_snapshot_id: str = "layout:datoviz-live-3d",
+        layout_snapshot_id: str | None = None,
     ) -> "_DatovizLiveView3DNavigation":
         """Enable Datoviz pointer input as canonical S037 View3D navigation."""
         target_view3d = view3d or self.view3d
@@ -2359,13 +2371,18 @@ class DatovizV04ProtocolRenderer:
             raise DatovizV04Unavailable("Datoviz live input router is unavailable")
         if self.live_view3d_navigation is not None:
             self.live_view3d_navigation.close()
+        effective_layout_snapshot_id = (
+            self.consumed_layout_snapshot.snapshot_id
+            if self.consumed_layout_snapshot is not None
+            else layout_snapshot_id or "layout:datoviz-live-3d"
+        )
         self.live_view3d_navigation = _DatovizLiveView3DNavigation(
             renderer=self,
             router=router,
             live_view=live_view,
             view3d=target_view3d,
             controller_id=controller_id,
-            layout_snapshot_id=layout_snapshot_id,
+            layout_snapshot_id=effective_layout_snapshot_id,
         )
         self.live_view3d_navigation.subscription_id = (
             self.dvz.dvz_input_subscribe_event(
@@ -2550,8 +2567,23 @@ class DatovizV04ProtocolRenderer:
             self.dvz, "DVZ_QUERY_PROFILE_UNSUPPORTED", DVZ_QUERY_PROFILE_UNSUPPORTED
         )
 
-        x, y = request.coordinate
-        if _panel_query(self.dvz, self.panel, float(x), float(y), dvz_request) != 0:
+        native_coordinate = self._native_query_coordinate(request.coordinate)
+        if native_coordinate is None:
+            return QueryResult(
+                request_id=request.id,
+                status=QueryStatus.MISS,
+                hit=False,
+                panel_coordinate=request.coordinate,
+                diagnostic="query coordinate is outside the consumed plot viewport",
+                layout_snapshot_id=(
+                    self.consumed_layout_snapshot.snapshot_id
+                    if self.consumed_layout_snapshot is not None
+                    else request.layout_snapshot_id
+                ),
+                view_snapshot_id=request.view_snapshot_id,
+            )
+        x, y = native_coordinate
+        if _panel_query(self.dvz, self.panel, x, y, dvz_request) != 0:
             return QueryResult(
                 request_id=request.id,
                 status=QueryStatus.FAILED,
@@ -2574,8 +2606,31 @@ class DatovizV04ProtocolRenderer:
                 diagnostic="Datoviz query produced no resolved result during bounded poll",
             )
 
-        decoded = replace(decode_dvz_query_result(raw_result), request_id=request.id)
+        decoded = replace(
+            decode_dvz_query_result(raw_result),
+            request_id=request.id,
+            panel_coordinate=request.coordinate,
+            layout_snapshot_id=(
+                self.consumed_layout_snapshot.snapshot_id
+                if self.consumed_layout_snapshot is not None
+                else request.layout_snapshot_id
+            ),
+        )
         return self._decorate_scalar_query_result(decoded, request)
+
+    def _native_query_coordinate(
+        self, coordinate: tuple[float, float]
+    ) -> tuple[float, float] | None:
+        if self.consumed_layout_snapshot is None:
+            return (float(coordinate[0]), float(coordinate[1]))
+        plot = self.consumed_layout_snapshot.plot_rect_px
+        x, y = coordinate
+        if not (
+            plot.x <= x <= plot.x + plot.width
+            and plot.y <= y <= plot.y + plot.height
+        ):
+            return None
+        return (float(x - plot.x), float(y - plot.y))
 
     def _query_panel_guides(self, request: QueryRequest) -> QueryResult:
         if request.coordinate_space != QueryCoordinateSpace.PANEL:
@@ -2661,17 +2716,25 @@ class DatovizV04ProtocolRenderer:
                 view_snapshot_id=request.view_snapshot_id,
             )
         snapshot = resolve_view3d_projection_snapshot(
-            self.view3d, layout_snapshot_id=layout_snapshot_id
+            self.view3d,
+            layout_snapshot=self.consumed_layout_snapshot,
+            layout_snapshot_id=layout_snapshot_id,
         )
         return datoviz_query_view3d_ray_context(
             request,
             self.view3d,
             snapshot,
-            panel_bounds=_datoviz_query_panel_bounds(
-                self.resolved_canvas.framebuffer_width,
-                self.resolved_canvas.framebuffer_height,
-                self.panel_bounds,
-            ),
+            panel_bounds=self._query_plot_bounds(),
+        )
+
+    def _query_plot_bounds(self) -> tuple[float, float, float, float]:
+        if self.consumed_layout_snapshot is not None:
+            plot = self.consumed_layout_snapshot.plot_rect_px
+            return (plot.x, plot.x + plot.width, plot.y, plot.y + plot.height)
+        return _datoviz_query_panel_bounds(
+            self.resolved_canvas.framebuffer_width,
+            self.resolved_canvas.framebuffer_height,
+            self.panel_bounds,
         )
 
     def query_view3d_mesh_triangle_pick(
@@ -2700,7 +2763,9 @@ class DatovizV04ProtocolRenderer:
         )
         view_snapshot_id = (
             resolve_view3d_projection_snapshot(
-                self.view3d, layout_snapshot_id=layout_snapshot_id
+                self.view3d,
+                layout_snapshot=self.consumed_layout_snapshot,
+                layout_snapshot_id=layout_snapshot_id,
             ).view_projection_snapshot_id
             if self.view3d is not None
             else None
@@ -2978,7 +3043,9 @@ class DatovizV04ProtocolRenderer:
             raise DatovizV04Unsupported("Datoviz retained View3D state copy failed")
         self.retained_view3d_update_stats.snapshot_resolves += 1
         projection_snapshot = resolve_view3d_projection_snapshot(
-            self.view3d, layout_snapshot_id=layout_snapshot_id
+            self.view3d,
+            layout_snapshot=self.consumed_layout_snapshot,
+            layout_snapshot_id=layout_snapshot_id,
         )
         view = getattr(state, "view", None)
         projection = getattr(state, "projection", None)
@@ -3085,6 +3152,8 @@ class _DatovizLiveView2DNavigation:
 
     def _initial_panel_rect(self) -> LogicalPixelRect:
         """Return the initial live Datoviz panel rectangle in host logical pixels."""
+        if self.renderer.consumed_layout_snapshot is not None:
+            return self.renderer.consumed_layout_snapshot.plot_rect_px
         return LogicalPixelRect(
             x=0.0,
             y=0.0,
@@ -3148,6 +3217,9 @@ class _DatovizLiveView2DNavigation:
 
     def handle_resize_event(self, event: Any) -> None:
         """Update the live logical panel size from one Datoviz resize event."""
+        if self.renderer.consumed_layout_snapshot is not None:
+            self._request_frame()
+            return
         width, height = _datoviz_resize_logical_size(event)
         if width <= 0.0 or height <= 0.0:
             return
@@ -3229,6 +3301,8 @@ class _DatovizLiveView3DNavigation:
 
     def _initial_panel_rect(self) -> LogicalPixelRect:
         """Return the initial live Datoviz panel rectangle in host logical pixels."""
+        if self.renderer.consumed_layout_snapshot is not None:
+            return self.renderer.consumed_layout_snapshot.plot_rect_px
         return LogicalPixelRect(
             x=0.0,
             y=0.0,
@@ -3292,6 +3366,9 @@ class _DatovizLiveView3DNavigation:
 
     def handle_resize_event(self, event: Any) -> None:
         """Update the live logical panel size from one Datoviz resize event."""
+        if self.renderer.consumed_layout_snapshot is not None:
+            self._request_frame()
+            return
         width, height = _datoviz_resize_logical_size(event)
         if width <= 0.0 or height <= 0.0:
             return
@@ -3356,7 +3433,9 @@ class _DatovizLiveView3DNavigation:
         payload: Orbit3DPayload | Pan3DPayload | Zoom3DPayload | ResetView3DPayload,
     ) -> None:
         snapshot = resolve_view3d_projection_snapshot(
-            self.view3d, layout_snapshot_id=self.layout_snapshot_id
+            self.view3d,
+            layout_snapshot=self.renderer.consumed_layout_snapshot,
+            layout_snapshot_id=self.layout_snapshot_id,
         )
         action = View3DNavigationAction(
             kind=kind,
@@ -5475,7 +5554,18 @@ def _create_panel(
     panel_factory = getattr(dvz, "dvz_panel", None)
     desc_type = getattr(dvz, "DvzPanelDesc", None)
     if panel_factory is None or desc_type is None:
-        return dvz.dvz_panel_full(figure)
+        missing = tuple(
+            name
+            for name, value in (
+                ("dvz_panel", panel_factory),
+                ("DvzPanelDesc", desc_type),
+            )
+            if value is None
+        )
+        raise DatovizV04Unavailable(
+            "Datoviz resolved-layout viewport placement requires public "
+            + " and ".join(missing)
+        )
 
     x, y, width, height = bounds
     desc = desc_type()

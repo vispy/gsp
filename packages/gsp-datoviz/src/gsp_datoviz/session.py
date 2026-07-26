@@ -20,6 +20,7 @@ from gsp.protocol import (
     QueryRequest,
     QueryResult,
     QueryStatus,
+    ResolvedLayoutSnapshot,
     SegmentVisual,
     SphereVisual,
     TextVisual,
@@ -27,6 +28,7 @@ from gsp.protocol import (
     VIEW3D_QUERY_PAYLOAD_KIND,
     VIEW3D_NAVIGATION_ORBIT_PAN_ZOOM_CAPABILITY,
     VectorVisual,
+    resolve_panel_viewport_rect,
 )
 
 from .capabilities import datoviz_v04_capability_snapshot
@@ -58,14 +60,16 @@ class DatovizSession:
         scene: Scene,
         *,
         target: str | Path | None = None,
+        layout_snapshot: ResolvedLayoutSnapshot | None = None,
         **kwargs: Any,
     ) -> DatovizV04ProtocolRenderer:
         self._require_open()
         if not isinstance(scene, Scene):
             raise TypeError("render() requires a gsp.Scene")
+        _validate_single_panel_layout(scene, layout_snapshot)
         if kwargs:
             raise TypeError(f"unsupported Datoviz render options: {sorted(kwargs)!r}")
-        renderer = self._build_renderer(scene)
+        renderer = self._build_renderer(scene, layout_snapshot=layout_snapshot)
         self._renderers.append(renderer)
         self._renderer_scenes[id(renderer)] = scene
         self._scene_renderers[scene.id] = (scene, renderer)
@@ -80,13 +84,14 @@ class DatovizSession:
         *,
         block: bool = True,
         frame_count: int = 1,
+        layout_snapshot: ResolvedLayoutSnapshot | None = None,
         **kwargs: Any,
     ) -> DatovizV04ProtocolRenderer:
         if kwargs:
             raise TypeError(f"unsupported Datoviz display options: {sorted(kwargs)!r}")
         if frame_count < 1:
             raise ValueError("frame_count must be positive")
-        renderer = self.render(scene)
+        renderer = self.render(scene, layout_snapshot=layout_snapshot)
         self._enable_interactive_view2d(renderer, scene)
         self._enable_interactive_view3d(renderer, scene)
         if block:
@@ -115,8 +120,14 @@ class DatovizSession:
             and VIEW3D_QUERY_PAYLOAD_KIND
             in request.requested_extension_payload_kinds
         ):
+            effective_layout = renderer.authoritative_layout_snapshot()
             return renderer.query_view3d_ray_context(
-                request, layout_snapshot_id="layout:datoviz-session"
+                request,
+                layout_snapshot_id=(
+                    effective_layout.snapshot_id
+                    if effective_layout is not None
+                    else "layout:datoviz-session"
+                ),
             )
 
         unsupported = tuple(
@@ -206,7 +217,17 @@ class DatovizSession:
         renderer.enable_gsp_view3d_navigation(scene.view3d)
         self._interactive_view3d_renderers.add(renderer_id)
 
-    def _build_renderer(self, scene: Scene) -> DatovizV04ProtocolRenderer:
+    def _build_renderer(
+        self,
+        scene: Scene,
+        *,
+        layout_snapshot: ResolvedLayoutSnapshot | None = None,
+    ) -> DatovizV04ProtocolRenderer:
+        panel_bounds = (
+            _normalized_plot_bounds(layout_snapshot)
+            if layout_snapshot is not None
+            else None
+        )
         renderer = DatovizV04ProtocolRenderer(
             dvz=self._dvz,
             color_scales={item.id: item for item in scene.color_scales},
@@ -215,6 +236,8 @@ class DatovizSession:
             view=None if scene.axis_guides else scene.view2d,
             view3d=scene.view3d,
             transform_resources={item.id: item for item in scene.transforms},
+            panel_bounds=panel_bounds,
+            consumed_layout_snapshot=layout_snapshot,
         )
         try:
             self._configure_guides(renderer, scene)
@@ -327,3 +350,37 @@ def _unsupported_query_result(
         layout_snapshot_id=request.layout_snapshot_id,
         view_snapshot_id=request.view_snapshot_id,
     )
+
+
+def _normalized_plot_bounds(
+    snapshot: ResolvedLayoutSnapshot,
+) -> tuple[float, float, float, float]:
+    target = snapshot.render_target
+    plot = snapshot.plot_rect_px
+    return (
+        plot.x / target.logical_width_px,
+        plot.y / target.logical_height_px,
+        plot.width / target.logical_width_px,
+        plot.height / target.logical_height_px,
+    )
+
+
+def _validate_single_panel_layout(
+    scene: Scene, layout_snapshot: ResolvedLayoutSnapshot | None
+) -> None:
+    if layout_snapshot is None:
+        return
+    if not isinstance(layout_snapshot, ResolvedLayoutSnapshot):
+        raise TypeError("layout_snapshot must be a ResolvedLayoutSnapshot")
+    if len(scene.panels) > 1:
+        raise ValueError(
+            "resolved-layout consumption supports exactly one scene panel"
+        )
+    if scene.panels:
+        expected = resolve_panel_viewport_rect(
+            scene.panels[0], layout_snapshot.render_target
+        )
+        if expected != layout_snapshot.panel_rect_px:
+            raise ValueError(
+                "layout_snapshot panel_rect_px does not match the scene panel allocation"
+            )

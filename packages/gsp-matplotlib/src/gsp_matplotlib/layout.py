@@ -36,6 +36,7 @@ def resolve_matplotlib_layout_snapshot(
     axis_guides: Iterable[AxisGuide] = (),
     panel_text_guides: Iterable[PanelTextGuide] = (),
     device_scale: float = 1.0,
+    panel_rect_px: LogicalPixelRect | None = None,
 ) -> ResolvedLayoutSnapshot:
     """Resolve a GSP layout snapshot from a drawn Matplotlib reference axes."""
     figure.canvas.draw()
@@ -53,7 +54,7 @@ def resolve_matplotlib_layout_snapshot(
         pixel_origin=PixelOrigin.TOP_LEFT,
         query_coordinate_space="panel",
     )
-    panel_rect = LogicalPixelRect(0.0, 0.0, width, height)
+    panel_rect = panel_rect_px or LogicalPixelRect(0.0, 0.0, width, height)
     plot_rect = _rect_from_bbox(axes.get_window_extent(renderer), height)
     axis_guides_tuple = tuple(axis_guides)
     panel_text_guides_tuple = tuple(panel_text_guides)

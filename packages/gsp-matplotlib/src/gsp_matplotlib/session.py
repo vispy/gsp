@@ -19,9 +19,11 @@ from gsp.protocol import (
     QueryRequest,
     QueryResult,
     QueryScope,
+    ResolvedLayoutSnapshot,
     TextVisual,
     VIEW3D_QUERY_PAYLOAD_KIND,
     View2D,
+    resolve_panel_viewport_rect,
     resolve_view3d_projection_snapshot,
 )
 
@@ -119,15 +121,16 @@ class _MatplotlibLiveView2DBinding:
         self.view = view
         self.view2d_revision = f"view-rev:matplotlib-live-{self.revision_index}"
         self.view_snapshot_id = f"view-snapshot:matplotlib-live-{self.revision_index}"
-        layout_snapshot = resolve_matplotlib_layout_snapshot(
-            self.result.figure,
-            self.result.axes,
-            snapshot_id=f"layout:matplotlib-live-{self.revision_index}",
-            view=view,
-            axis_guides=self.scene.axis_guides,
-            panel_text_guides=self.scene.panel_text_guides,
-        )
-        object.__setattr__(self.result, "layout_snapshot", layout_snapshot)
+        if not self.result.layout_was_consumed:
+            layout_snapshot = resolve_matplotlib_layout_snapshot(
+                self.result.figure,
+                self.result.axes,
+                snapshot_id=f"layout:matplotlib-live-{self.revision_index}",
+                view=view,
+                axis_guides=self.scene.axis_guides,
+                panel_text_guides=self.scene.panel_text_guides,
+            )
+            object.__setattr__(self.result, "layout_snapshot", layout_snapshot)
         object.__setattr__(self.result, "view_snapshot_id", self.view_snapshot_id)
 
 
@@ -158,11 +161,13 @@ class MatplotlibSession:
         *,
         target: str | Path | None = None,
         output_dpi: float | None = None,
+        layout_snapshot: ResolvedLayoutSnapshot | None = None,
         **savefig_kwargs: Any,
     ) -> MatplotlibProtocolRenderResult:
         self._require_open()
         if not isinstance(scene, Scene):
             raise TypeError("render() requires a gsp.Scene")
+        _validate_single_panel_layout(scene, layout_snapshot)
         result = render_protocol_scene_with_layout(
             visuals=scene.visuals,
             view=scene.view2d,
@@ -174,6 +179,10 @@ class MatplotlibSession:
             transform_resources={item.id: item for item in scene.transforms},
             canvas_size=scene.canvas_size,
             output_dpi=output_dpi,
+            layout_snapshot=layout_snapshot,
+            panel_viewport_rect=(
+                scene.panels[0].viewport_rect if scene.panels else None
+            ),
         )
         self._results.append(result)
         self._scene_results[scene.id] = (scene, result)
@@ -189,8 +198,14 @@ class MatplotlibSession:
             result.figure.savefig(target, **savefig_kwargs)
         return result
 
-    def display(self, scene: Scene, **kwargs: Any) -> MatplotlibProtocolRenderResult:
-        return self.render(scene, **kwargs)
+    def display(
+        self,
+        scene: Scene,
+        *,
+        layout_snapshot: ResolvedLayoutSnapshot | None = None,
+        **kwargs: Any,
+    ) -> MatplotlibProtocolRenderResult:
+        return self.render(scene, layout_snapshot=layout_snapshot, **kwargs)
 
     def query(
         self,
@@ -231,7 +246,7 @@ class MatplotlibSession:
             in effective_request.requested_extension_payload_kinds
         ):
             snapshot = resolve_view3d_projection_snapshot(
-                scene.view3d, layout_snapshot_id=layout_snapshot_id
+                scene.view3d, layout_snapshot=result.layout_snapshot
             )
             return query_view3d_ray_context(
                 effective_request,
@@ -360,5 +375,26 @@ def _scene_panel_ids(scene: Scene) -> frozenset[str]:
 def _matplotlib_panel_bounds(
     result: MatplotlibProtocolRenderResult,
 ) -> tuple[float, float, float, float]:
-    rect = result.layout_snapshot.panel_rect_px
+    rect = result.layout_snapshot.plot_rect_px
     return (rect.x, rect.x + rect.width, rect.y, rect.y + rect.height)
+
+
+def _validate_single_panel_layout(
+    scene: Scene, layout_snapshot: ResolvedLayoutSnapshot | None
+) -> None:
+    if layout_snapshot is None:
+        return
+    if not isinstance(layout_snapshot, ResolvedLayoutSnapshot):
+        raise TypeError("layout_snapshot must be a ResolvedLayoutSnapshot")
+    if len(scene.panels) > 1:
+        raise ValueError(
+            "resolved-layout consumption supports exactly one scene panel"
+        )
+    if scene.panels:
+        expected = resolve_panel_viewport_rect(
+            scene.panels[0], layout_snapshot.render_target
+        )
+        if expected != layout_snapshot.panel_rect_px:
+            raise ValueError(
+                "layout_snapshot panel_rect_px does not match the scene panel allocation"
+            )

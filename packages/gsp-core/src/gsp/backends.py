@@ -7,7 +7,13 @@ from dataclasses import dataclass
 from importlib import metadata
 from typing import Any, Protocol, runtime_checkable
 
-from .protocol import PROTOCOL_VERSION, CapabilitySnapshot, QueryRequest, QueryResult
+from .protocol import (
+    PROTOCOL_VERSION,
+    CapabilitySnapshot,
+    QueryRequest,
+    QueryResult,
+    ResolvedLayoutSnapshot,
+)
 
 BACKEND_ENTRY_POINT_GROUP = "gsp.backends"
 PLUGIN_API_VERSION = 1
@@ -68,8 +74,20 @@ class BackendSession(Protocol):
 
     @property
     def diagnostics(self) -> tuple[str, ...]: ...
-    def render(self, scene: Any, **kwargs: Any) -> Any: ...
-    def display(self, scene: Any, **kwargs: Any) -> Any: ...
+    def render(
+        self,
+        scene: Any,
+        *,
+        layout_snapshot: ResolvedLayoutSnapshot | None = None,
+        **kwargs: Any,
+    ) -> Any: ...
+    def display(
+        self,
+        scene: Any,
+        *,
+        layout_snapshot: ResolvedLayoutSnapshot | None = None,
+        **kwargs: Any,
+    ) -> Any: ...
     def query(
         self, request: QueryRequest, *, scene_id: str | None = None
     ) -> QueryResult: ...

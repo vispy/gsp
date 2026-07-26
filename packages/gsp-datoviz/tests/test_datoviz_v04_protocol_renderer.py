@@ -62,6 +62,9 @@ from gsp.protocol import (
     GUIDE_QUERY_PAYLOAD_KIND,
     GuideQueryPayload,
     LogicalPixelRect,
+    PixelOrigin,
+    RenderTarget,
+    ResolvedLayoutSnapshot,
     MESH3D_OPAQUE_DEPTH_CAPABILITY,
     NavigationPlacement,
     QueryCoordinateSpace,
@@ -1802,6 +1805,36 @@ def test_renderer_can_create_custom_panel_bounds_for_review_layout():
 
     assert _calls(fake, "panel") == [("panel", "figure", 0.0, 0.07, 1.0, 0.93)]
     assert _calls(fake, "panel_full") == []
+
+
+def test_renderer_consumes_plot_viewport_and_retains_outer_panel_layout():
+    fake = FakeDatovizV04()
+    layout = ResolvedLayoutSnapshot(
+        snapshot_id="layout:shared",
+        render_target=RenderTarget(
+            logical_width_px=800,
+            logical_height_px=600,
+            pixel_origin=PixelOrigin.TOP_LEFT,
+        ),
+        panel_rect_px=LogicalPixelRect(40, 30, 720, 540),
+        plot_rect_px=LogicalPixelRect(200, 150, 400, 200),
+        grid_clip_rect_px=LogicalPixelRect(200, 150, 400, 200),
+    )
+
+    renderer = DatovizV04ProtocolRenderer(
+        dvz=fake,
+        panel_bounds=(0.25, 0.25, 0.5, 1.0 / 3.0),
+        consumed_layout_snapshot=layout,
+    )
+
+    assert _calls(fake, "panel") == [
+        ("panel", "figure", 0.25, 0.25, 0.5, pytest.approx(1.0 / 3.0))
+    ]
+    assert renderer.authoritative_layout_snapshot() is layout
+    assert renderer.resolve_partial_layout_snapshot() is layout
+    assert renderer._query_plot_bounds() == (200.0, 600.0, 150.0, 350.0)
+    assert renderer._native_query_coordinate((400.0, 250.0)) == (200.0, 100.0)
+    assert renderer._native_query_coordinate((100.0, 100.0)) is None
 
 
 def test_renderer_defaults_to_legacy_color_pipeline_when_binding_is_available():

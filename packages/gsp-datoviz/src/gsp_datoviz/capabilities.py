@@ -295,6 +295,13 @@ def gsp_capability_snapshot_from_datoviz(
     frame_snapshot_status: Literal["none", "partial"] = (
         "partial" if frame_snapshot_supported else "none"
     )
+    layout_consume_status: Literal["none", "partial"] = (
+        "partial"
+        if dvz is not None
+        and hasattr(dvz, "dvz_panel")
+        and hasattr(dvz, "DvzPanelDesc")
+        else "none"
+    )
     guide_query_diagnostics = datoviz_v04_panel_frame_guide_query_diagnostics(dvz)
     guide_query_supported = frame_snapshot_supported and not guide_query_diagnostics
     frame_snapshot_audit_diagnostics = (
@@ -360,7 +367,7 @@ def gsp_capability_snapshot_from_datoviz(
         "s034_guide_layout_audit": {
             "semantic_guides": True,
             "resolved_layout_produce": frame_snapshot_status,
-            "resolved_layout_consume": "none",
+            "resolved_layout_consume": layout_consume_status,
             "layout_strict": False,
             "panel_text_title": "unsupported",
             "axis_style_mapping": "partial"
@@ -759,11 +766,16 @@ def gsp_capability_snapshot_from_datoviz(
         layout_capability=LayoutCapability(
             semantic_guides=True,
             resolved_layout_produce=frame_snapshot_status,
-            resolved_layout_consume="none",
+            resolved_layout_consume=layout_consume_status,
             layout_strict=False,
             diagnostics=(
                 "panel_text_title_unsupported_no_public_renderer_path",
                 "axis_style_mapping_partial",
+                (
+                    "resolved_layout_plot_viewport_consumption_proven"
+                    if layout_consume_status == "partial"
+                    else "resolved_layout_plot_viewport_consumption_unavailable"
+                ),
                 *frame_snapshot_audit_diagnostics,
                 "layout_strict_false",
             ),

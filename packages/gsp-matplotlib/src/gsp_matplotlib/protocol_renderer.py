@@ -36,7 +36,9 @@ from gsp.protocol import (
     View2D,
     View3D,
     View3DDiagnosticCode,
+    View3DProjectionSnapshot,
     project_view3d_data_point,
+    resolve_view3d_projection_snapshot,
     validate_mesh_visual_flat_lambert,
 )
 from gsp_matplotlib.guides import render_axis_guides, render_panel_text_guides
@@ -148,6 +150,8 @@ class MatplotlibProtocolRenderResult:
     layout_snapshot: ResolvedLayoutSnapshot
     resolved_canvas: ResolvedCanvas
     view_snapshot_id: str | None = None
+    view3d_projection_snapshot: View3DProjectionSnapshot | None = None
+    layout_was_consumed: bool = False
 
     @property
     def layout_snapshot_id(self) -> str:
@@ -172,8 +176,14 @@ def render_protocol_scene_with_layout(
     output_dpi: float | None = None,
     device_scale: float = 1.0,
     view_snapshot_id: str | None = None,
+    layout_snapshot: ResolvedLayoutSnapshot | None = None,
+    panel_viewport_rect: tuple[float, float, float, float] | None = None,
 ) -> MatplotlibProtocolRenderResult:
     """Render a protocol scene and report the resolved layout snapshot used."""
+    if layout_snapshot is not None:
+        _validate_consumed_layout_view(layout_snapshot, view=view, view3d=view3d)
+        canvas_size = _consumed_canvas_size(layout_snapshot)
+        device_scale = layout_snapshot.render_target.device_scale
     if axes is None:
         import matplotlib.pyplot as plt
 
@@ -210,6 +220,11 @@ def render_protocol_scene_with_layout(
             device_scale=device_scale,
         )
 
+    if layout_snapshot is not None:
+        _place_axes_at_consumed_plot_rect(figure, axes, layout_snapshot)
+    elif panel_viewport_rect is not None:
+        _place_native_axes_inside_panel(axes, panel_viewport_rect)
+
     color_scale_map = color_scales if color_scales is not None else {}
     for visual in visuals:
         _render_protocol_visual(
@@ -233,24 +248,166 @@ def render_protocol_scene_with_layout(
         # not leak Matplotlib's default 2D frame into the rendered scene.
         axes.set_axis_off()
     render_panel_text_guides(axes, panel_text_guide_tuple)
+    if layout_snapshot is not None:
+        _place_consumed_title_artists(
+            figure, axes, panel_text_guide_tuple, layout_snapshot
+        )
     for guide in colorbar_guides:
         render_colorbar_guide(axes, guide, color_scales=color_scale_map)
 
-    snapshot = resolve_matplotlib_layout_snapshot(
-        figure,
-        axes,
-        snapshot_id=snapshot_id,
-        view=view,
-        axis_guides=axis_guide_tuple,
-        panel_text_guides=panel_text_guide_tuple,
-        device_scale=device_scale,
+    if layout_snapshot is None:
+        snapshot = resolve_matplotlib_layout_snapshot(
+            figure,
+            axes,
+            snapshot_id=snapshot_id,
+            view=view,
+            axis_guides=axis_guide_tuple,
+            panel_text_guides=panel_text_guide_tuple,
+            device_scale=device_scale,
+            panel_rect_px=_normalized_panel_rect(
+                figure, panel_viewport_rect
+            ),
+        )
+    else:
+        # Draw after the final artist placement, but retain the consumed snapshot
+        # as the authoritative render/query geometry and identity.
+        figure.canvas.draw()
+        snapshot = layout_snapshot
+    projection_snapshot = (
+        resolve_view3d_projection_snapshot(view3d, layout_snapshot=snapshot)
+        if view3d is not None
+        else None
     )
     return MatplotlibProtocolRenderResult(
         figure,
         axes,
         snapshot,
         resolved_canvas,
-        view_snapshot_id=view_snapshot_id,
+        view_snapshot_id=(
+            projection_snapshot.view_projection_snapshot_id
+            if projection_snapshot is not None
+            else view_snapshot_id
+        ),
+        view3d_projection_snapshot=projection_snapshot,
+        layout_was_consumed=layout_snapshot is not None,
+    )
+
+
+def _validate_consumed_layout_view(
+    snapshot: ResolvedLayoutSnapshot,
+    *,
+    view: View2D | None,
+    view3d: View3D | None,
+) -> None:
+    if not isinstance(snapshot, ResolvedLayoutSnapshot):
+        raise TypeError("layout_snapshot must be a ResolvedLayoutSnapshot")
+    active_view = view if view is not None else view3d
+    if (
+        active_view is not None
+        and snapshot.view_id is not None
+        and snapshot.view_id != active_view.id
+    ):
+        raise ValueError("layout_snapshot view_id does not match the rendered view")
+
+
+def _consumed_canvas_size(snapshot: ResolvedLayoutSnapshot) -> CanvasSize:
+    target = snapshot.render_target
+    width = target.logical_width_px
+    height = target.logical_height_px
+    if not float(width).is_integer() or not float(height).is_integer():
+        raise ValueError(
+            "Matplotlib layout consumption requires integer logical render-target dimensions"
+        )
+    return CanvasSize.pixel_exact(int(width), int(height))
+
+
+def _place_axes_at_consumed_plot_rect(
+    figure: matplotlib.figure.Figure,
+    axes: matplotlib.axes.Axes,
+    snapshot: ResolvedLayoutSnapshot,
+) -> None:
+    target = snapshot.render_target
+    plot = snapshot.plot_rect_px
+    left = plot.x / target.logical_width_px
+    bottom = 1.0 - (plot.y + plot.height) / target.logical_height_px
+    axes.set_position(
+        (
+            left,
+            bottom,
+            plot.width / target.logical_width_px,
+            plot.height / target.logical_height_px,
+        ),
+        which="both",
+    )
+
+
+def _place_native_axes_inside_panel(
+    axes: matplotlib.axes.Axes,
+    viewport_rect: tuple[float, float, float, float],
+) -> None:
+    panel_x, panel_y, panel_width, panel_height = viewport_rect
+    native = axes.get_position(original=True)
+    axes.set_position(
+        (
+            panel_x + float(native.x0) * panel_width,
+            1.0
+            - (panel_y + panel_height)
+            + float(native.y0) * panel_height,
+            float(native.width) * panel_width,
+            float(native.height) * panel_height,
+        ),
+        which="both",
+    )
+
+
+def _normalized_panel_rect(
+    figure: matplotlib.figure.Figure,
+    viewport_rect: tuple[float, float, float, float] | None,
+) -> LogicalPixelRect | None:
+    if viewport_rect is None:
+        return None
+    width, height = _figure_canvas_size_px(figure)
+    x, y, panel_width, panel_height = viewport_rect
+    return LogicalPixelRect(
+        x=x * width,
+        y=y * height,
+        width=panel_width * width,
+        height=panel_height * height,
+    )
+
+
+def _place_consumed_title_artists(
+    figure: matplotlib.figure.Figure,
+    axes: matplotlib.axes.Axes,
+    guides: tuple[PanelTextGuide, ...],
+    snapshot: ResolvedLayoutSnapshot,
+) -> None:
+    title_guides = tuple(
+        guide for guide in guides if guide.role.value == "title"
+    )
+    if not title_guides:
+        return
+    boxes = {box.guide_id: box for box in snapshot.title_boxes}
+    target_box = boxes.get(title_guides[0].id)
+    if target_box is None:
+        return
+    figure.canvas.draw()
+    renderer = cast(
+        matplotlib.backend_bases.RendererBase,
+        getattr(figure.canvas, "get_renderer")(),
+    )
+    current = axes.title.get_window_extent(renderer)
+    target = target_box.rect_px
+    target_display_x = target.x
+    target_display_y = snapshot.render_target.logical_height_px - (
+        target.y + target.height
+    )
+    axes.title.set_transform(
+        axes.title.get_transform()
+        + matplotlib.transforms.Affine2D().translate(
+            target_display_x - float(current.x0),
+            target_display_y - float(current.y0),
+        )
     )
 
 

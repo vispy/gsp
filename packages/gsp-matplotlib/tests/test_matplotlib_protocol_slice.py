@@ -42,6 +42,8 @@ from gsp.protocol import (
     PanelTextRole,
     PathVisual,
     PerspectiveProjection3D,
+    PixelOrigin,
+    PixelVisual,
     PointVisual,
     QueryCoordinateSpace,
     QueryRequest,
@@ -50,6 +52,8 @@ from gsp.protocol import (
     ScalarColorEncoding,
     ScalarColorSlot,
     SegmentVisual,
+    RenderTarget,
+    ResolvedLayoutSnapshot,
     StrokeCap,
     StrokeJoin,
     TextAnchorX,
@@ -63,6 +67,7 @@ from gsp.protocol import (
 )
 from gsp_matplotlib.color_mapping import map_scalar_values
 from gsp_matplotlib.layout_query import query_resolved_layout_guides
+from gsp_matplotlib.layout import resolve_matplotlib_layout_snapshot
 from gsp_matplotlib.navigation import apply_view2d_navigation_action
 from gsp_matplotlib.protocol_query import QueryVisualEntry, query_visuals
 from gsp.protocol.visuals import ImageInterpolation
@@ -177,6 +182,125 @@ def test_render_protocol_scene_with_layout_reports_snapshot_id():
         )
         assert query.status == QueryStatus.HIT
         assert query.layout_snapshot_id == result.layout_snapshot_id
+    finally:
+        plt.close(result.figure)
+
+
+def test_matplotlib_produced_layout_round_trip_preserves_plot_and_title_geometry():
+    view = View2D(id="view:roundtrip", panel_id="panel:roundtrip")
+    point = PointVisual(
+        id="visual:roundtrip",
+        positions=np.array([[0.0, 0.0]], dtype=np.float32),
+        colors=np.array([[255, 0, 0, 255]], dtype=np.uint8),
+        sizes=12.0,
+    )
+    guides = (
+        AxisGuide(
+            id="guide:roundtrip:x",
+            view_id=view.id,
+            dimension=AxisDimension.X,
+            side=AxisSide.BOTTOM,
+            label_text="x",
+        ),
+        AxisGuide(
+            id="guide:roundtrip:y",
+            view_id=view.id,
+            dimension=AxisDimension.Y,
+            side=AxisSide.LEFT,
+            label_text="y",
+        ),
+    )
+    title = PanelTextGuide(
+        id="guide:roundtrip:title",
+        panel_id=view.panel_id,
+        role=PanelTextRole.TITLE,
+        text="Round trip",
+    )
+    produced = render_protocol_scene_with_layout(
+        visuals=(point,),
+        view=view,
+        axis_guides=guides,
+        panel_text_guides=(title,),
+        canvas_size=CanvasSize.pixel_exact(640, 480),
+        snapshot_id="layout:roundtrip",
+    )
+    consumed = render_protocol_scene_with_layout(
+        visuals=(point,),
+        view=view,
+        axis_guides=guides,
+        panel_text_guides=(title,),
+        layout_snapshot=produced.layout_snapshot,
+    )
+    try:
+        assert consumed.layout_snapshot is produced.layout_snapshot
+        resolved = resolve_matplotlib_layout_snapshot(
+            consumed.figure,
+            consumed.axes,
+            snapshot_id="layout:roundtrip:observed",
+            view=view,
+            axis_guides=guides,
+            panel_text_guides=(title,),
+        )
+        assert resolved.plot_rect_px == pytest.approx(produced.layout_snapshot.plot_rect_px)
+        assert resolved.title_boxes[0].rect_px == pytest.approx(
+            produced.layout_snapshot.title_boxes[0].rect_px, abs=0.75
+        )
+        np.testing.assert_allclose(
+            consumed.axes.collections[0].get_sizes(),
+            produced.axes.collections[0].get_sizes(),
+        )
+    finally:
+        plt.close(produced.figure)
+        plt.close(consumed.figure)
+
+
+def test_matplotlib_consumed_inset_plot_overrides_native_subplot_margins():
+    view3d = View3D(
+        id="view:inset",
+        panel_id="panel:inset",
+        camera=Camera3D(
+            eye=(0.0, 0.0, 2.0),
+            target=(0.0, 0.0, 0.0),
+            up=(0.0, 1.0, 0.0),
+        ),
+        projection=PerspectiveProjection3D(
+            fov_y_degrees=45.0,
+            near_far=(0.1, 10.0),
+        ),
+    )
+    layout = ResolvedLayoutSnapshot(
+        snapshot_id="layout:inset",
+        render_target=RenderTarget(
+            logical_width_px=800,
+            logical_height_px=600,
+            pixel_origin=PixelOrigin.TOP_LEFT,
+        ),
+        panel_rect_px=LogicalPixelRect(40, 30, 720, 540),
+        plot_rect_px=LogicalPixelRect(200, 150, 400, 200),
+        view_id=view3d.id,
+        grid_clip_rect_px=LogicalPixelRect(200, 150, 400, 200),
+    )
+    pixel = PixelVisual(
+        id="visual:inset",
+        positions=np.array([[0.0, 0.0, 0.0]], dtype=np.float32),
+        colors=np.array([255, 255, 255, 255], dtype=np.uint8),
+        pixel_size_px=9.0,
+    )
+    result = render_protocol_scene_with_layout(
+        visuals=(pixel,),
+        view3d=view3d,
+        layout_snapshot=layout,
+    )
+    try:
+        bbox = result.axes.get_window_extent()
+        assert (bbox.x0, bbox.y0, bbox.width, bbox.height) == pytest.approx(
+            (200.0, 250.0, 400.0, 200.0)
+        )
+        assert result.view3d_projection_snapshot is not None
+        assert result.view3d_projection_snapshot.aspect_ratio == pytest.approx(2.0)
+        assert result.axes.collections[0].get_sizes()[0] == pytest.approx(
+            (9.0 * 72.0 / result.figure.dpi) ** 2
+        )
     finally:
         plt.close(result.figure)
 
