@@ -11,10 +11,12 @@ from gsp.protocol import (
     AdaptationOutcome,
     AxisDimension,
     CanvasSize,
+    GuideQueryPolicy,
     ImageVisual,
     MarkerVisual,
     MeshVisual,
     PathVisual,
+    PanelTextRole,
     PixelVisual,
     PointVisual,
     PrimitiveVisual,
@@ -410,6 +412,14 @@ def _validate_consumed_layout_scene(
             "layout_snapshot panel_rect_px does not match the scene panel allocation"
         )
     _validate_scene_canvas_target(scene.canvas_size, layout_snapshot)
+    if any(
+        guide.role is not PanelTextRole.TITLE
+        or guide.query_policy is not GuideQueryPolicy.NON_QUERYABLE
+        for guide in scene.panel_text_guides
+    ):
+        raise ValueError(
+            "consumed Datoviz layout may omit only non-queryable title guides"
+        )
     if scene.axis_guides or scene.colorbar_guides:
         raise ValueError(
             "consumed Datoviz layout does not prove native guide geometry; "

@@ -12,6 +12,7 @@ from gsp.protocol import (
     Camera3D,
     CanvasSize,
     CoordinateSpace,
+    GuideQueryPolicy,
     ImageVisual,
     MarkerShape,
     MarkerVisual,
@@ -272,9 +273,58 @@ def test_datoviz_consumed_layout_omits_title_with_diagnostic() -> None:
     )
 
     assert session.render(scene, layout_snapshot=layout) is renderer  # type: ignore[comparison-overlap]
+    assert session.render(scene, layout_snapshot=layout) is renderer  # type: ignore[comparison-overlap]
     assert session.diagnostics == (
         "panel_text_title_unsupported_no_public_renderer_path",
+        "panel_text_title_unsupported_no_public_renderer_path",
     )
+
+
+@pytest.mark.parametrize(
+    ("role", "query_policy"),
+    (
+        (PanelTextRole.SUBTITLE, GuideQueryPolicy.NON_QUERYABLE),
+        (PanelTextRole.TITLE, GuideQueryPolicy.QUERYABLE),
+    ),
+)
+def test_datoviz_consumed_layout_rejects_unsupported_panel_text_before_renderer_build(
+    role: PanelTextRole,
+    query_policy: GuideQueryPolicy,
+) -> None:
+    base = _mesh3d_scene()
+    assert base.view3d is not None
+    panel = Panel(id=base.view3d.panel_id, figure_id="figure:layout")
+    scene = gsp.Scene(
+        id=base.id,
+        visuals=base.visuals,
+        panels=(panel,),
+        view3d=base.view3d,
+        panel_text_guides=(
+            PanelTextGuide(
+                id="guide:panel-text",
+                panel_id=panel.id,
+                role=role,
+                text="Unsupported panel text",
+                query_policy=query_policy,
+            ),
+        ),
+        canvas_size=CanvasSize.pixel_exact(800, 600),
+    )
+    layout = ResolvedLayoutSnapshot(
+        snapshot_id="layout:shared-panel-text",
+        render_target=RenderTarget(800, 600),
+        panel_rect_px=LogicalPixelRect(0, 0, 800, 600),
+        plot_rect_px=LogicalPixelRect(100, 72, 620, 462),
+        view_id=base.view3d.id,
+    )
+    renderer = _FakeRenderer(base.view3d)
+    session = _session(renderer)
+
+    with pytest.raises(ValueError, match="only non-queryable title"):
+        session.render(scene, layout_snapshot=layout)
+
+    assert session._renderers == []
+    assert session.diagnostics == ()
 
 
 def test_run_after_noninteractive_render_enables_navigation_once() -> None:
