@@ -20,6 +20,7 @@ from gsp.protocol import (
     QueryResult,
     QueryScope,
     ResolvedLayoutSnapshot,
+    CanvasSize,
     TextVisual,
     VIEW3D_QUERY_PAYLOAD_KIND,
     View2D,
@@ -167,7 +168,7 @@ class MatplotlibSession:
         self._require_open()
         if not isinstance(scene, Scene):
             raise TypeError("render() requires a gsp.Scene")
-        _validate_single_panel_layout(scene, layout_snapshot)
+        _validate_consumed_layout_scene(scene, layout_snapshot)
         result = render_protocol_scene_with_layout(
             visuals=scene.visuals,
             view=scene.view2d,
@@ -253,6 +254,7 @@ class MatplotlibSession:
                 scene.view3d,
                 snapshot,
                 panel_bounds=panel_bounds,
+                layout_snapshot=result.layout_snapshot,
             )
 
         guide_extension_request = (
@@ -379,22 +381,68 @@ def _matplotlib_panel_bounds(
     return (rect.x, rect.x + rect.width, rect.y, rect.y + rect.height)
 
 
-def _validate_single_panel_layout(
+def _validate_consumed_layout_scene(
     scene: Scene, layout_snapshot: ResolvedLayoutSnapshot | None
 ) -> None:
     if layout_snapshot is None:
         return
     if not isinstance(layout_snapshot, ResolvedLayoutSnapshot):
         raise TypeError("layout_snapshot must be a ResolvedLayoutSnapshot")
-    if len(scene.panels) > 1:
+    if len(scene.panels) != 1:
         raise ValueError(
             "resolved-layout consumption supports exactly one scene panel"
         )
-    if scene.panels:
-        expected = resolve_panel_viewport_rect(
-            scene.panels[0], layout_snapshot.render_target
+    panel = scene.panels[0]
+    active_view = scene.view2d if scene.view2d is not None else scene.view3d
+    if active_view is not None:
+        if active_view.panel_id != panel.id:
+            raise ValueError("active view panel_id does not match the consumed scene panel")
+        if layout_snapshot.view_id != active_view.id:
+            raise ValueError("layout_snapshot view_id does not match the active scene view")
+    elif layout_snapshot.view_id is not None:
+        raise ValueError("viewless scene cannot consume a view-bound layout_snapshot")
+    expected = resolve_panel_viewport_rect(panel, layout_snapshot.render_target)
+    if expected != layout_snapshot.panel_rect_px:
+        raise ValueError(
+            "layout_snapshot panel_rect_px does not match the scene panel allocation"
         )
-        if expected != layout_snapshot.panel_rect_px:
-            raise ValueError(
-                "layout_snapshot panel_rect_px does not match the scene panel allocation"
-            )
+    _validate_scene_canvas_target(scene.canvas_size, layout_snapshot)
+    if scene.axis_guides or scene.colorbar_guides:
+        raise ValueError(
+            "consumed Matplotlib layout does not prove native axis/colorbar guide geometry"
+        )
+    title_guides = tuple(
+        guide for guide in scene.panel_text_guides if guide.role.value == "title"
+    )
+    if len(title_guides) != len(scene.panel_text_guides) or len(title_guides) > 1:
+        raise ValueError(
+            "consumed Matplotlib layout supports at most one title PanelTextGuide"
+        )
+    title_box_ids = {box.guide_id for box in layout_snapshot.title_boxes}
+    if title_guides and title_guides[0].id not in title_box_ids:
+        raise ValueError(
+            "supplied title guide requires matching resolved title geometry"
+        )
+
+
+def _validate_scene_canvas_target(
+    canvas_size: CanvasSize | None, snapshot: ResolvedLayoutSnapshot
+) -> None:
+    if canvas_size is None:
+        return
+    target = snapshot.render_target
+    resolved = canvas_size.resolve(
+        output_dpi=canvas_size.reference_dpi * target.device_scale,
+        device_scale=target.device_scale,
+    )
+    if (
+        resolved.canvas_width_px != target.logical_width_px
+        or resolved.canvas_height_px != target.logical_height_px
+        or resolved.framebuffer_width != target.framebuffer_width_px
+        or resolved.framebuffer_height != target.framebuffer_height_px
+        or resolved.device_scale_x != target.device_scale
+        or resolved.device_scale_y != target.device_scale
+    ):
+        raise ValueError(
+            "scene canvas policy does not resolve to the consumed layout render target"
+        )

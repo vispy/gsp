@@ -10,12 +10,16 @@ from gsp.protocol import (
     QueryRequest,
     QueryResult,
     QueryStatus,
+    LogicalCoordinateRegion,
+    ResolvedLayoutSnapshot,
     VIEW3D_QUERY_PAYLOAD_KIND,
     View3D,
     View3DDiagnosticCode,
     View3DProjectionSnapshot,
     View3DQueryPayload,
     VisualFamily,
+    classify_logical_coordinate,
+    plot_logical_px_to_panel_ndc,
     unproject_view3d_panel_ndc_point,
 )
 
@@ -133,6 +137,7 @@ def datoviz_query_view3d_ray_context(
     snapshot: View3DProjectionSnapshot,
     *,
     panel_bounds: tuple[float, float, float, float],
+    layout_snapshot: ResolvedLayoutSnapshot | None = None,
 ) -> QueryResult:
     """Return a canonical S036 View3D ray context for the Datoviz adapter.
 
@@ -162,8 +167,31 @@ def datoviz_query_view3d_ray_context(
             view_snapshot_id=snapshot.view_projection_snapshot_id,
         )
 
-    panel_ndc = _panel_coordinate_to_ndc(request.coordinate, panel_bounds)
-    aspect_ratio = _panel_bounds_aspect_ratio(panel_bounds)
+    if (
+        layout_snapshot is not None
+        and classify_logical_coordinate(layout_snapshot, request.coordinate)
+        is not LogicalCoordinateRegion.DATA_PLOT
+    ):
+        return QueryResult(
+            request_id=request.id,
+            status=QueryStatus.MISS,
+            hit=False,
+            panel_coordinate=request.coordinate,
+            diagnostic="query coordinate is outside the consumed data viewport",
+            layout_snapshot_id=snapshot.layout_snapshot_id,
+            view_snapshot_id=snapshot.view_projection_snapshot_id,
+        )
+
+    panel_ndc = (
+        plot_logical_px_to_panel_ndc(layout_snapshot, request.coordinate)
+        if layout_snapshot is not None
+        else _panel_coordinate_to_ndc(request.coordinate, panel_bounds)
+    )
+    aspect_ratio = (
+        layout_snapshot.plot_rect_px.width / layout_snapshot.plot_rect_px.height
+        if layout_snapshot is not None
+        else _panel_bounds_aspect_ratio(panel_bounds)
+    )
     near = unproject_view3d_panel_ndc_point(
         view, (panel_ndc[0], panel_ndc[1], -1.0), aspect_ratio=aspect_ratio
     )

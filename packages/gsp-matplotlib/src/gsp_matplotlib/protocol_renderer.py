@@ -30,7 +30,9 @@ from gsp.protocol import (
     CanvasSize,
     ColorScale,
     ColorbarGuide,
+    LogicalPixelRect,
     PanelTextGuide,
+    PixelOrigin,
     ResolvedCanvas,
     ResolvedLayoutSnapshot,
     View2D,
@@ -180,8 +182,15 @@ def render_protocol_scene_with_layout(
     panel_viewport_rect: tuple[float, float, float, float] | None = None,
 ) -> MatplotlibProtocolRenderResult:
     """Render a protocol scene and report the resolved layout snapshot used."""
+    panel_text_guide_tuple = tuple(panel_text_guides)
     if layout_snapshot is not None:
         _validate_consumed_layout_view(layout_snapshot, view=view, view3d=view3d)
+        _validate_consumed_layout_inputs(
+            layout_snapshot,
+            canvas_size=canvas_size,
+            panel_viewport_rect=panel_viewport_rect,
+            panel_text_guides=panel_text_guide_tuple,
+        )
         canvas_size = _consumed_canvas_size(layout_snapshot)
         device_scale = layout_snapshot.render_target.device_scale
     if axes is None:
@@ -237,7 +246,6 @@ def render_protocol_scene_with_layout(
         )
 
     axis_guide_tuple = tuple(axis_guides)
-    panel_text_guide_tuple = tuple(panel_text_guides)
     if view is not None:
         axes.set_xlim(view.x_range)
         axes.set_ylim(view.y_range)
@@ -261,6 +269,7 @@ def render_protocol_scene_with_layout(
             axes,
             snapshot_id=snapshot_id,
             view=view,
+            view3d=view3d,
             axis_guides=axis_guide_tuple,
             panel_text_guides=panel_text_guide_tuple,
             device_scale=device_scale,
@@ -304,7 +313,6 @@ def _validate_consumed_layout_view(
     active_view = view if view is not None else view3d
     if (
         active_view is not None
-        and snapshot.view_id is not None
         and snapshot.view_id != active_view.id
     ):
         raise ValueError("layout_snapshot view_id does not match the rendered view")
@@ -321,6 +329,54 @@ def _consumed_canvas_size(snapshot: ResolvedLayoutSnapshot) -> CanvasSize:
     return CanvasSize.pixel_exact(int(width), int(height))
 
 
+def _validate_consumed_layout_inputs(
+    snapshot: ResolvedLayoutSnapshot,
+    *,
+    canvas_size: CanvasSize | None,
+    panel_viewport_rect: tuple[float, float, float, float] | None,
+    panel_text_guides: tuple[PanelTextGuide, ...],
+) -> None:
+    target = snapshot.render_target
+    if canvas_size is not None:
+        resolved = canvas_size.resolve(
+            output_dpi=canvas_size.reference_dpi * target.device_scale,
+            device_scale=target.device_scale,
+        )
+        if (
+            resolved.canvas_width_px != target.logical_width_px
+            or resolved.canvas_height_px != target.logical_height_px
+            or resolved.framebuffer_width != target.framebuffer_width_px
+            or resolved.framebuffer_height != target.framebuffer_height_px
+        ):
+            raise ValueError(
+                "canvas_size does not resolve to the consumed layout render target"
+            )
+    if panel_viewport_rect is not None:
+        x, y, width, height = panel_viewport_rect
+        expected = LogicalPixelRect(
+            x * target.logical_width_px,
+            y * target.logical_height_px,
+            width * target.logical_width_px,
+            height * target.logical_height_px,
+        )
+        if expected != snapshot.panel_rect_px:
+            raise ValueError(
+                "panel_viewport_rect conflicts with the consumed layout panel rectangle"
+            )
+    title_guides = tuple(
+        guide for guide in panel_text_guides if guide.role.value == "title"
+    )
+    if len(title_guides) != len(panel_text_guides) or len(title_guides) > 1:
+        raise ValueError(
+            "consumed Matplotlib layout supports at most one title PanelTextGuide"
+        )
+    title_box_ids = {box.guide_id for box in snapshot.title_boxes}
+    if title_guides and title_guides[0].id not in title_box_ids:
+        raise ValueError(
+            "supplied title guide requires matching resolved title geometry"
+        )
+
+
 def _place_axes_at_consumed_plot_rect(
     figure: matplotlib.figure.Figure,
     axes: matplotlib.axes.Axes,
@@ -329,7 +385,11 @@ def _place_axes_at_consumed_plot_rect(
     target = snapshot.render_target
     plot = snapshot.plot_rect_px
     left = plot.x / target.logical_width_px
-    bottom = 1.0 - (plot.y + plot.height) / target.logical_height_px
+    bottom = (
+        1.0 - (plot.y + plot.height) / target.logical_height_px
+        if target.pixel_origin is PixelOrigin.TOP_LEFT
+        else plot.y / target.logical_height_px
+    )
     axes.set_position(
         (
             left,
@@ -399,8 +459,10 @@ def _place_consumed_title_artists(
     current = axes.title.get_window_extent(renderer)
     target = target_box.rect_px
     target_display_x = target.x
-    target_display_y = snapshot.render_target.logical_height_px - (
-        target.y + target.height
+    target_display_y = (
+        snapshot.render_target.logical_height_px - (target.y + target.height)
+        if snapshot.render_target.pixel_origin is PixelOrigin.TOP_LEFT
+        else target.y
     )
     axes.title.set_transform(
         axes.title.get_transform()

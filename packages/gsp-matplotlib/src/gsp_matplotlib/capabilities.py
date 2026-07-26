@@ -199,10 +199,10 @@ def capability_snapshot() -> CapabilitySnapshot:
         layout_capability=LayoutCapability(
             semantic_guides=True,
             resolved_layout_produce="full",
-            resolved_layout_consume="full",
+            resolved_layout_consume="partial",
             layout_strict=False,
             diagnostics=(
-                "resolved_layout_consumption_plot_and_guides_proven",
+                "resolved_layout_consumption_plot_and_bounded_title_proven",
                 "layout_strict-awaits-readback-snapshot-contract",
             ),
         ),

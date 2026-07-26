@@ -18,15 +18,20 @@ from gsp.protocol import (
     CoordinateSpace,
     GUIDE_QUERY_PAYLOAD_KIND,
     MeshVisual,
+    LogicalPixelRect,
     Orbit3DPayload,
     Pan3DPayload,
     PerspectiveProjection3D,
     PointVisual,
+    Panel,
+    PixelOrigin,
     QueryCoordinateSpace,
     QueryPayload,
     QueryRequest,
     QueryScope,
     QueryStatus,
+    RenderTarget,
+    ResolvedLayoutSnapshot,
     SphereVisual,
     VIEW3D_QUERY_PAYLOAD_KIND,
     View2D,
@@ -74,6 +79,35 @@ def test_matplotlib_session_renders_gsp_scene() -> None:
     with gsp.open_session("matplotlib", require={"visual.points"}) as session:
         result = session.render(scene)
         assert result.axes.get_xlim() == (-1.0, 1.0)
+
+
+def test_matplotlib_session_consumed_layout_validates_scene_target_before_render() -> None:
+    panel = Panel(
+        id="panel:consumed",
+        figure_id="figure:consumed",
+        viewport_rect=(0.1, 0.2, 0.8, 0.6),
+    )
+    view = View2D(id="view:consumed", panel_id=panel.id)
+    scene = gsp.Scene(
+        id="scene:consumed",
+        panels=(panel,),
+        view2d=view,
+        canvas_size=CanvasSize.pixel_exact(320, 240),
+    )
+    layout = ResolvedLayoutSnapshot(
+        snapshot_id="layout:consumed",
+        render_target=RenderTarget(640, 480, pixel_origin=PixelOrigin.TOP_LEFT),
+        panel_rect_px=LogicalPixelRect(64, 96, 512, 288),
+        plot_rect_px=LogicalPixelRect(100, 120, 440, 220),
+        view_id=view.id,
+    )
+    session = MatplotlibSession(request=SessionRequest())
+
+    with pytest.raises(ValueError, match="scene canvas policy"):
+        session.render(scene, layout_snapshot=layout)
+
+    assert session._results == []
+    session.close()
 
 
 def test_matplotlib_session_captures_static_perspective_mesh(tmp_path: Path) -> None:

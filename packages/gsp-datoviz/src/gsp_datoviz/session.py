@@ -10,6 +10,7 @@ from gsp.backends import SessionRequest
 from gsp.protocol import (
     AdaptationOutcome,
     AxisDimension,
+    CanvasSize,
     ImageVisual,
     MarkerVisual,
     MeshVisual,
@@ -66,10 +67,14 @@ class DatovizSession:
         self._require_open()
         if not isinstance(scene, Scene):
             raise TypeError("render() requires a gsp.Scene")
-        _validate_single_panel_layout(scene, layout_snapshot)
+        _validate_consumed_layout_scene(scene, layout_snapshot)
         if kwargs:
             raise TypeError(f"unsupported Datoviz render options: {sorted(kwargs)!r}")
-        renderer = self._build_renderer(scene, layout_snapshot=layout_snapshot)
+        renderer = (
+            self._build_renderer(scene)
+            if layout_snapshot is None
+            else self._build_renderer(scene, layout_snapshot=layout_snapshot)
+        )
         self._renderers.append(renderer)
         self._renderer_scenes[id(renderer)] = scene
         self._scene_renderers[scene.id] = (scene, renderer)
@@ -120,7 +125,8 @@ class DatovizSession:
             and VIEW3D_QUERY_PAYLOAD_KIND
             in request.requested_extension_payload_kinds
         ):
-            effective_layout = renderer.authoritative_layout_snapshot()
+            layout_getter = getattr(renderer, "authoritative_layout_snapshot", None)
+            effective_layout = layout_getter() if layout_getter is not None else None
             return renderer.query_view3d_ray_context(
                 request,
                 layout_snapshot_id=(
@@ -232,7 +238,11 @@ class DatovizSession:
             dvz=self._dvz,
             color_scales={item.id: item for item in scene.color_scales},
             texture_resources={item.id: item for item in scene.textures},
-            canvas_size=scene.canvas_size,
+            canvas_size=(
+                _canvas_size_for_consumed_layout(layout_snapshot)
+                if layout_snapshot is not None
+                else scene.canvas_size
+            ),
             view=None if scene.axis_guides else scene.view2d,
             view3d=scene.view3d,
             transform_resources={item.id: item for item in scene.transforms},
@@ -357,30 +367,79 @@ def _normalized_plot_bounds(
 ) -> tuple[float, float, float, float]:
     target = snapshot.render_target
     plot = snapshot.plot_rect_px
+    y = (
+        plot.y / target.logical_height_px
+        if target.pixel_origin.value == "top-left"
+        else 1.0 - (plot.y + plot.height) / target.logical_height_px
+    )
     return (
         plot.x / target.logical_width_px,
-        plot.y / target.logical_height_px,
+        y,
         plot.width / target.logical_width_px,
         plot.height / target.logical_height_px,
     )
 
 
-def _validate_single_panel_layout(
+def _validate_consumed_layout_scene(
     scene: Scene, layout_snapshot: ResolvedLayoutSnapshot | None
 ) -> None:
     if layout_snapshot is None:
         return
     if not isinstance(layout_snapshot, ResolvedLayoutSnapshot):
         raise TypeError("layout_snapshot must be a ResolvedLayoutSnapshot")
-    if len(scene.panels) > 1:
+    if len(scene.panels) != 1:
         raise ValueError(
             "resolved-layout consumption supports exactly one scene panel"
         )
-    if scene.panels:
-        expected = resolve_panel_viewport_rect(
-            scene.panels[0], layout_snapshot.render_target
+    panel = scene.panels[0]
+    active_view = scene.view2d if scene.view2d is not None else scene.view3d
+    if active_view is not None:
+        if active_view.panel_id != panel.id:
+            raise ValueError("active view panel_id does not match the consumed scene panel")
+        if layout_snapshot.view_id != active_view.id:
+            raise ValueError("layout_snapshot view_id does not match the active scene view")
+    elif layout_snapshot.view_id is not None:
+        raise ValueError("viewless scene cannot consume a view-bound layout_snapshot")
+    expected = resolve_panel_viewport_rect(panel, layout_snapshot.render_target)
+    if expected != layout_snapshot.panel_rect_px:
+        raise ValueError(
+            "layout_snapshot panel_rect_px does not match the scene panel allocation"
         )
-        if expected != layout_snapshot.panel_rect_px:
-            raise ValueError(
-                "layout_snapshot panel_rect_px does not match the scene panel allocation"
-            )
+    _validate_scene_canvas_target(scene.canvas_size, layout_snapshot)
+    if scene.axis_guides or scene.panel_text_guides or scene.colorbar_guides:
+        raise ValueError(
+            "consumed Datoviz layout does not prove native guide geometry; "
+            "PanelTextGuide remains unsupported"
+        )
+
+
+def _validate_scene_canvas_target(
+    canvas_size: CanvasSize | None, snapshot: ResolvedLayoutSnapshot
+) -> None:
+    if canvas_size is None:
+        return
+    target = snapshot.render_target
+    resolved = canvas_size.resolve(
+        output_dpi=canvas_size.reference_dpi * target.device_scale,
+        device_scale=target.device_scale,
+    )
+    if (
+        resolved.canvas_width_px != target.logical_width_px
+        or resolved.canvas_height_px != target.logical_height_px
+        or resolved.framebuffer_width != target.framebuffer_width_px
+        or resolved.framebuffer_height != target.framebuffer_height_px
+        or resolved.device_scale_x != target.device_scale
+        or resolved.device_scale_y != target.device_scale
+    ):
+        raise ValueError(
+            "scene canvas policy does not resolve to the consumed layout render target"
+        )
+
+
+def _canvas_size_for_consumed_layout(snapshot: ResolvedLayoutSnapshot) -> CanvasSize:
+    target = snapshot.render_target
+    return CanvasSize.reference_px(
+        target.logical_width_px,
+        target.logical_height_px,
+        reference_dpi=target.dpi or 96.0,
+    ).with_requested_device_scale(target.device_scale)

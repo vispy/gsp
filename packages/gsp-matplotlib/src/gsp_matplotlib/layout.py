@@ -23,6 +23,7 @@ from gsp.protocol import (
     ResolvedGuideBox,
     ResolvedLayoutSnapshot,
     View2D,
+    View3D,
 )
 from gsp.protocol.guides import PanelTextGuide, PanelTextRole
 
@@ -33,6 +34,7 @@ def resolve_matplotlib_layout_snapshot(
     *,
     snapshot_id: str,
     view: View2D | None = None,
+    view3d: View3D | None = None,
     axis_guides: Iterable[AxisGuide] = (),
     panel_text_guides: Iterable[PanelTextGuide] = (),
     device_scale: float = 1.0,
@@ -67,7 +69,11 @@ def resolve_matplotlib_layout_snapshot(
         render_target=render_target,
         panel_rect_px=panel_rect,
         plot_rect_px=plot_rect,
-        view_id=view.id if view is not None else None,
+        view_id=(
+            view.id
+            if view is not None
+            else view3d.id if view3d is not None else None
+        ),
         data_to_screen_transform=_data_to_top_left_transform(axes, height),
         guide_boxes=guide_boxes,
         tick_label_boxes=tick_label_boxes,

@@ -63,6 +63,8 @@ from gsp.protocol import (
     View3D,
     View3DDiagnosticCode,
     View2DNavigationController,
+    VectorCap,
+    VectorVisual,
     VisualTransformBinding,
 )
 from gsp_matplotlib.color_mapping import map_scalar_values
@@ -303,6 +305,152 @@ def test_matplotlib_consumed_inset_plot_overrides_native_subplot_margins():
         )
     finally:
         plt.close(result.figure)
+
+
+@pytest.mark.parametrize(
+    ("origin", "expected_display_bottom"),
+    [
+        (PixelOrigin.TOP_LEFT, 350.0),
+        (PixelOrigin.BOTTOM_LEFT, 50.0),
+    ],
+)
+def test_matplotlib_consumed_plot_placement_honors_pixel_origin(
+    origin: PixelOrigin, expected_display_bottom: float
+):
+    view = View2D(id=f"view:origin:{origin.value}", panel_id="panel:origin")
+    layout = ResolvedLayoutSnapshot(
+        snapshot_id=f"layout:origin:{origin.value}",
+        render_target=RenderTarget(800, 600, pixel_origin=origin),
+        panel_rect_px=LogicalPixelRect(0, 0, 800, 600),
+        plot_rect_px=LogicalPixelRect(100, 50, 400, 200),
+        view_id=view.id,
+    )
+    result = render_protocol_scene_with_layout(
+        visuals=(),
+        view=view,
+        layout_snapshot=layout,
+    )
+    try:
+        bbox = result.axes.get_window_extent()
+        assert (bbox.x0, bbox.y0, bbox.width, bbox.height) == pytest.approx(
+            (100.0, expected_display_bottom, 400.0, 200.0)
+        )
+    finally:
+        plt.close(result.figure)
+
+
+def test_matplotlib_producer_honors_inset_outer_panel_allocation():
+    view = View2D(id="view:producer-inset", panel_id="panel:producer-inset")
+    result = render_protocol_scene_with_layout(
+        visuals=(),
+        view=view,
+        canvas_size=CanvasSize.pixel_exact(800, 600),
+        panel_viewport_rect=(0.1, 0.2, 0.5, 0.6),
+        snapshot_id="layout:producer-inset",
+    )
+    try:
+        assert result.layout_snapshot.panel_rect_px == LogicalPixelRect(
+            80.0, 120.0, 400.0, 360.0
+        )
+        plot = result.layout_snapshot.plot_rect_px
+        panel = result.layout_snapshot.panel_rect_px
+        assert panel.x <= plot.x <= plot.x + plot.width <= panel.x + panel.width
+        assert panel.y <= plot.y <= plot.y + plot.height <= panel.y + panel.height
+    finally:
+        plt.close(result.figure)
+
+
+def test_consumed_plot_size_does_not_scale_screen_space_visual_sizes():
+    view = View2D(id="view:size-invariance", panel_id="panel:size-invariance")
+    rgba = np.array([[255, 255, 255, 255]], dtype=np.uint8)
+    visuals = (
+        MarkerVisual(
+            id="visual:size-marker",
+            positions=np.array([[0.0, 0.0]], dtype=np.float32),
+            shape=MarkerShape.DISC,
+            fill_colors=rgba,
+            sizes=12.0,
+            stroke_width=2.0,
+        ),
+        PixelVisual(
+            id="visual:size-pixel",
+            positions=np.array([[0.0, 0.0]], dtype=np.float32),
+            colors=rgba,
+            pixel_size_px=8.0,
+            coordinate_space=CoordinateSpace.NDC,
+        ),
+        TextVisual(
+            id="visual:size-text",
+            texts=("size",),
+            positions=np.array([[0.0, 0.0]], dtype=np.float32),
+            coordinate_space=CoordinateSpace.NDC,
+            font_size_px=16.0,
+        ),
+        SegmentVisual(
+            id="visual:size-line",
+            start_positions=np.array([[-0.5, 0.0]], dtype=np.float32),
+            end_positions=np.array([[0.5, 0.0]], dtype=np.float32),
+            colors=rgba,
+            widths=5.0,
+        ),
+        VectorVisual(
+            id="visual:size-vector",
+            positions=np.array([[-0.5, -0.5]], dtype=np.float32),
+            vectors=np.array([[1.0, 0.0]], dtype=np.float32),
+            colors=rgba,
+            widths_px=7.0,
+            start_cap=VectorCap.NONE,
+            end_cap=VectorCap.NONE,
+            coordinate_space=CoordinateSpace.NDC,
+        ),
+    )
+    target = RenderTarget(800, 600)
+    layouts = (
+        ResolvedLayoutSnapshot(
+            snapshot_id="layout:size-full",
+            render_target=target,
+            panel_rect_px=LogicalPixelRect(0, 0, 800, 600),
+            plot_rect_px=LogicalPixelRect(0, 0, 800, 600),
+            view_id=view.id,
+        ),
+        ResolvedLayoutSnapshot(
+            snapshot_id="layout:size-inset",
+            render_target=target,
+            panel_rect_px=LogicalPixelRect(40, 30, 720, 540),
+            plot_rect_px=LogicalPixelRect(200, 150, 400, 200),
+            view_id=view.id,
+        ),
+    )
+    results = tuple(
+        render_protocol_scene_with_layout(
+            visuals=visuals,
+            view=view,
+            layout_snapshot=layout,
+        )
+        for layout in layouts
+    )
+    try:
+        observed = []
+        for result in results:
+            collections = {}
+            for artist in result.axes.collections:
+                collections.setdefault(artist.get_gid(), artist)
+            observed.append(
+                np.concatenate(
+                    (
+                        collections["visual:size-marker"].get_sizes(),
+                        collections["visual:size-marker"].get_linewidths(),
+                        collections["visual:size-pixel"].get_sizes(),
+                        np.array([result.axes.texts[0].get_fontsize()]),
+                        collections["visual:size-line"].get_linewidths(),
+                        collections["visual:size-vector"].get_linewidths(),
+                    )
+                )
+            )
+        np.testing.assert_allclose(observed[0], observed[1])
+    finally:
+        for result in results:
+            plt.close(result.figure)
 
 
 def test_render_protocol_scene_with_layout_accepts_view3d_mesh():

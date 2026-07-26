@@ -172,6 +172,7 @@ from gsp_datoviz.query import (
     datoviz_v04_query_binding_ready,
     datoviz_query_view3d_ray_context,
 )
+from gsp_matplotlib.protocol_query import query_view3d_ray_context as matplotlib_view3d_ray_context
 
 
 def test_datoviz_call_succeeded_accepts_bool_and_result_conventions() -> None:
@@ -247,6 +248,10 @@ class FakeDatovizV04:
         y = 0.0
         width = 0.0
         height = 0.0
+
+    def dvz_panel_desc(self):
+        self.calls.append(("panel_desc",))
+        return self.DvzPanelDesc()
 
     def dvz_panel(self, figure, desc):
         self.calls.append(("panel", figure, desc.x, desc.y, desc.width, desc.height))
@@ -1837,6 +1842,86 @@ def test_renderer_consumes_plot_viewport_and_retains_outer_panel_layout():
     assert renderer._native_query_coordinate((100.0, 100.0)) is None
 
 
+def test_renderer_consumed_bottom_left_layout_converts_native_panel_and_query_y():
+    fake = FakeDatovizV04()
+    layout = ResolvedLayoutSnapshot(
+        snapshot_id="layout:shared-bottom-left",
+        render_target=RenderTarget(800, 600, pixel_origin=PixelOrigin.BOTTOM_LEFT),
+        panel_rect_px=LogicalPixelRect(0, 0, 800, 600),
+        plot_rect_px=LogicalPixelRect(200, 50, 400, 200),
+    )
+
+    renderer = DatovizV04ProtocolRenderer(
+        dvz=fake,
+        panel_bounds=(0.25, 1.0 - 250.0 / 600.0, 0.5, 1.0 / 3.0),
+        consumed_layout_snapshot=layout,
+    )
+
+    assert _calls(fake, "panel") == [
+        (
+            "panel",
+            "figure",
+            0.25,
+            pytest.approx(1.0 - 250.0 / 600.0),
+            0.5,
+            pytest.approx(1.0 / 3.0),
+        )
+    ]
+    assert renderer._native_query_coordinate((400.0, 50.0)) == (200.0, 200.0)
+    assert renderer._native_query_coordinate((400.0, 250.0)) == (200.0, 0.0)
+
+
+def test_renderer_consumed_layout_fails_before_resources_without_public_descriptor():
+    fake = FakeDatovizV04()
+    fake.dvz_panel_desc = None  # type: ignore[method-assign]
+    layout = ResolvedLayoutSnapshot(
+        snapshot_id="layout:missing-panel-desc",
+        render_target=RenderTarget(800, 600),
+        panel_rect_px=LogicalPixelRect(0, 0, 800, 600),
+        plot_rect_px=LogicalPixelRect(100, 100, 600, 400),
+    )
+
+    with pytest.raises(DatovizV04Unavailable, match="dvz_panel_desc"):
+        DatovizV04ProtocolRenderer(
+            dvz=fake,
+            panel_bounds=(0.125, 1.0 / 6.0, 0.75, 2.0 / 3.0),
+            consumed_layout_snapshot=layout,
+        )
+
+    assert _calls(fake, "scene") == []
+    assert _calls(fake, "figure") == []
+    assert _calls(fake, "panel_full") == []
+
+
+def test_renderer_rejects_stale_consumed_layout_before_native_data_query():
+    fake = FakeDatovizV04()
+    layout = ResolvedLayoutSnapshot(
+        snapshot_id="layout:current",
+        render_target=RenderTarget(800, 600),
+        panel_rect_px=LogicalPixelRect(0, 0, 800, 600),
+        plot_rect_px=LogicalPixelRect(100, 100, 600, 400),
+    )
+    renderer = DatovizV04ProtocolRenderer(
+        dvz=fake,
+        panel_bounds=(0.125, 1.0 / 6.0, 0.75, 2.0 / 3.0),
+        consumed_layout_snapshot=layout,
+    )
+
+    result = renderer.query_panel(
+        QueryRequest(
+            id="query:stale-layout",
+            panel_id="panel:main",
+            coordinate=(400.0, 300.0),
+            coordinate_space=QueryCoordinateSpace.PANEL,
+            layout_snapshot_id="layout:stale",
+        )
+    )
+
+    assert result.status is QueryStatus.STALE
+    assert result.layout_snapshot_id == layout.snapshot_id
+    assert _calls(fake, "panel_query_px") == []
+
+
 def test_renderer_defaults_to_legacy_color_pipeline_when_binding_is_available():
     fake = FakeDatovizV04WithColorPipeline()
 
@@ -2526,6 +2611,69 @@ def test_datoviz_view3d_ray_context_matches_canonical_projection():
     assert datoviz_result.extension_payload.near_data_point == (0.5, -0.5, 1.0)
     assert datoviz_result.extension_payload.far_data_point == (0.5, -0.5, -1.0)
     assert datoviz_result.extension_payload.ray_direction == (0.0, 0.0, -1.0)
+
+
+@pytest.mark.parametrize("origin", [PixelOrigin.TOP_LEFT, PixelOrigin.BOTTOM_LEFT])
+@pytest.mark.parametrize(
+    "projection",
+    [
+        OrthographicProjection3D(
+            xlim=(-1.0, 1.0),
+            ylim=(-1.0, 1.0),
+            near_far=(1.0, 3.0),
+        ),
+        PerspectiveProjection3D(
+            fov_y_degrees=60.0,
+            near_far=(1.0, 10.0),
+        ),
+    ],
+)
+def test_datoviz_and_matplotlib_view3d_rays_share_snapshot_geometry(
+    origin: PixelOrigin,
+    projection: OrthographicProjection3D | PerspectiveProjection3D,
+):
+    view = replace(_canonical_view3d_for_datoviz_query(), projection=projection)
+    layout = ResolvedLayoutSnapshot(
+        snapshot_id=f"layout:cross-ray:{origin.value}:{projection.kind.value}",
+        render_target=RenderTarget(200, 150, pixel_origin=origin),
+        panel_rect_px=LogicalPixelRect(20, 10, 160, 130),
+        plot_rect_px=LogicalPixelRect(50, 25, 100, 100),
+        view_id=view.id,
+    )
+    snapshot = resolve_view3d_projection_snapshot(view, layout_snapshot=layout)
+    request = QueryRequest(
+        id=f"query:cross-ray:{origin.value}:{projection.kind.value}",
+        panel_id=view.panel_id,
+        coordinate=(100.0, 25.0),
+        coordinate_space=QueryCoordinateSpace.PANEL,
+        layout_snapshot_id=layout.snapshot_id,
+        view_snapshot_id=snapshot.view_projection_snapshot_id,
+    )
+
+    datoviz_result = datoviz_query_view3d_ray_context(
+        request,
+        view,
+        snapshot,
+        panel_bounds=(50.0, 150.0, 25.0, 125.0),
+        layout_snapshot=layout,
+    )
+    matplotlib_result = matplotlib_view3d_ray_context(
+        request,
+        view,
+        snapshot,
+        panel_bounds=(50.0, 150.0, 25.0, 125.0),
+        layout_snapshot=layout,
+    )
+
+    expected_ndc = (
+        0.0,
+        1.0 if origin is PixelOrigin.TOP_LEFT else -1.0,
+    )
+    assert datoviz_result.status is QueryStatus.HIT
+    assert matplotlib_result.status is QueryStatus.HIT
+    assert datoviz_result.visual_coordinate == pytest.approx(expected_ndc)
+    assert matplotlib_result.visual_coordinate == pytest.approx(expected_ndc)
+    assert datoviz_result.extension_payload == matplotlib_result.extension_payload
 
 
 def test_datoviz_renderer_view3d_ray_context_uses_current_view_and_bounds():

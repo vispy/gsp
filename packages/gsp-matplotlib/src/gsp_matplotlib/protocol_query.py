@@ -38,7 +38,9 @@ from gsp.protocol import (
     AffineTransform2DResource,
     CoordinateSpace,
     InverseStatus,
+    LogicalCoordinateRegion,
     QueryCoordinateSpace,
+    ResolvedLayoutSnapshot,
     View2D,
     View3D,
     View3DDiagnosticCode,
@@ -46,6 +48,7 @@ from gsp.protocol import (
     Projection3DKind,
     ProjectedFaceClassification,
     classify_projected_triangle,
+    classify_logical_coordinate,
     face_culling_excludes,
     mesh_pick_barycentric_2d,
     mesh_pick_data_xyz,
@@ -53,6 +56,7 @@ from gsp.protocol import (
     mesh_pick_projected_front_facing,
     project_view3d_data_point,
     projected_triangle_area2,
+    plot_logical_px_to_panel_ndc,
     unproject_view3d_panel_ndc_point,
 )
 from gsp.protocol.visuals import (
@@ -211,6 +215,7 @@ def query_view3d_ray_context(
     snapshot: View3DProjectionSnapshot,
     *,
     panel_bounds: tuple[float, float, float, float],
+    layout_snapshot: ResolvedLayoutSnapshot | None = None,
 ) -> QueryResult:
     """Return a S036 projection-inverse ray context without visual picking."""
     if request.coordinate_space is not QueryCoordinateSpace.PANEL:
@@ -235,8 +240,30 @@ def query_view3d_ray_context(
             layout_snapshot_id=snapshot.layout_snapshot_id,
             view_snapshot_id=snapshot.view_projection_snapshot_id,
         )
-    panel_ndc = _panel_coordinate_to_ndc(request.coordinate, panel_bounds)
-    aspect_ratio = _panel_bounds_aspect_ratio(panel_bounds)
+    if (
+        layout_snapshot is not None
+        and classify_logical_coordinate(layout_snapshot, request.coordinate)
+        is not LogicalCoordinateRegion.DATA_PLOT
+    ):
+        return QueryResult(
+            request_id=request.id,
+            status=QueryStatus.MISS,
+            hit=False,
+            panel_coordinate=request.coordinate,
+            diagnostic="query coordinate is outside the consumed data viewport",
+            layout_snapshot_id=snapshot.layout_snapshot_id,
+            view_snapshot_id=snapshot.view_projection_snapshot_id,
+        )
+    panel_ndc = (
+        plot_logical_px_to_panel_ndc(layout_snapshot, request.coordinate)
+        if layout_snapshot is not None
+        else _panel_coordinate_to_ndc(request.coordinate, panel_bounds)
+    )
+    aspect_ratio = (
+        layout_snapshot.plot_rect_px.width / layout_snapshot.plot_rect_px.height
+        if layout_snapshot is not None
+        else _panel_bounds_aspect_ratio(panel_bounds)
+    )
     near = unproject_view3d_panel_ndc_point(
         view, (panel_ndc[0], panel_ndc[1], -1.0), aspect_ratio=aspect_ratio
     )
@@ -281,6 +308,7 @@ def query_view3d_mesh_triangle_pick(
     view: View3D,
     snapshot: View3DProjectionSnapshot,
     panel_bounds: tuple[float, float, float, float],
+    layout_snapshot: ResolvedLayoutSnapshot | None = None,
     pick_scene_snapshot_id: str | None = None,
     geometry_payload: bool = False,
     include_facing: bool = False,
@@ -306,7 +334,11 @@ def query_view3d_mesh_triangle_pick(
     if invalid is not None:
         return invalid
 
-    panel_ndc = _panel_coordinate_to_ndc(request.panel_xy, panel_bounds)
+    panel_ndc = (
+        plot_logical_px_to_panel_ndc(layout_snapshot, request.panel_xy)
+        if layout_snapshot is not None
+        else _panel_coordinate_to_ndc(request.panel_xy, panel_bounds)
+    )
     best: _MeshPickHit | None = None
     projected_degenerate_seen = False
     for entry in entries:
@@ -463,6 +495,7 @@ def query_view3d_mesh_triangle_pick_geometry(
     view: View3D,
     snapshot: View3DProjectionSnapshot,
     panel_bounds: tuple[float, float, float, float],
+    layout_snapshot: ResolvedLayoutSnapshot | None = None,
     pick_scene_snapshot_id: str | None = None,
     include_facing: bool = False,
 ) -> QueryResult:
@@ -473,6 +506,7 @@ def query_view3d_mesh_triangle_pick_geometry(
         view=view,
         snapshot=snapshot,
         panel_bounds=panel_bounds,
+        layout_snapshot=layout_snapshot,
         pick_scene_snapshot_id=pick_scene_snapshot_id,
         geometry_payload=True,
         include_facing=include_facing,

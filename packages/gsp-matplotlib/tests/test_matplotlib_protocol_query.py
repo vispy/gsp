@@ -14,6 +14,7 @@ from gsp.protocol import (
     ImageOrigin,
     ImageVisual,
     LinearNormalize,
+    LogicalPixelRect,
     MESH_QUERY_PAYLOAD_KIND,
     SCALAR_COLOR_QUERY_PAYLOAD_KIND,
     MeshColorMode,
@@ -22,6 +23,7 @@ from gsp.protocol import (
     MarkerShape,
     MarkerVisual,
     OrthographicProjection3D,
+    PixelOrigin,
     PerspectiveProjection3D,
     PointVisual,
     QueryContributionKind,
@@ -32,6 +34,8 @@ from gsp.protocol import (
     QueryResult,
     QueryScope,
     QueryStatus,
+    RenderTarget,
+    ResolvedLayoutSnapshot,
     ScalarColorEncoding,
     ScalarColorQueryPayload,
     ScalarColorSlot,
@@ -906,6 +910,59 @@ def test_query_view3d_ray_context_returns_corner_ray_payload():
     assert payload.near_data_point == pytest.approx((1.0, 1.0, 1.0))
     assert payload.far_data_point == pytest.approx((1.0, 1.0, -1.0))
     assert payload.ray_direction == pytest.approx((0.0, 0.0, -1.0))
+
+
+@pytest.mark.parametrize(
+    ("origin", "expected_y_ndc"),
+    [
+        (PixelOrigin.TOP_LEFT, 1.0),
+        (PixelOrigin.BOTTOM_LEFT, -1.0),
+    ],
+)
+def test_query_view3d_ray_context_uses_snapshot_origin_and_rejects_title_lane(
+    origin: PixelOrigin, expected_y_ndc: float
+):
+    view = _canonical_query_view3d()
+    layout = ResolvedLayoutSnapshot(
+        snapshot_id=f"layout:ray-origin:{origin.value}",
+        render_target=RenderTarget(200, 150, pixel_origin=origin),
+        panel_rect_px=LogicalPixelRect(20, 10, 160, 130),
+        plot_rect_px=LogicalPixelRect(50, 25, 100, 100),
+        view_id=view.id,
+    )
+    snapshot = resolve_view3d_projection_snapshot(view, layout_snapshot=layout)
+
+    hit = query_view3d_ray_context(
+        QueryRequest(
+            id=f"query:ray-origin:{origin.value}",
+            panel_id=view.panel_id,
+            coordinate=(100.0, 25.0),
+            coordinate_space=QueryCoordinateSpace.PANEL,
+            layout_snapshot_id=layout.snapshot_id,
+        ),
+        view,
+        snapshot,
+        panel_bounds=(50.0, 150.0, 25.0, 125.0),
+        layout_snapshot=layout,
+    )
+    title_lane_miss = query_view3d_ray_context(
+        QueryRequest(
+            id=f"query:ray-title-lane:{origin.value}",
+            panel_id=view.panel_id,
+            coordinate=(100.0, 15.0),
+            coordinate_space=QueryCoordinateSpace.PANEL,
+            layout_snapshot_id=layout.snapshot_id,
+        ),
+        view,
+        snapshot,
+        panel_bounds=(50.0, 150.0, 25.0, 125.0),
+        layout_snapshot=layout,
+    )
+
+    assert hit.status is QueryStatus.HIT
+    assert hit.visual_coordinate == pytest.approx((0.0, expected_y_ndc))
+    assert title_lane_miss.status is QueryStatus.MISS
+    assert title_lane_miss.layout_snapshot_id == layout.snapshot_id
 
 
 def test_query_view3d_ray_context_reports_stale_snapshot_mismatch():

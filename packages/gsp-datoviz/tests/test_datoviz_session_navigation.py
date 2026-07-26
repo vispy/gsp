@@ -10,15 +10,18 @@ from gsp.protocol import (
     AdaptationDecision,
     AdaptationOutcome,
     Camera3D,
+    CanvasSize,
     CoordinateSpace,
     ImageVisual,
     MarkerShape,
     MarkerVisual,
     MeshVisual,
+    LogicalPixelRect,
     OrthographicProjection3D,
     PathVisual,
     PixelVisual,
     PointVisual,
+    Panel,
     PrimitiveTopology,
     PrimitiveVisual,
     QueryCoordinateSpace,
@@ -27,6 +30,8 @@ from gsp.protocol import (
     QueryResult,
     QueryScope,
     QueryStatus,
+    RenderTarget,
+    ResolvedLayoutSnapshot,
     SegmentVisual,
     SphereVisual,
     TextVisual,
@@ -205,6 +210,31 @@ def test_interactive_2d_display_enables_canonical_navigation_exactly_once() -> N
 
     session.close()
     assert renderer.closed
+
+
+def test_datoviz_consumed_layout_rejects_canvas_mismatch_before_renderer_build() -> None:
+    panel = Panel(id="panel:layout", figure_id="figure:layout")
+    view = View2D(id="view:layout", panel_id=panel.id)
+    scene = gsp.Scene(
+        id="scene:layout",
+        panels=(panel,),
+        view2d=view,
+        canvas_size=CanvasSize.pixel_exact(320, 240),
+    )
+    layout = ResolvedLayoutSnapshot(
+        snapshot_id="layout:target",
+        render_target=RenderTarget(640, 480),
+        panel_rect_px=LogicalPixelRect(0, 0, 640, 480),
+        plot_rect_px=LogicalPixelRect(80, 60, 480, 360),
+        view_id=view.id,
+    )
+    renderer = _FakeRenderer(view)
+    session = _session(renderer)
+
+    with pytest.raises(ValueError, match="scene canvas policy"):
+        session.render(scene, layout_snapshot=layout)
+
+    assert session._renderers == []
 
 
 def test_run_after_noninteractive_render_enables_navigation_once() -> None:

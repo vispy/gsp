@@ -298,8 +298,8 @@ def gsp_capability_snapshot_from_datoviz(
     layout_consume_status: Literal["none", "partial"] = (
         "partial"
         if dvz is not None
-        and hasattr(dvz, "dvz_panel")
-        and hasattr(dvz, "DvzPanelDesc")
+        and callable(getattr(dvz, "dvz_panel", None))
+        and callable(getattr(dvz, "dvz_panel_desc", None))
         else "none"
     )
     guide_query_diagnostics = datoviz_v04_panel_frame_guide_query_diagnostics(dvz)
