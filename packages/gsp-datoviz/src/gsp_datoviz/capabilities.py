@@ -122,15 +122,30 @@ _REQUIRED_DVZ_VIEW3D_CAMERA_FUNCTIONS = (
 
 _REQUIRED_DVZ_VIEW3D_RETAINED_DATA_FUNCTIONS = (
     "DvzPanelView3DDesc",
-    "DvzPanelView3DState",
     "dvz_panel_view3d_desc",
     "dvz_panel_set_view3d_desc",
-    "dvz_panel_view3d_state",
     "dvz_panel_camera",
     "dvz_camera_set_view",
-    "dvz_camera_get_view",
-    "dvz_camera_get_projection",
-    "dvz_camera_get_orthographic_bounds",
+)
+
+_REQUIRED_DVZ_VIEW3D_STATE_READBACK_FUNCTIONS = (
+    "DvzPanelView3DState",
+    "dvz_panel_view3d_state",
+)
+
+_REQUIRED_DVZ_PANEL_VIEW3D_STATE_FIELDS = (
+    "struct_size",
+    "flags",
+    "view_id",
+    "revision",
+    "enabled",
+    "view",
+    "projection",
+    "has_explicit_orthographic_bounds",
+    "orthographic_bounds",
+    "model_matrix",
+    "view_matrix",
+    "projection_matrix",
 )
 
 _REQUIRED_DVZ_LIVE_INPUT_FUNCTIONS = (
@@ -498,6 +513,9 @@ def gsp_capability_snapshot_from_datoviz(
 
     view3d_diagnostics = _datoviz_v04_view3d_binding_diagnostics(dvz)
     retained_view3d_diagnostics = datoviz_v04_view3d_retained_data_diagnostics(dvz)
+    view3d_state_readback_diagnostics = (
+        datoviz_v04_view3d_state_readback_diagnostics(dvz)
+    )
     live_input_diagnostics = datoviz_v04_live_input_diagnostics(dvz)
     texture2d_mesh_diagnostics = tuple(
         f"missing {name}"
@@ -684,11 +702,20 @@ def gsp_capability_snapshot_from_datoviz(
             metadata["datoviz_view3d_retained_data_diagnostics"] = (
                 retained_view3d_diagnostics
             )
+        if view3d_state_readback_diagnostics:
+            metadata["datoviz_view3d_state_readback_diagnostics"] = (
+                view3d_state_readback_diagnostics
+            )
+        else:
+            metadata["datoviz_view3d_state_readback"] = (
+                "native retained View3D state output record and readback function ready"
+            )
         view3d_navigation_experimental_enabled = (
             os.environ.get(DATOVIZ_EXPERIMENTAL_VIEW3D_NAV_ENV) == "1"
         )
         if (
             not retained_view3d_diagnostics
+            and not view3d_state_readback_diagnostics
             and not live_input_diagnostics
             and view3d_navigation_experimental_enabled
         ):
@@ -896,6 +923,29 @@ def datoviz_v04_view3d_retained_data_diagnostics(
     )
 
 
+def datoviz_v04_view3d_state_readback_diagnostics(
+    dvz: ModuleType | Any | None,
+) -> tuple[str, ...]:
+    """Return why native retained View3D state readback is unavailable."""
+    if dvz is None:
+        return ("Datoviz is not importable",)
+    missing = tuple(
+        f"missing {name}"
+        for name in _REQUIRED_DVZ_VIEW3D_STATE_READBACK_FUNCTIONS
+        if (
+            not callable(getattr(dvz, name, None))
+            if name.startswith("dvz_")
+            else not hasattr(dvz, name)
+        )
+    )
+    return missing + _ctypes_record_layout_diagnostics(
+        dvz,
+        "DvzPanelView3DState",
+        required_fields=_REQUIRED_DVZ_PANEL_VIEW3D_STATE_FIELDS,
+        require_structure=True,
+    )
+
+
 def datoviz_v04_live_input_diagnostics(
     dvz: ModuleType | Any | None,
 ) -> tuple[str, ...]:
@@ -946,16 +996,48 @@ def _incomplete_ctypes_records(
     """Report generated ctypes records that are only empty forward declarations."""
     diagnostics: list[str] = []
     for name in names:
-        record_type = getattr(dvz, name, None)
-        if not isinstance(record_type, type):
-            continue
-        try:
-            is_ctypes_record = issubclass(record_type, ctypes.Structure)
-        except TypeError:
-            continue
-        if is_ctypes_record and ctypes.sizeof(record_type) == 0:
-            diagnostics.append(f"incomplete ctypes layout for {name}")
+        diagnostics.extend(_ctypes_record_layout_diagnostics(dvz, name))
     return tuple(diagnostics)
+
+
+def _ctypes_record_layout_diagnostics(
+    dvz: ModuleType | Any,
+    name: str,
+    *,
+    required_fields: tuple[str, ...] = (),
+    require_structure: bool = False,
+) -> tuple[str, ...]:
+    """Validate a generated ctypes record before it may back an output pointer."""
+    record_type = getattr(dvz, name, None)
+    if not isinstance(record_type, type):
+        return (
+            (f"{name} is not a ctypes.Structure subclass",)
+            if require_structure
+            else ()
+        )
+    try:
+        is_ctypes_record = issubclass(record_type, ctypes.Structure)
+    except TypeError:
+        is_ctypes_record = False
+    if not is_ctypes_record:
+        return (
+            (f"{name} is not a ctypes.Structure subclass",)
+            if require_structure
+            else ()
+        )
+    fields = getattr(record_type, "_fields_", ())
+    if not fields or ctypes.sizeof(record_type) <= 0:
+        return (f"incomplete ctypes layout for {name}",)
+    field_names = {field[0] for field in fields}
+    missing_fields = tuple(
+        field_name for field_name in required_fields if field_name not in field_names
+    )
+    if missing_fields:
+        return (
+            f"ctypes layout for {name} missing required fields: "
+            + ", ".join(missing_fields),
+        )
+    return ()
 
 
 def datoviz_v04_capture_ready(dvz: ModuleType | Any) -> bool:

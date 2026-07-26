@@ -122,6 +122,7 @@ from gsp_datoviz.capabilities import (
     datoviz_v04_grid_clip_to_plot_rect_ready_for_source,
     datoviz_v04_panel_frame_snapshot_diagnostics as capability_panel_frame_snapshot_diagnostics,
     datoviz_v04_view3d_retained_data_diagnostics,
+    datoviz_v04_view3d_state_readback_diagnostics as _capability_state_diagnostics,
     gsp_capability_snapshot_from_datoviz,
 )
 from gsp_datoviz.latest_api_contract import (
@@ -147,6 +148,8 @@ from gsp_datoviz.protocol_renderer import (
     datoviz_v04_view3d_camera_diagnostics,
     datoviz_v04_view3d_live_navigation_diagnostics,
     datoviz_v04_view3d_retained_data_ready,
+    datoviz_v04_view3d_state_readback_diagnostics,
+    datoviz_v04_view3d_state_readback_ready,
     import_datoviz_v04,
     is_datoviz_v04_facade,
     _DatovizLiveView2DNavigation,
@@ -1282,28 +1285,44 @@ class FakeDatovizV04WithMesh(FakeDatovizV04WithQueryCapabilities):
         return 0
 
 
+class FakeDvzCameraView(ctypes.Structure):
+    _fields_ = [
+        ("eye", ctypes.c_double * 3),
+        ("target", ctypes.c_double * 3),
+        ("up", ctypes.c_double * 3),
+    ]
+
+
+class FakeDvzCameraProjection(ctypes.Structure):
+    _fields_ = [
+        ("type", ctypes.c_int32),
+        ("fov_y", ctypes.c_double),
+        ("near_clip", ctypes.c_double),
+        ("far_clip", ctypes.c_double),
+        ("ortho_height", ctypes.c_double),
+    ]
+
+
+class FakeDvzPanelView3DState(ctypes.Structure):
+    _fields_ = [
+        ("struct_size", ctypes.c_uint32),
+        ("flags", ctypes.c_uint32),
+        ("view_id", ctypes.c_uint64),
+        ("revision", ctypes.c_uint64),
+        ("enabled", ctypes.c_bool),
+        ("view", FakeDvzCameraView),
+        ("projection", FakeDvzCameraProjection),
+        ("has_explicit_orthographic_bounds", ctypes.c_bool),
+        ("orthographic_bounds", ctypes.c_double * 6),
+        ("model_matrix", (ctypes.c_double * 4) * 4),
+        ("view_matrix", (ctypes.c_double * 4) * 4),
+        ("projection_matrix", (ctypes.c_double * 4) * 4),
+    ]
+
+
 class FakeDatovizV04WithRetainedView3D(FakeDatovizV04WithMesh):
     DvzPanelView3DDesc = object
-
-    class DvzPanelView3DState:
-        def __init__(self):
-            self.view_id = 0
-            self.revision = 0
-            self.enabled = False
-            self.view = SimpleNamespace(
-                eye=[0.0, 0.0, 0.0],
-                target=[0.0, 0.0, 0.0],
-                up=[0.0, 1.0, 0.0],
-            )
-            self.projection = SimpleNamespace(
-                type=0,
-                fov_y=0.0,
-                near_clip=0.0,
-                far_clip=1.0,
-                ortho_height=2.0,
-            )
-            self.has_explicit_orthographic_bounds = False
-            self.orthographic_bounds = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    DvzPanelView3DState = FakeDvzPanelView3DState
 
     def __init__(self):
         super().__init__()
@@ -1420,23 +1439,20 @@ class FakeDatovizV04WithRetainedView3D(FakeDatovizV04WithMesh):
 
     def dvz_panel_view3d_state(self, panel, out):
         self.calls.append(("panel_view3d_state", panel))
-        out.view_id = self.view3d_view_id
-        out.revision = self.view3d_revision
-        out.enabled = True
-        out.view = SimpleNamespace(
-            eye=list(self.camera_view.eye),
-            target=list(self.camera_view.target),
-            up=list(self.camera_view.up),
-        )
-        out.projection = SimpleNamespace(
-            type=self.camera_projection.type,
-            fov_y=self.camera_projection.fov_y,
-            near_clip=self.camera_projection.near_clip,
-            far_clip=self.camera_projection.far_clip,
-            ortho_height=self.camera_projection.ortho_height,
-        )
-        out.has_explicit_orthographic_bounds = self.has_explicit_orthographic_bounds
-        out.orthographic_bounds = list(self.orthographic_bounds)
+        state = getattr(out, "_obj", out)
+        state.view_id = self.view3d_view_id
+        state.revision = self.view3d_revision
+        state.enabled = True
+        state.view.eye[:] = self.camera_view.eye
+        state.view.target[:] = self.camera_view.target
+        state.view.up[:] = self.camera_view.up
+        state.projection.type = self.camera_projection.type
+        state.projection.fov_y = self.camera_projection.fov_y
+        state.projection.near_clip = self.camera_projection.near_clip
+        state.projection.far_clip = self.camera_projection.far_clip
+        state.projection.ortho_height = self.camera_projection.ortho_height
+        state.has_explicit_orthographic_bounds = self.has_explicit_orthographic_bounds
+        state.orthographic_bounds[:] = self.orthographic_bounds
         return True
 
 
@@ -5210,6 +5226,118 @@ def test_retained_view3d_state_readback_reports_snapshot_identity():
     assert ray.view_snapshot_id == snapshot["view_projection_snapshot_id"]
 
 
+def test_retained_view3d_state_readback_rejects_zero_size_record_before_native_call():
+    class IncompletePanelView3DState(ctypes.Structure):
+        pass
+
+    fake = FakeDatovizV04WithRetainedView3D()
+    fake.DvzPanelView3DState = IncompletePanelView3DState
+    renderer = DatovizV04ProtocolRenderer(
+        dvz=fake, view3d=_canonical_view3d_for_datoviz_query()
+    )
+
+    assert datoviz_v04_view3d_retained_data_ready(fake)
+    assert not datoviz_v04_view3d_state_readback_ready(fake)
+    assert datoviz_v04_view3d_state_readback_diagnostics(fake) == (
+        "incomplete ctypes layout for DvzPanelView3DState",
+    )
+    assert _capability_state_diagnostics(fake) == (
+        "incomplete ctypes layout for DvzPanelView3DState",
+    )
+    caps = renderer.capabilities()
+    assert VIEW3D_RETAINED_DATA_SPACE_VISUALS_CAPABILITY in caps.view3d_capabilities
+    assert (
+        caps.metadata["datoviz_view3d_state_readback_diagnostics"]
+        == datoviz_v04_view3d_state_readback_diagnostics(fake)
+    )
+    baseline_camera_updates = len(_calls(fake, "panel_set_view3d_desc"))
+
+    with pytest.raises(
+        DatovizV04Unavailable,
+        match="incomplete ctypes layout for DvzPanelView3DState",
+    ):
+        renderer.resolve_retained_view3d_state_snapshot()
+    with pytest.raises(
+        DatovizV04Unavailable,
+        match="navigation state readback is unavailable",
+    ):
+        renderer.apply_retained_view3d_navigation(renderer.view3d)
+
+    assert _calls(fake, "panel_view3d_state") == []
+    assert len(_calls(fake, "panel_set_view3d_desc")) == baseline_camera_updates
+
+
+def test_retained_view3d_state_readback_rejects_missing_fields_before_native_call():
+    class StalePanelView3DState(ctypes.Structure):
+        _fields_ = [("struct_size", ctypes.c_uint32)]
+
+    fake = FakeDatovizV04WithRetainedView3D()
+    fake.DvzPanelView3DState = StalePanelView3DState
+    renderer = DatovizV04ProtocolRenderer(
+        dvz=fake, view3d=_canonical_view3d_for_datoviz_query()
+    )
+
+    diagnostics = datoviz_v04_view3d_state_readback_diagnostics(fake)
+    assert diagnostics
+    assert diagnostics[0].startswith(
+        "ctypes layout for DvzPanelView3DState missing required fields:"
+    )
+    assert "view_id" in diagnostics[0]
+    assert "projection_matrix" in diagnostics[0]
+
+    with pytest.raises(DatovizV04Unavailable, match="missing required fields"):
+        renderer.resolve_retained_view3d_state_snapshot()
+
+    assert _calls(fake, "panel_view3d_state") == []
+
+
+def test_retained_view3d_state_readback_rejects_none_record_before_native_call():
+    fake = FakeDatovizV04WithRetainedView3D()
+    fake.DvzPanelView3DState = None
+    renderer = DatovizV04ProtocolRenderer(
+        dvz=fake, view3d=_canonical_view3d_for_datoviz_query()
+    )
+
+    diagnostics = datoviz_v04_view3d_state_readback_diagnostics(fake)
+    assert diagnostics == (
+        "DvzPanelView3DState is not a ctypes.Structure subclass",
+    )
+
+    with pytest.raises(DatovizV04Unavailable, match="not a ctypes.Structure subclass"):
+        renderer.resolve_retained_view3d_state_snapshot()
+
+    assert _calls(fake, "panel_view3d_state") == []
+
+
+def test_missing_view3d_state_readback_preserves_retained_rendering_facade():
+    class DatovizWithoutStateReadback(FakeDatovizV04WithRetainedView3D):
+        def __getattribute__(self, name):
+            if name in {
+                "DvzPanelView3DState",
+                "dvz_panel_view3d_state",
+                "dvz_camera_get_view",
+                "dvz_camera_get_projection",
+                "dvz_camera_get_orthographic_bounds",
+            }:
+                raise AttributeError(name)
+            return super().__getattribute__(name)
+
+    fake = DatovizWithoutStateReadback()
+
+    assert is_datoviz_v04_facade(fake)
+    renderer = DatovizV04ProtocolRenderer(
+        dvz=fake, view3d=_canonical_view3d_for_datoviz_query()
+    )
+    assert datoviz_v04_view3d_retained_data_ready(fake)
+    assert not datoviz_v04_view3d_state_readback_ready(fake)
+    assert VIEW3D_RETAINED_DATA_SPACE_VISUALS_CAPABILITY in (
+        renderer.capabilities().view3d_capabilities
+    )
+
+    with pytest.raises(DatovizV04Unavailable, match="state readback is unavailable"):
+        renderer.resolve_retained_view3d_state_snapshot()
+
+
 def test_datoviz_view3d_live_navigation_diagnostics_report_manual_review_gate():
     fake = FakeDatovizV04WithInteractiveRetainedView3D()
 
@@ -5225,6 +5353,29 @@ def test_datoviz_view3d_live_navigation_diagnostics_clear_when_experimental_opte
     monkeypatch.setenv("GSP_DATOVIZ_ENABLE_EXPERIMENTAL_VIEW3D_NAV", "1")
 
     assert datoviz_v04_view3d_live_navigation_diagnostics(fake) == ()
+
+
+def test_datoviz_view3d_live_navigation_requires_state_readback_layout(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    class IncompletePanelView3DState(ctypes.Structure):
+        pass
+
+    fake = FakeDatovizV04WithInteractiveRetainedView3D()
+    fake.DvzPanelView3DState = IncompletePanelView3DState
+    monkeypatch.setenv("GSP_DATOVIZ_ENABLE_EXPERIMENTAL_VIEW3D_NAV", "1")
+
+    diagnostics = datoviz_v04_view3d_live_navigation_diagnostics(fake)
+    caps = DatovizV04ProtocolRenderer(dvz=fake).capabilities()
+
+    assert "incomplete ctypes layout for DvzPanelView3DState" in diagnostics
+    assert any("requires native View3D state readback" in item for item in diagnostics)
+    assert VIEW3D_RETAINED_DATA_SPACE_VISUALS_CAPABILITY in caps.view3d_capabilities
+    assert VIEW3D_NAVIGATION_ORBIT_PAN_ZOOM_CAPABILITY not in caps.view3d_capabilities
+    assert (
+        VIEW3D_NAVIGATION_ORBIT_PAN_ZOOM_CAPABILITY
+        not in caps.navigation_capabilities
+    )
 
 
 def test_datoviz_live_view3d_navigation_replays_canonical_actions_without_reupload(
@@ -6805,6 +6956,15 @@ def test_imported_datoviz_binding_has_expected_v04_shape_when_available():
         pytest.skip("installed Datoviz binding is not the v0.4 facade")
 
     assert is_datoviz_v04_facade(dvz)
+
+
+def test_imported_datoviz_view3d_state_readback_layout_is_ready_when_available():
+    dvz = pytest.importorskip("datoviz")
+    if sys.version_info < (3, 13):
+        pytest.skip("aligned Datoviz View3D state readback requires Python 3.13+")
+
+    assert datoviz_v04_view3d_state_readback_diagnostics(dvz) == ()
+    assert datoviz_v04_view3d_state_readback_ready(dvz)
 
 
 def test_imported_datoviz_binding_exposes_view2d_and_axis_tick_contract_when_available():

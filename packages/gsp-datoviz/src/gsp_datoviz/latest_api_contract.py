@@ -72,18 +72,13 @@ REQUIRED_DATOVIZ_V04_DEV_SYMBOLS: tuple[str, ...] = (
     "DvzCameraView",
     "DvzCameraProjection",
     "DvzPanelView3DDesc",
-    "DvzPanelView3DState",
     "DvzPanelFrameInfo",
     "dvz_panel_view3d_desc",
     "dvz_panel_set_view3d_desc",
-    "dvz_panel_view3d_state",
     "dvz_panel_camera",
     "dvz_camera_desc",
     "dvz_camera_set_orthographic_bounds",
     "dvz_camera_set_view",
-    "dvz_camera_get_view",
-    "dvz_camera_get_projection",
-    "dvz_camera_get_orthographic_bounds",
 )
 
 def datoviz_current_api_missing_symbols(module: ModuleType | Any) -> tuple[str, ...]:

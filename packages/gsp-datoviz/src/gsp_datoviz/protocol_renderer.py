@@ -133,6 +133,7 @@ from gsp_datoviz.capabilities import (
     datoviz_v04_capability_snapshot,
     datoviz_v04_capture_diagnostics,
     datoviz_v04_capture_ready,
+    datoviz_v04_view3d_state_readback_diagnostics as _state_readback_diagnostics,
 )
 from gsp_datoviz.latest_api_contract import (
     REQUIRED_DATOVIZ_V04_DEV_SYMBOLS,
@@ -216,15 +217,10 @@ _REQUIRED_DVZ_VIEW3D_CAMERA_FUNCTIONS = (
 
 _REQUIRED_DVZ_VIEW3D_RETAINED_DATA_FUNCTIONS = (
     "DvzPanelView3DDesc",
-    "DvzPanelView3DState",
     "dvz_panel_view3d_desc",
     "dvz_panel_set_view3d_desc",
-    "dvz_panel_view3d_state",
     "dvz_panel_camera",
     "dvz_camera_set_view",
-    "dvz_camera_get_view",
-    "dvz_camera_get_projection",
-    "dvz_camera_get_orthographic_bounds",
 )
 
 _REQUIRED_DVZ_PANEL_FRAME_SNAPSHOT_FUNCTIONS = (
@@ -537,6 +533,18 @@ def datoviz_v04_view3d_retained_data_ready(module: ModuleType | Any) -> bool:
     return not datoviz_v04_view3d_retained_data_diagnostics(module)
 
 
+def datoviz_v04_view3d_state_readback_diagnostics(
+    module: ModuleType | Any,
+) -> tuple[str, ...]:
+    """Return why native retained View3D state readback is unavailable."""
+    return _state_readback_diagnostics(module)
+
+
+def datoviz_v04_view3d_state_readback_ready(module: ModuleType | Any) -> bool:
+    """Return whether native retained View3D state may be read through ctypes."""
+    return not datoviz_v04_view3d_state_readback_diagnostics(module)
+
+
 def datoviz_v04_panel_frame_snapshot_diagnostics(
     module: ModuleType | Any,
 ) -> tuple[str, ...]:
@@ -612,6 +620,12 @@ def datoviz_v04_view3d_live_navigation_diagnostics(
         diagnostics.append(
             "Datoviz View3D live navigation requires the retained DATA-space "
             "View3D visual path from the current generated binding"
+        )
+    readback_diagnostics = datoviz_v04_view3d_state_readback_diagnostics(module)
+    if readback_diagnostics:
+        diagnostics.extend(readback_diagnostics)
+        diagnostics.append(
+            "Datoviz View3D live navigation requires native View3D state readback"
         )
     return tuple(diagnostics)
 
@@ -3087,6 +3101,12 @@ class DatovizV04ProtocolRenderer:
                 "Datoviz retained View3D DATA-space visual path is unavailable: "
                 + "; ".join(diagnostics)
             )
+        readback_diagnostics = datoviz_v04_view3d_state_readback_diagnostics(self.dvz)
+        if readback_diagnostics:
+            raise DatovizV04Unavailable(
+                "Datoviz retained View3D navigation state readback is unavailable: "
+                + "; ".join(readback_diagnostics)
+            )
         self.native_view3d_camera = _update_datoviz_view3d_camera(
             self.dvz, self.panel, view3d
         )
@@ -3161,7 +3181,7 @@ class DatovizV04ProtocolRenderer:
         self, *, layout_snapshot_id: str = "layout:datoviz"
     ) -> dict[str, object]:
         """Read back retained Datoviz View3D state and canonical GSP snapshot identity."""
-        diagnostics = datoviz_v04_view3d_retained_data_diagnostics(self.dvz)
+        diagnostics = datoviz_v04_view3d_state_readback_diagnostics(self.dvz)
         if diagnostics:
             raise DatovizV04Unavailable(
                 "Datoviz retained View3D state readback is unavailable: "
