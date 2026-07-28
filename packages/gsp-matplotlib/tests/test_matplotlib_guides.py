@@ -200,6 +200,26 @@ def test_render_guides_maps_logical_pixel_style_to_matplotlib_points():
         plt.close(fig)
 
 
+def test_render_guides_maps_retina_canvas_pixels_to_physical_points():
+    fig, ax = plt.subplots(dpi=200)
+    view = View2D(id="view:retina-style", panel_id="panel:retina-style")
+    guide = AxisGuide(
+        id="guide:retina-style:x",
+        view_id=view.id,
+        dimension=AxisDimension.X,
+        side=AxisSide.BOTTOM,
+        style=AxisGuideStyle(tick_label_font_size_px=12.0),
+    )
+    try:
+        setattr(fig, "_gsp_resolved_canvas", _simulated_retina_canvas())
+
+        render_axis_guides(ax, view, (guide,))
+
+        assert ax.get_xticklabels()[0].get_fontsize() == pytest.approx(17.28)
+    finally:
+        plt.close(fig)
+
+
 def test_grid_visibility_follows_axis_guides():
     fig, ax = plt.subplots()
     view = View2D(id="view:main", panel_id="panel:main")

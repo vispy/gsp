@@ -615,7 +615,12 @@ def _configure_matplotlib_canvas(
             metrics_source=CanvasMetricsSource.BACKEND_REPORTED,
         )
     else:
-        dpi = output_dpi if output_dpi is not None else canvas_size.reference_dpi
+        effective_device_scale = canvas_size.requested_device_scale or device_scale
+        dpi = (
+            output_dpi
+            if output_dpi is not None
+            else canvas_size.reference_dpi * effective_device_scale
+        )
         resolved = canvas_size.resolve(
             output_dpi=dpi,
             device_scale=device_scale,

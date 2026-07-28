@@ -13,6 +13,7 @@ from gsp.protocol import (
     AxisSide,
     PanelTextGuide,
     PanelTextRole,
+    ResolvedCanvas,
     View2D,
     logical_px_to_points,
     resolve_ticks,
@@ -117,4 +118,7 @@ def _grid_kwargs(
 
 
 def _px_to_points(axes: matplotlib.axes.Axes, logical_px: float) -> float:
+    resolved = getattr(axes.figure, "_gsp_resolved_canvas", None)
+    if isinstance(resolved, ResolvedCanvas):
+        return resolved.canvas_px_to_points(logical_px)
     return logical_px_to_points(logical_px, float(axes.figure.dpi))

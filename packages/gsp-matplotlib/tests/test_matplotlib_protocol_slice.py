@@ -327,6 +327,8 @@ def test_matplotlib_consumed_scale_two_preserves_logical_and_physical_geometry()
         assert (canvas.canvas_width_px, canvas.canvas_height_px) == (800, 600)
         assert (canvas.host_logical_width, canvas.host_logical_height) == (800, 600)
         assert (canvas.framebuffer_width, canvas.framebuffer_height) == (1600, 1200)
+        assert canvas.output_dpi == 192
+        assert result.figure.dpi == 192
         assert result.figure.canvas.get_width_height() == (1600, 1200)
         bbox = result.axes.get_window_extent()
         assert (bbox.x0, bbox.y0, bbox.width, bbox.height) == pytest.approx(
@@ -723,6 +725,24 @@ def test_render_protocol_scene_with_reference_canvas_resolves_matplotlib_size():
         collection = result.axes.collections[0]
         np.testing.assert_allclose(
             collection.get_sizes(), np.array([225.0], dtype=np.float32)
+        )
+    finally:
+        plt.close(result.figure)
+
+
+def test_requested_device_scale_sets_native_matplotlib_raster_dpi():
+    result = render_protocol_scene_with_layout(
+        visuals=(),
+        canvas_size=CanvasSize.host_logical_px(
+            800, 600
+        ).with_requested_device_scale(2.0),
+    )
+    try:
+        assert result.resolved_canvas.output_dpi == 192
+        assert result.figure.dpi == 192
+        assert result.figure.canvas.get_width_height() == (1600, 1200)
+        np.testing.assert_allclose(
+            result.figure.get_size_inches(), np.array([800 / 96, 600 / 96])
         )
     finally:
         plt.close(result.figure)
