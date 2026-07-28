@@ -2968,7 +2968,7 @@ def test_add_point_visual_uses_dvz_point_attributes_and_diameter_pixels():
     assert attach_desc.viewport_rect == 0
 
 
-def test_add_pixel_visual_uses_public_dense_attributes_and_logical_size_scale():
+def test_add_pixel_visual_keeps_logical_sizes_at_hidpi_scale():
     fake = FakeDatovizV04WithQueryCapabilities()
     canvas_size = CanvasSize.reference_px(320, 240).with_requested_device_scale(2.0)
     renderer = DatovizV04ProtocolRenderer(
@@ -2999,7 +2999,7 @@ def test_add_pixel_visual_uses_public_dense_attributes_and_logical_size_scale():
     np.testing.assert_array_equal(
         set_data[1][3], [[255, 0, 0, 255], [255, 0, 0, 255]]
     )
-    np.testing.assert_allclose(set_data[2][3], [4.0, 8.0])
+    np.testing.assert_allclose(set_data[2][3], [2.0, 4.0])
     assert _calls(fake, "add_visual")[-1][2] == "pixel-visual"
 
 
@@ -3671,7 +3671,7 @@ def test_visual_attach_desc_rejects_stale_binding_missing_clip_and_viewport_rect
         _visual_attach_desc(fake, coord_space="data", z_layer=3)
 
 
-def test_add_point_visual_scales_canvas_pixels_for_resolved_datoviz_framebuffer():
+def test_add_point_visual_keeps_logical_size_for_resolved_datoviz_framebuffer():
     fake = FakeDatovizV04WithQueryCapabilities()
     canvas_size = CanvasSize.reference_px(320, 240).with_requested_device_scale(2.0)
     renderer = DatovizV04ProtocolRenderer(dvz=fake, canvas_size=canvas_size)
@@ -3688,7 +3688,7 @@ def test_add_point_visual_scales_canvas_pixels_for_resolved_datoviz_framebuffer(
     assert renderer.resolved_canvas.framebuffer_width == 640
     assert _calls(fake, "figure") == [("figure", "scene", 640, 480, 0)]
     set_data = _calls(fake, "set_data")
-    np.testing.assert_allclose(set_data[2][3], [24.0], rtol=1e-6)
+    np.testing.assert_allclose(set_data[2][3], [12.0], rtol=1e-6)
 
 
 def test_resolved_canvas_from_datoviz_fills_missing_physical_metrics():
@@ -4473,7 +4473,7 @@ def test_add_colorbar_guide_creates_native_datoviz_scale_colormap_and_colorbar()
     assert renderer.colorbars[guide.id] == "colorbar"
 
 
-def test_add_colorbar_guide_scales_style_width_for_datoviz_framebuffer():
+def test_add_colorbar_guide_keeps_logical_style_width_at_hidpi_scale():
     fake = FakeDatovizV04WithColorbar()
     scale = _test_color_scale(colormap_id=ColorMapId.VIRIDIS)
     canvas_size = CanvasSize.reference_px(320, 240).with_requested_device_scale(2.0)
@@ -4492,9 +4492,9 @@ def test_add_colorbar_guide_scales_style_width_for_datoviz_framebuffer():
     renderer.add_colorbar_guide(guide)
 
     colorbar_call = _calls(fake, "colorbar")[0]
-    assert colorbar_call[7] == 44.0
-    assert colorbar_call[13] == 44.0
-    assert colorbar_call[14] == max(160.0, 480.0 * 0.62)
+    assert colorbar_call[7] == 22.0
+    assert colorbar_call[13] == 22.0
+    assert colorbar_call[14] == max(80.0, 240.0 * 0.62)
 
 
 def test_add_colorbar_guide_rejects_missing_explicit_tick_facade():

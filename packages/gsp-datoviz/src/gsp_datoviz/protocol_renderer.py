@@ -1141,7 +1141,17 @@ class DatovizV04ProtocolRenderer:
         return self.consumed_layout_snapshot
 
     def _canvas_px_scale(self) -> float:
-        return self.resolved_canvas.framebuffer_per_canvas_px
+        """Convert GSP canvas pixels to Datoviz logical screen pixels.
+
+        Datoviz ``*_px`` visual attributes are authored in logical pixels and
+        its runtime applies the view device scale during frame emission.
+        Scaling by framebuffer-per-canvas here would therefore apply HiDPI
+        twice. Use the canvas-to-host conversion instead.
+        """
+        return 0.5 * (
+            self.resolved_canvas.canvas_to_host_scale_x
+            + self.resolved_canvas.canvas_to_host_scale_y
+        )
 
     def _scale_canvas_px_array(
         self, values: npt.NDArray[np.float32]
@@ -2229,8 +2239,8 @@ class DatovizV04ProtocolRenderer:
             self.dvz,
             desc,
             guide,
-            self.width,
-            self.height,
+            self.resolved_canvas.host_logical_width,
+            self.resolved_canvas.host_logical_height,
             canvas_px_scale=self._canvas_px_scale(),
         )
         if hasattr(desc, "anchor"):
