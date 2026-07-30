@@ -3,8 +3,10 @@ from __future__ import annotations
 import pytest
 
 from gsp.protocol import LogicalPixelRect, PanByAction, View2D, View2DNavigationController
-from gsp_datoviz.protocol_renderer import _apply_view2d_navigation_action as apply_datoviz
 from gsp_matplotlib.navigation import apply_view2d_navigation_action as apply_matplotlib
+
+datoviz_renderer = pytest.importorskip("gsp_datoviz.protocol_renderer")
+apply_datoviz = datoviz_renderer._apply_view2d_navigation_action
 
 
 def test_providers_share_canonical_pan_ranges_and_revision_transition() -> None:

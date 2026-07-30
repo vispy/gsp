@@ -6,9 +6,9 @@ answer queries. A figure or scene never owns a native backend object.
 
 ## Install and discover
 
-The workspace currently publishes no umbrella wheel. Build and install the three local wheels
-`gsp-core`, `gsp-matplotlib`, and `gsp-datoviz`. The Datoviz development adapter also needs an
-RC3-compatible checkout selected with `GSP_DATOVIZ_SOURCE`.
+The workspace publishes no umbrella wheel. The intended first ordinary package set is `gsp-core`
+plus `gsp-matplotlib`. The development-only Datoviz adapter additionally needs an RC3-compatible
+checkout selected with `GSP_DATOVIZ_SOURCE`; it is not an ordinary installation claim.
 
 This block is executable after those wheels are installed:
 
@@ -94,11 +94,10 @@ preserving semantic panel titles. The qualified Datoviz binding has no public ad
 
 ## Evidence
 
-The VisPy2 `examples/validate_gallery.py` harness copies the gallery scripts outside both source
-trees, verifies wheel-installed imports, enforces 20-second process-group timeouts with one
-Datoviz retry, requires all fourteen PNGs to be exactly 800×600, and records dimensions and
-hashes. M285 regenerated the seven Matplotlib PNGs; the seven Datoviz PNGs remain explicitly
-labelled M284 carry-forwards until an unsandboxed run completes. One earlier Datoviz invocation
-hung without output;
-repeated isolated reruns did not reproduce a backend defect. That event remains lifecycle-stress
-evidence for M284 rather than a reason to weaken capabilities.
+The VisPy2 `examples/validate_gallery.py` harness copies gallery scripts outside both source trees,
+verifies wheel-installed imports, enforces process-group timeouts, requires all fourteen PNGs to be
+exactly 800×600, and records dimensions and hashes. M292 regenerated and qualified all fourteen
+exact-wheel captures. M300 subsequently proved public DATA-space scalar images and linked
+colorbars through retained Datoviz View2D, including pan, zoom, reversed-x, multiple canvas sizes,
+and clean lifecycle. Native evidence remains exact-runtime evidence rather than a universal
+backend claim.

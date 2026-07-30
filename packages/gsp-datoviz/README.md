@@ -8,3 +8,5 @@ The package metadata therefore depends only on `gsp-core` for now. For local dev
 explicit probe or session open. Metadata-only discovery remains side-effect-free and does not need
 the source checkout. Do not interpret this development bootstrap as compatibility with RC2 or as a
 published RC3 dependency contract.
+
+This package is not part of the intended first ordinary publication set.

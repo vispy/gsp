@@ -2,8 +2,26 @@
 name = "gsp-matplotlib"
 version = "0.2.0a1"
 description = "Matplotlib reference backend for GSP."
+readme = "README.md"
+license = "BSD-3-Clause"
+license-files = ["LICENSE"]
+authors = [{ name = "VisPy developers" }]
 requires-python = ">=3.13,<4"
 dependencies = ["gsp-core==0.2.0a1", "matplotlib>=3.10,<4"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "Typing :: Typed",
+]
+
+[project.urls]
+Homepage = "https://github.com/vispy/gsp"
+Documentation = "https://github.com/vispy/gsp/tree/main/docs"
+Repository = "https://github.com/vispy/gsp"
+Issues = "https://github.com/vispy/gsp/issues"
 
 [project.entry-points."gsp.backends"]
 matplotlib = "gsp_matplotlib.plugin:get_provider"

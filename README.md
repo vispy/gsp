@@ -25,11 +25,11 @@ Start with the [protocol and backend guide](docs/protocol-and-backends.md) for s
 capability checks, queries, and backend limitations. High-level plotting journeys and reviewed
 artifacts live in the VisPy2 repository.
 
-During the unpublished bootstrap, install the built wheels together from `dist/`; there is no
+The intended first ordinary publication set is `gsp-core` plus `gsp-matplotlib`; there is no
 repository-root umbrella distribution. The Datoviz adapter intentionally has no ordinary Datoviz
-dependency yet because the required RC3-compatible artifact is not published. Local development
-sets `GSP_DATOVIZ_SOURCE=/path/to/datoviz` for explicit source-checkout probing. That bootstrap is
-not a release installation claim.
+dependency yet because the required RC3-compatible artifact is not published, so `gsp-datoviz`
+remains development-only. Local development sets
+`GSP_DATOVIZ_SOURCE=/path/to/datoviz` for explicit source-checkout probing.
 
 The source repository is [vispy/gsp](https://github.com/vispy/gsp). No public package release is
 configured during the bootstrap.
