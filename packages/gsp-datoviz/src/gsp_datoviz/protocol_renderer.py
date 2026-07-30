@@ -1789,11 +1789,7 @@ class DatovizV04ProtocolRenderer:
         return dvz_visual
 
     def add_image_visual(self, visual: ImageVisual) -> Any:
-        """Create and attach a Datoviz image visual for RGBA/RGB uint8 images."""
-        if visual.coordinate_space != CoordinateSpace.NDC:
-            raise DatovizV04Unsupported(
-                "Datoviz v0.4 slice currently supports NDC image extents only"
-            )
+        """Create and attach a Datoviz image visual in DATA or NDC coordinates."""
         pixels = _rgba8_image_visual(visual, color_scales=self.color_scales)
         positions = _image_positions(visual.extent)
         texcoords = _image_texcoords(visual.origin)
@@ -1822,7 +1818,11 @@ class DatovizV04ProtocolRenderer:
             self.dvz,
             self.panel,
             dvz_visual,
-            _visual_attach_desc(self.dvz, coord_space="view", z_layer=0),
+            _visual_attach_desc(
+                self.dvz,
+                coord_space=self._visual_coord_space(visual.coordinate_space),
+                z_layer=0,
+            ),
         )
         self.visuals[visual.id] = dvz_visual
         if visual.color_scale_id is not None:

@@ -4153,6 +4153,49 @@ def test_add_image_visual_uses_sampled_field_for_rgb_image():
     ]
     add_visual_call = _calls(fake, "add_visual")[-1]
     assert add_visual_call[:3] == ("add_visual", "panel", "image-visual")
+    assert add_visual_call[3].coord_space == fake.DVZ_VISUAL_COORD_VIEW
+
+
+def test_add_image_visual_attaches_data_extent_to_retained_view2d():
+    fake = FakeDatovizV04WithImageSampling()
+    view = View2D(
+        id="view:data-image",
+        panel_id="panel",
+        x_range=(10.0, 20.0),
+        y_range=(-5.0, 5.0),
+    )
+    renderer = DatovizV04ProtocolRenderer(dvz=fake, view=view)
+    visual = ImageVisual(
+        id="visual:data-image",
+        image=np.zeros((2, 3, 4), dtype=np.uint8),
+        extent=(12.0, 18.0, -4.0, 3.0),
+        coordinate_space=CoordinateSpace.DATA,
+        origin=ImageOrigin.LOWER,
+    )
+
+    renderer.add_image_visual(visual)
+
+    position_upload = next(
+        call for call in _calls(fake, "set_data") if call[2] == "position"
+    )
+    np.testing.assert_allclose(
+        position_upload[3],
+        [
+            [12.0, -4.0, 0.0],
+            [12.0, 3.0, 0.0],
+            [18.0, -4.0, 0.0],
+            [18.0, 3.0, 0.0],
+        ],
+    )
+    texcoord_upload = next(
+        call for call in _calls(fake, "set_data") if call[2] == "texcoords"
+    )
+    np.testing.assert_allclose(
+        texcoord_upload[3],
+        [[0.0, 0.0], [0.0, 1.0], [1.0, 0.0], [1.0, 1.0]],
+    )
+    attach_desc = _calls(fake, "add_visual")[-1][3]
+    assert attach_desc.coord_space == fake.DVZ_VISUAL_COORD_DATA
 
 
 def test_add_image_visual_maps_linear_sampling():
@@ -6211,19 +6254,19 @@ def test_datoviz_text_diagnostics_name_missing_and_unverified_symbols():
     assert datoviz_v04_text_ready(fake) is False
 
 
-def test_image_slice_rejects_data_extents_but_point_data_uses_default_domain():
-    fake = FakeDatovizV04()
+def test_image_and_point_data_visuals_share_retained_data_coordinates():
+    fake = FakeDatovizV04WithImageSampling()
     renderer = DatovizV04ProtocolRenderer(dvz=fake)
 
-    with pytest.raises(DatovizV04Unsupported, match="NDC image"):
-        renderer.add_image_visual(
-            ImageVisual(
-                id="visual:data-image",
-                image=np.zeros((2, 2, 4), dtype=np.uint8),
-                extent=(0.0, 1.0, 0.0, 1.0),
-                coordinate_space=CoordinateSpace.DATA,
-            )
+    renderer.add_image_visual(
+        ImageVisual(
+            id="visual:data-image",
+            image=np.zeros((2, 2, 4), dtype=np.uint8),
+            extent=(0.0, 1.0, 0.0, 1.0),
+            coordinate_space=CoordinateSpace.DATA,
         )
+    )
+    assert _calls(fake, "add_visual")[-1][3].coord_space == fake.DVZ_VISUAL_COORD_DATA
 
     renderer.add_point_visual(
         PointVisual(
@@ -6234,8 +6277,11 @@ def test_image_slice_rejects_data_extents_but_point_data_uses_default_domain():
             coordinate_space=CoordinateSpace.DATA,
         )
     )
-    position_upload = _calls(fake, "set_data")[0]
+    position_upload = next(
+        call for call in _calls(fake, "set_data") if call[1] == "point-visual"
+    )
     np.testing.assert_allclose(position_upload[3], [[0.25, -0.5, 0.0]])
+    assert _calls(fake, "add_visual")[-1][3].coord_space == fake.DVZ_VISUAL_COORD_DATA
 
 
 def test_renderer_close_uses_scene_destroy_when_available():
