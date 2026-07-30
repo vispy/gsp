@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 import pytest
+from conformance.p038_support import resolved_single_panel_fixture
 from gsp.protocol import (
     AxisDimension,
     AxisGuide,
@@ -26,7 +27,6 @@ from gsp.protocol import (
     QueryStatus,
     RenderTarget,
     ResolvedGuideBox,
-    ResolvedLayoutSnapshot,
     TickSpec,
     TickSpecKind,
     View2D,
@@ -62,7 +62,13 @@ def test_render_axis_guides_uses_explicit_gsp_ticks_and_labels():
                 target_count=None,
             ),
         ),
-        AxisGuide(id="guide:y", view_id=view.id, dimension=AxisDimension.Y, side=AxisSide.LEFT, label_text="value"),
+        AxisGuide(
+            id="guide:y",
+            view_id=view.id,
+            dimension=AxisDimension.Y,
+            side=AxisSide.LEFT,
+            label_text="value",
+        ),
     )
 
     try:
@@ -85,13 +91,28 @@ def test_render_axis_guides_uses_auto_linear_nice_ticks_not_native_locator():
             ax,
             view,
             (
-                AxisGuide(id="guide:x", view_id=view.id, dimension=AxisDimension.X, side=AxisSide.BOTTOM),
-                AxisGuide(id="guide:y", view_id=view.id, dimension=AxisDimension.Y, side=AxisSide.LEFT, tick_spec=TickSpec(target_count=5)),
+                AxisGuide(
+                    id="guide:x", view_id=view.id, dimension=AxisDimension.X, side=AxisSide.BOTTOM
+                ),
+                AxisGuide(
+                    id="guide:y",
+                    view_id=view.id,
+                    dimension=AxisDimension.Y,
+                    side=AxisSide.LEFT,
+                    tick_spec=TickSpec(target_count=5),
+                ),
             ),
         )
 
         assert list(ax.get_xticks()) == [-1.0, -0.5, 0.0, 0.5, 1.0]
-        assert [label.get_text() for label in ax.get_yticklabels()] == ["0", "1e+03", "2e+03", "3e+03", "4e+03", "5e+03"]
+        assert [label.get_text() for label in ax.get_yticklabels()] == [
+            "0",
+            "1e+03",
+            "2e+03",
+            "3e+03",
+            "4e+03",
+            "5e+03",
+        ]
     finally:
         plt.close(fig)
 
@@ -105,8 +126,12 @@ def test_render_axis_guides_accepts_reversed_view2d_limits():
             ax,
             view,
             (
-                AxisGuide(id="guide:x", view_id=view.id, dimension=AxisDimension.X, side=AxisSide.BOTTOM),
-                AxisGuide(id="guide:y", view_id=view.id, dimension=AxisDimension.Y, side=AxisSide.LEFT),
+                AxisGuide(
+                    id="guide:x", view_id=view.id, dimension=AxisDimension.X, side=AxisSide.BOTTOM
+                ),
+                AxisGuide(
+                    id="guide:y", view_id=view.id, dimension=AxisDimension.Y, side=AxisSide.LEFT
+                ),
             ),
         )
 
@@ -148,7 +173,14 @@ def test_render_panel_text_guide_sets_title():
     fig, ax = plt.subplots()
 
     try:
-        render_panel_text_guides(ax, (PanelTextGuide(id="guide:title", panel_id="panel:main", role=PanelTextRole.TITLE, text="Demo"),))
+        render_panel_text_guides(
+            ax,
+            (
+                PanelTextGuide(
+                    id="guide:title", panel_id="panel:main", role=PanelTextRole.TITLE, text="Demo"
+                ),
+            ),
+        )
 
         assert ax.get_title() == "Demo"
     finally:
@@ -192,10 +224,18 @@ def test_render_guides_maps_logical_pixel_style_to_matplotlib_points():
         assert ax.title.get_fontsize() == pytest.approx(logical_px_to_points(20.0, 100.0))
         assert ax.xaxis.labelpad == pytest.approx(logical_px_to_points(8.0, 100.0))
         first_tick = ax.xaxis.majorTicks[0]
-        assert first_tick.tick1line.get_markersize() == pytest.approx(logical_px_to_points(6.0, 100.0))
-        assert first_tick.tick1line.get_markeredgewidth() == pytest.approx(logical_px_to_points(2.0, 100.0))
-        assert ax.get_xticklabels()[0].get_fontsize() == pytest.approx(logical_px_to_points(12.0, 100.0))
-        assert ax.get_xgridlines()[0].get_linewidth() == pytest.approx(logical_px_to_points(1.5, 100.0))
+        assert first_tick.tick1line.get_markersize() == pytest.approx(
+            logical_px_to_points(6.0, 100.0)
+        )
+        assert first_tick.tick1line.get_markeredgewidth() == pytest.approx(
+            logical_px_to_points(2.0, 100.0)
+        )
+        assert ax.get_xticklabels()[0].get_fontsize() == pytest.approx(
+            logical_px_to_points(12.0, 100.0)
+        )
+        assert ax.get_xgridlines()[0].get_linewidth() == pytest.approx(
+            logical_px_to_points(1.5, 100.0)
+        )
     finally:
         plt.close(fig)
 
@@ -229,8 +269,20 @@ def test_grid_visibility_follows_axis_guides():
             ax,
             view,
             (
-                AxisGuide(id="guide:x", view_id=view.id, dimension=AxisDimension.X, side=AxisSide.BOTTOM, grid_visible=True),
-                AxisGuide(id="guide:y", view_id=view.id, dimension=AxisDimension.Y, side=AxisSide.LEFT, grid_visible=False),
+                AxisGuide(
+                    id="guide:x",
+                    view_id=view.id,
+                    dimension=AxisDimension.X,
+                    side=AxisSide.BOTTOM,
+                    grid_visible=True,
+                ),
+                AxisGuide(
+                    id="guide:y",
+                    view_id=view.id,
+                    dimension=AxisDimension.Y,
+                    side=AxisSide.LEFT,
+                    grid_visible=False,
+                ),
             ),
         )
 
@@ -249,8 +301,20 @@ def test_grid_visibility_follows_axis_guides_with_reversed_limits():
             ax,
             view,
             (
-                AxisGuide(id="guide:x", view_id=view.id, dimension=AxisDimension.X, side=AxisSide.BOTTOM, grid_visible=True),
-                AxisGuide(id="guide:y", view_id=view.id, dimension=AxisDimension.Y, side=AxisSide.LEFT, grid_visible=True),
+                AxisGuide(
+                    id="guide:x",
+                    view_id=view.id,
+                    dimension=AxisDimension.X,
+                    side=AxisSide.BOTTOM,
+                    grid_visible=True,
+                ),
+                AxisGuide(
+                    id="guide:y",
+                    view_id=view.id,
+                    dimension=AxisDimension.Y,
+                    side=AxisSide.LEFT,
+                    grid_visible=True,
+                ),
             ),
         )
 
@@ -312,17 +376,17 @@ def test_resolve_matplotlib_layout_snapshot_exposes_native_guide_geometry():
 
         assert snapshot.render_target.logical_width_px == 640
         assert snapshot.render_target.logical_height_px == 480
-        assert snapshot.view_id == "view:main"
-        assert snapshot.plot_rect_px.width > 0
-        assert snapshot.plot_rect_px.height > 0
-        assert snapshot.grid_clip_rect_px == snapshot.plot_rect_px
-        assert [box.kind for box in snapshot.title_boxes] == ["title"]
-        assert snapshot.title_boxes[0].rect_px.y < snapshot.plot_rect_px.y
-        assert any(box.role == "x_axis_label" for box in snapshot.axis_label_boxes)
-        assert any(box.role == "y_axis_label" for box in snapshot.axis_label_boxes)
-        assert any(box.role == "x_tick_label" for box in snapshot.tick_label_boxes)
-        assert any(box.role == "y_tick_label" for box in snapshot.tick_label_boxes)
-        assert len(snapshot.data_to_screen_transform) == 9
+        assert snapshot.only_panel().view_id == "view:main"
+        assert snapshot.only_panel().plot_rect_px.width > 0
+        assert snapshot.only_panel().plot_rect_px.height > 0
+        assert snapshot.only_panel().grid_clip_rect_px == snapshot.only_panel().plot_rect_px
+        assert [box.kind for box in snapshot.only_panel().title_boxes] == ["title"]
+        assert snapshot.only_panel().title_boxes[0].rect_px.y < snapshot.only_panel().plot_rect_px.y
+        assert any(box.role == "x_axis_label" for box in snapshot.only_panel().axis_label_boxes)
+        assert any(box.role == "y_axis_label" for box in snapshot.only_panel().axis_label_boxes)
+        assert any(box.role == "x_tick_label" for box in snapshot.only_panel().tick_label_boxes)
+        assert any(box.role == "y_tick_label" for box in snapshot.only_panel().tick_label_boxes)
+        assert len(snapshot.only_panel().data_to_screen_transform) == 9
     finally:
         plt.close(fig)
 
@@ -395,35 +459,33 @@ def test_resolve_matplotlib_layout_snapshot_normalizes_simulated_retina_geometry
         assert snapshot.render_target.logical_height_px == 480
         assert snapshot.render_target.device_scale == 2
         assert snapshot.render_target.dpi == 100
-        assert snapshot.panel_rect_px == LogicalPixelRect(0, 0, 640, 480)
+        assert snapshot.only_panel().panel_rect_px == LogicalPixelRect(0, 0, 640, 480)
         assert (
-            snapshot.plot_rect_px.x,
-            snapshot.plot_rect_px.y,
-            snapshot.plot_rect_px.width,
-            snapshot.plot_rect_px.height,
-        ) == pytest.approx(
-            (80, 57.6, 496, 369.6)
-        )
-        assert snapshot.grid_clip_rect_px == snapshot.plot_rect_px
-        assert snapshot.guide_boxes
-        for box in snapshot.guide_boxes:
+            snapshot.only_panel().plot_rect_px.x,
+            snapshot.only_panel().plot_rect_px.y,
+            snapshot.only_panel().plot_rect_px.width,
+            snapshot.only_panel().plot_rect_px.height,
+        ) == (80, 58, 496, 369)
+        assert snapshot.only_panel().grid_clip_rect_px == snapshot.only_panel().plot_rect_px
+        assert snapshot.only_panel().guide_boxes
+        for box in snapshot.only_panel().guide_boxes:
             assert 0 <= box.rect_px.x <= 640
             assert 0 <= box.rect_px.y <= 480
             assert box.rect_px.x + box.rect_px.width <= 640
             assert box.rect_px.y + box.rect_px.height <= 480
 
-        transform = np.asarray(snapshot.data_to_screen_transform).reshape(3, 3)
+        transform = np.asarray(snapshot.only_panel().data_to_screen_transform).reshape(3, 3)
         top_left = transform @ np.array([0.0, 1.0, 1.0])
         bottom_right = transform @ np.array([1.0, 0.0, 1.0])
         np.testing.assert_allclose(
             top_left[:2],
-            (snapshot.plot_rect_px.x, snapshot.plot_rect_px.y),
+            (snapshot.only_panel().plot_rect_px.x, snapshot.only_panel().plot_rect_px.y),
         )
         np.testing.assert_allclose(
             bottom_right[:2],
             (
-                snapshot.plot_rect_px.x + snapshot.plot_rect_px.width,
-                snapshot.plot_rect_px.y + snapshot.plot_rect_px.height,
+                snapshot.only_panel().plot_rect_px.x + snapshot.only_panel().plot_rect_px.width,
+                snapshot.only_panel().plot_rect_px.y + snapshot.only_panel().plot_rect_px.height,
             ),
         )
     finally:
@@ -445,13 +507,11 @@ def test_resolve_matplotlib_layout_snapshot_uses_original_dpi_without_resolved_c
         assert snapshot.render_target.logical_height_px == 480
         assert snapshot.render_target.dpi == 100
         assert (
-            snapshot.plot_rect_px.x,
-            snapshot.plot_rect_px.y,
-            snapshot.plot_rect_px.width,
-            snapshot.plot_rect_px.height,
-        ) == pytest.approx(
-            (80, 57.6, 496, 369.6)
-        )
+            snapshot.only_panel().plot_rect_px.x,
+            snapshot.only_panel().plot_rect_px.y,
+            snapshot.only_panel().plot_rect_px.width,
+            snapshot.only_panel().plot_rect_px.height,
+        ) == (80, 58, 496, 369)
     finally:
         plt.close(fig)
 
@@ -468,16 +528,16 @@ def test_resolve_matplotlib_layout_snapshot_uses_independent_display_factors():
         )
 
         assert (
-            snapshot.plot_rect_px.x,
-            snapshot.plot_rect_px.y,
-            snapshot.plot_rect_px.width,
-            snapshot.plot_rect_px.height,
-        ) == pytest.approx((80, 57.6, 496, 369.6))
+            snapshot.only_panel().plot_rect_px.x,
+            snapshot.only_panel().plot_rect_px.y,
+            snapshot.only_panel().plot_rect_px.width,
+            snapshot.only_panel().plot_rect_px.height,
+        ) == (80, 58, 496, 369)
     finally:
         plt.close(fig)
 
 
-def test_resolve_matplotlib_layout_snapshot_preserves_ordinary_agg_geometry():
+def test_resolve_matplotlib_layout_snapshot_quantizes_ordinary_agg_geometry():
     fig, ax = plt.subplots(figsize=(6.4, 4.8), dpi=100)
     try:
         fig.canvas.draw()
@@ -490,17 +550,15 @@ def test_resolve_matplotlib_layout_snapshot_preserves_ordinary_agg_geometry():
         )
 
         assert (
-            snapshot.plot_rect_px.x,
-            snapshot.plot_rect_px.y,
-            snapshot.plot_rect_px.width,
-            snapshot.plot_rect_px.height,
-        ) == pytest.approx(
-            (
-                native.x0,
-                fig.bbox.height - native.y1,
-                native.width,
-                native.height,
-            )
+            snapshot.only_panel().plot_rect_px.x,
+            snapshot.only_panel().plot_rect_px.y,
+            snapshot.only_panel().plot_rect_px.width,
+            snapshot.only_panel().plot_rect_px.height,
+        ) == (
+            round(native.x0),
+            round(fig.bbox.height - native.y1),
+            round(native.x1) - round(native.x0),
+            round(native.y1) - round(native.y0),
         )
     finally:
         plt.close(fig)
@@ -547,8 +605,20 @@ def test_query_resolved_matplotlib_layout_guides_hits_title_box():
     fig, ax = plt.subplots(figsize=(6.4, 4.8), dpi=100)
     view = View2D(id="view:main", panel_id="panel:main")
     axis_guides = (
-        AxisGuide(id="guide:x", view_id=view.id, dimension=AxisDimension.X, side=AxisSide.BOTTOM, label_text="x"),
-        AxisGuide(id="guide:y", view_id=view.id, dimension=AxisDimension.Y, side=AxisSide.LEFT, label_text="y"),
+        AxisGuide(
+            id="guide:x",
+            view_id=view.id,
+            dimension=AxisDimension.X,
+            side=AxisSide.BOTTOM,
+            label_text="x",
+        ),
+        AxisGuide(
+            id="guide:y",
+            view_id=view.id,
+            dimension=AxisDimension.Y,
+            side=AxisSide.LEFT,
+            label_text="y",
+        ),
     )
     title = PanelTextGuide(
         id="guide:title",
@@ -569,7 +639,7 @@ def test_query_resolved_matplotlib_layout_guides_hits_title_box():
             axis_guides=axis_guides,
             panel_text_guides=(title,),
         )
-        title_rect = snapshot.title_boxes[0].rect_px
+        title_rect = snapshot.only_panel().title_boxes[0].rect_px
         result = query_resolved_layout_guides(
             QueryRequest(
                 id="query:title",
@@ -594,16 +664,26 @@ def test_query_resolved_matplotlib_layout_guides_hits_title_box():
 
 
 def test_query_resolved_matplotlib_layout_guides_returns_all_overlapping_boxes():
-    synthetic = ResolvedLayoutSnapshot(
+    synthetic = resolved_single_panel_fixture(
         snapshot_id="layout:synthetic",
         render_target=RenderTarget(logical_width_px=100, logical_height_px=100),
         panel_rect_px=LogicalPixelRect(0, 0, 100, 100),
         plot_rect_px=LogicalPixelRect(10, 10, 80, 80),
         title_boxes=(
-            ResolvedGuideBox(guide_id="guide:title", kind="title", role="title", rect_px=LogicalPixelRect(20, 5, 60, 20)),
+            ResolvedGuideBox(
+                guide_id="guide:title",
+                kind="title",
+                role="title",
+                rect_px=LogicalPixelRect(20, 5, 60, 20),
+            ),
         ),
         axis_label_boxes=(
-            ResolvedGuideBox(guide_id="guide:x", kind="axis_label", role="x_axis_label", rect_px=LogicalPixelRect(20, 15, 60, 20)),
+            ResolvedGuideBox(
+                guide_id="guide:x",
+                kind="axis_label",
+                role="x_axis_label",
+                rect_px=LogicalPixelRect(20, 15, 60, 20),
+            ),
         ),
     )
     result = query_resolved_layout_guides(

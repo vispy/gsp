@@ -98,7 +98,9 @@ class TickSpec:
         if self.kind == TickSpecKind.EXPLICIT:
             if not self.explicit_values:
                 raise ValueError("explicit TickSpec requires explicit_values")
-            if self.explicit_labels is not None and len(self.explicit_labels) != len(self.explicit_values):
+            if self.explicit_labels is not None and len(self.explicit_labels) != len(
+                self.explicit_values
+            ):
                 raise ValueError("explicit tick labels must match explicit tick values")
         if self.target_count is not None and self.target_count <= 0:
             raise ValueError("target_count must be positive")

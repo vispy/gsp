@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 
 import gsp
+from conformance.p038_support import resolved_single_panel_fixture, single_panel_scene
 from gsp.protocol import (
     AdaptationDecision,
     AdaptationOutcome,
@@ -34,7 +35,6 @@ from gsp.protocol import (
     QueryScope,
     QueryStatus,
     RenderTarget,
-    ResolvedLayoutSnapshot,
     SegmentVisual,
     SphereVisual,
     TextVisual,
@@ -106,16 +106,16 @@ class _FakeRenderer:
 
 class _FakeCapabilities:
     def __init__(
-        self, *, live_view3d: bool = False, query_outcome: AdaptationOutcome = AdaptationOutcome.ACCEPT
+        self,
+        *,
+        live_view3d: bool = False,
+        query_outcome: AdaptationOutcome = AdaptationOutcome.ACCEPT,
     ) -> None:
         self.live_view3d = live_view3d
         self.query_outcome = query_outcome
 
     def supports_view3d_capability(self, capability: str) -> bool:
-        return (
-            capability == VIEW3D_NAVIGATION_ORBIT_PAN_ZOOM_CAPABILITY
-            and self.live_view3d
-        )
+        return capability == VIEW3D_NAVIGATION_ORBIT_PAN_ZOOM_CAPABILITY and self.live_view3d
 
     def adapt_query_request(self, request: QueryRequest) -> AdaptationDecision:
         return AdaptationDecision(
@@ -153,7 +153,7 @@ def _session(
 
 
 def _scene() -> gsp.Scene:
-    return gsp.Scene(
+    return single_panel_scene(
         id="scene:live-view2d",
         visuals=(
             PointVisual(
@@ -171,8 +171,33 @@ def _scene() -> gsp.Scene:
     )
 
 
+def test_datoviz_rejects_direct_multi_panel_scene_before_renderer_build() -> None:
+    panels = (Panel("panel:left"), Panel("panel:right"))
+    scene = gsp.Scene(
+        id="scene:multi",
+        panels=panels,
+        panel_layout=gsp.protocol.ExplicitPanelLayoutV1(
+            (
+                gsp.protocol.PanelPlacement(
+                    panels[0].id,
+                    gsp.protocol.NormalizedRenderTargetRect(0.0, 0.0, 0.5, 1.0),
+                ),
+                gsp.protocol.PanelPlacement(
+                    panels[1].id,
+                    gsp.protocol.NormalizedRenderTargetRect(0.5, 0.0, 0.5, 1.0),
+                ),
+            )
+        ),
+    )
+    renderer = _FakeRenderer(View2D("view:unused", "panel:left"))
+    session = _session(renderer)
+    with pytest.raises(ValueError, match="exactly one scene panel"):
+        session.render(scene)
+    assert session._renderers == []
+
+
 def _mesh3d_scene() -> gsp.Scene:
-    return gsp.Scene(
+    return single_panel_scene(
         id="scene:mesh3d",
         visuals=(
             MeshVisual(
@@ -216,15 +241,15 @@ def test_interactive_2d_display_enables_canonical_navigation_exactly_once() -> N
 
 
 def test_datoviz_consumed_layout_rejects_canvas_mismatch_before_renderer_build() -> None:
-    panel = Panel(id="panel:layout", figure_id="figure:layout")
+    panel = Panel(id="panel:layout")
     view = View2D(id="view:layout", panel_id=panel.id)
-    scene = gsp.Scene(
+    scene = single_panel_scene(
         id="scene:layout",
         panels=(panel,),
         view2d=view,
         canvas_size=CanvasSize.pixel_exact(320, 240),
     )
-    layout = ResolvedLayoutSnapshot(
+    layout = resolved_single_panel_fixture(
         snapshot_id="layout:target",
         render_target=RenderTarget(640, 480),
         panel_rect_px=LogicalPixelRect(0, 0, 640, 480),
@@ -243,8 +268,8 @@ def test_datoviz_consumed_layout_rejects_canvas_mismatch_before_renderer_build()
 def test_datoviz_consumed_layout_omits_two_titles_with_one_diagnostic_per_render() -> None:
     base = _mesh3d_scene()
     assert base.view3d is not None
-    panel = Panel(id=base.view3d.panel_id, figure_id="figure:layout")
-    scene = gsp.Scene(
+    panel = Panel(id=base.view3d.panel_id)
+    scene = single_panel_scene(
         id=base.id,
         visuals=base.visuals,
         panels=(panel,),
@@ -265,7 +290,7 @@ def test_datoviz_consumed_layout_omits_two_titles_with_one_diagnostic_per_render
         ),
         canvas_size=CanvasSize.pixel_exact(800, 600),
     )
-    layout = ResolvedLayoutSnapshot(
+    layout = resolved_single_panel_fixture(
         snapshot_id="layout:shared-title",
         render_target=RenderTarget(800, 600),
         panel_rect_px=LogicalPixelRect(0, 0, 800, 600),
@@ -279,9 +304,7 @@ def test_datoviz_consumed_layout_omits_two_titles_with_one_diagnostic_per_render
     )
 
     assert session.render(scene, layout_snapshot=layout) is renderer  # type: ignore[comparison-overlap]
-    assert session.diagnostics == (
-        "panel_text_title_unsupported_no_public_renderer_path",
-    )
+    assert session.diagnostics == ("panel_text_title_unsupported_no_public_renderer_path",)
 
 
 @pytest.mark.parametrize(
@@ -297,8 +320,8 @@ def test_datoviz_consumed_layout_rejects_unsupported_panel_text_before_renderer_
 ) -> None:
     base = _mesh3d_scene()
     assert base.view3d is not None
-    panel = Panel(id=base.view3d.panel_id, figure_id="figure:layout")
-    scene = gsp.Scene(
+    panel = Panel(id=base.view3d.panel_id)
+    scene = single_panel_scene(
         id=base.id,
         visuals=base.visuals,
         panels=(panel,),
@@ -314,7 +337,7 @@ def test_datoviz_consumed_layout_rejects_unsupported_panel_text_before_renderer_
         ),
         canvas_size=CanvasSize.pixel_exact(800, 600),
     )
-    layout = ResolvedLayoutSnapshot(
+    layout = resolved_single_panel_fixture(
         snapshot_id="layout:shared-panel-text",
         render_target=RenderTarget(800, 600),
         panel_rect_px=LogicalPixelRect(0, 0, 800, 600),
@@ -409,12 +432,10 @@ def test_scene_emits_geometry_then_stably_z_ordered_overlay_text(
         def close(self) -> None:
             pass
 
-    monkeypatch.setattr(
-        session_module, "DatovizV04ProtocolRenderer", RecordingRenderer
-    )
+    monkeypatch.setattr(session_module, "DatovizV04ProtocolRenderer", RecordingRenderer)
     session = object.__new__(DatovizSession)
     session._dvz = object()  # type: ignore[assignment]
-    scene = gsp.Scene(
+    scene = single_panel_scene(
         id="scene:text-order",
         visuals=(
             TextVisual(
@@ -519,7 +540,7 @@ def test_public_datoviz_query_routes_proven_view3d_ray_path() -> None:
 
 def test_public_datoviz_query_targets_latest_explicit_and_replaced_scene_render() -> None:
     first = _scene()
-    second = gsp.Scene(
+    second = single_panel_scene(
         id="scene:second",
         visuals=first.visuals,
         view2d=first.view2d,
@@ -621,10 +642,10 @@ def test_public_datoviz_query_rejects_every_unproven_family_and_mixed_scene(
     visual: Any, mixed: bool
 ) -> None:
     base = _scene()
-    visuals = ((base.visuals[0], visual) if mixed else (visual,))
+    visuals = (base.visuals[0], visual) if mixed else (visual,)
     view3d = _mesh3d_scene().view3d if isinstance(visual, SphereVisual) else None
     view2d = None if view3d is not None else base.view2d
-    scene = gsp.Scene(
+    scene = single_panel_scene(
         id=f"scene:unsupported:{type(visual).__name__.lower()}:{int(mixed)}",
         visuals=visuals,
         view2d=view2d,

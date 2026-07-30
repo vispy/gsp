@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+from conformance.p038_support import single_panel_scene
 
-from gsp import Scene
 from gsp.protocol import (
     Camera3D,
     CoordinateSpace,
@@ -35,23 +35,19 @@ def test_pixelvisual_2d_scene_preserves_logical_sizes_and_colors() -> None:
     visual = PixelVisual(
         id="pixel:2d",
         positions=np.array([[-0.5, -0.5], [0.5, 0.5]], dtype=np.float32),
-        colors=np.array(
-            [[255, 0, 0, 255], [0, 255, 0, 128]], dtype=np.uint8
-        ),
+        colors=np.array([[255, 0, 0, 255], [0, 255, 0, 128]], dtype=np.uint8),
         pixel_size_px=np.array([3.0, 7.0], dtype=np.float32),
     )
-    scene = Scene(
+    scene = single_panel_scene(
         id="scene:pixel-2d",
         visuals=(visual,),
-        panels=(Panel(id="panel:2d", figure_id="figure:1"),),
+        panels=(Panel(id="panel:2d"),),
         view2d=View2D(id="view:2d", panel_id="panel:2d"),
     )
 
     assert scene.visuals == (visual,)
     np.testing.assert_array_equal(visual.pixel_size_values(), [3.0, 7.0])
-    np.testing.assert_array_equal(
-        visual.colors, [[255, 0, 0, 255], [0, 255, 0, 128]]
-    )
+    np.testing.assert_array_equal(visual.colors, [[255, 0, 0, 255], [0, 255, 0, 128]])
 
 
 def test_pixelvisual_3d_contract_requires_data_space_and_view3d() -> None:
@@ -64,14 +60,14 @@ def test_pixelvisual_3d_contract_requires_data_space_and_view3d() -> None:
     )
 
     with pytest.raises(ValueError, match="Scene.view3d"):
-        Scene(id="scene:missing-view3d", visuals=(visual,))
+        single_panel_scene(id="scene:missing-view3d", visuals=(visual,))
 
-    scene = Scene(id="scene:pixel-3d", visuals=(visual,), view3d=_view3d())
+    scene = single_panel_scene(id="scene:pixel-3d", visuals=(visual,), view3d=_view3d())
     assert scene.visuals == (visual,)
     np.testing.assert_array_equal(visual.pixel_size_values(), [5.0, 5.0])
 
     with pytest.raises(ValueError, match="CoordinateSpace.DATA"):
-        Scene(
+        single_panel_scene(
             id="scene:pixel-3d-ndc",
             visuals=(
                 PixelVisual(

@@ -8,8 +8,12 @@ from gsp.protocol import (
     PerspectiveProjection3D,
     PixelOrigin,
     Panel,
+    PanelPlacement,
+    NormalizedRenderTargetRect,
+    ExplicitPanelLayoutV1,
     RenderTarget,
     ResolvedLayoutSnapshot,
+    ResolvedPanelLayout,
     View3D,
     View2D,
     View3DNavigationAction,
@@ -18,13 +22,13 @@ from gsp.protocol import (
     apply_view3d_navigation_action,
     classify_logical_coordinate,
     logical_coordinate_in_data_viewport,
-    panel_ndc_to_plot_logical_px,
+    plot_ndc_to_plot_logical_px,
     pan_view2d,
-    plot_logical_px_to_panel_ndc,
+    plot_logical_px_to_plot_ndc,
     project_view3d_data_point,
     resolve_view3d_projection_snapshot,
-    resolve_panel_viewport_rect,
-    unproject_view3d_panel_ndc_point,
+    resolve_panel_layout_intent,
+    unproject_view3d_plot_ndc_point,
     zoom_view3d,
     zoom_view2d_about,
 )
@@ -38,10 +42,15 @@ def _layout(
 ) -> ResolvedLayoutSnapshot:
     return ResolvedLayoutSnapshot(
         snapshot_id=snapshot_id,
-        view_id="view:perspective",
         render_target=RenderTarget(800.0, 600.0),
-        panel_rect_px=panel,
-        plot_rect_px=plot,
+        panels=(
+            ResolvedPanelLayout(
+                panel_id="panel:main",
+                view_id="view:perspective",
+                panel_rect_px=panel,
+                plot_rect_px=plot,
+            ),
+        ),
     )
 
 
@@ -63,10 +72,16 @@ def _view(*, authored_aspect: float | None = None) -> View3D:
 
 
 def test_normalized_panel_intent_and_view2d_origin_are_executable() -> None:
-    panel = Panel(
-        id="panel:main",
-        figure_id="figure:main",
-        viewport_rect=(0.125, 0.1, 0.75, 0.8),
+    panel = Panel(id="panel:main")
+    panel_layout = ExplicitPanelLayoutV1(
+        (
+            PanelPlacement(
+                panel_id=panel.id,
+                allocation_rect=NormalizedRenderTargetRect(
+                    left=0.125, top=0.1, width=0.75, height=0.8
+                ),
+            ),
+        )
     )
     view = View2D(
         id="view:main",
@@ -76,23 +91,35 @@ def test_normalized_panel_intent_and_view2d_origin_are_executable() -> None:
     )
     top_left = ResolvedLayoutSnapshot(
         snapshot_id="layout:top-left",
-        view_id=view.id,
         render_target=RenderTarget(800.0, 600.0, pixel_origin=PixelOrigin.TOP_LEFT),
-        panel_rect_px=resolve_panel_viewport_rect(panel, RenderTarget(800.0, 600.0)),
-        plot_rect_px=LogicalPixelRect(140.0, 100.0, 520.0, 400.0),
+        panels=(
+            ResolvedPanelLayout(
+                panel_id=panel.id,
+                view_id=view.id,
+                panel_rect_px=resolve_panel_layout_intent(panel_layout, RenderTarget(800.0, 600.0))[
+                    0
+                ].panel_rect_px,
+                plot_rect_px=LogicalPixelRect(140.0, 100.0, 520.0, 400.0),
+            ),
+        ),
     )
     bottom_left = ResolvedLayoutSnapshot(
         snapshot_id="layout:bottom-left",
-        view_id=view.id,
         render_target=RenderTarget(800.0, 600.0, pixel_origin=PixelOrigin.BOTTOM_LEFT),
-        panel_rect_px=top_left.panel_rect_px,
-        plot_rect_px=top_left.plot_rect_px,
+        panels=(
+            ResolvedPanelLayout(
+                panel_id=panel.id,
+                view_id=view.id,
+                panel_rect_px=top_left.only_panel().panel_rect_px,
+                plot_rect_px=top_left.only_panel().plot_rect_px,
+            ),
+        ),
     )
 
-    assert top_left.panel_rect_px == LogicalPixelRect(100.0, 60.0, 600.0, 480.0)
+    assert top_left.only_panel().panel_rect_px == LogicalPixelRect(100.0, 60.0, 600.0, 480.0)
     assert zoom_view2d_about(
         view,
-        top_left.plot_rect_px,
+        top_left.only_panel().plot_rect_px,
         (400.0, 100.0),
         1.0,
         2.0,
@@ -100,7 +127,7 @@ def test_normalized_panel_intent_and_view2d_origin_are_executable() -> None:
     ).y_range == pytest.approx((50.0, 100.0))
     assert zoom_view2d_about(
         view,
-        bottom_left.plot_rect_px,
+        bottom_left.only_panel().plot_rect_px,
         (400.0, 100.0),
         1.0,
         2.0,
@@ -108,14 +135,14 @@ def test_normalized_panel_intent_and_view2d_origin_are_executable() -> None:
     ).y_range == pytest.approx((0.0, 50.0))
     assert pan_view2d(
         view,
-        top_left.plot_rect_px,
+        top_left.only_panel().plot_rect_px,
         0.0,
         40.0,
         layout_snapshot=top_left,
     ).y_range == pytest.approx((10.0, 110.0))
     assert pan_view2d(
         view,
-        bottom_left.plot_rect_px,
+        bottom_left.only_panel().plot_rect_px,
         0.0,
         40.0,
         layout_snapshot=bottom_left,
@@ -144,25 +171,18 @@ def test_plot_viewport_round_trips_and_drives_perspective_projection(
 ) -> None:
     layout = _layout("layout:strict", panel=panel, plot=plot)
     view = _view()
-    projection = resolve_view3d_projection_snapshot(
-        view, layout_snapshot=layout
-    )
+    projection = resolve_view3d_projection_snapshot(view, layout_snapshot=layout)
     point = (0.75, -0.4, 0.0)
 
-    ndc = project_view3d_data_point(
-        view, point, aspect_ratio=projection.aspect_ratio
-    )
-    logical = panel_ndc_to_plot_logical_px(layout, ndc[:2])
+    ndc = project_view3d_data_point(view, point, aspect_ratio=projection.aspect_ratio)
+    logical = plot_ndc_to_plot_logical_px(layout, ndc[:2])
 
-    assert plot_logical_px_to_panel_ndc(layout, logical) == pytest.approx(ndc[:2])
-    assert unproject_view3d_panel_ndc_point(
+    assert plot_logical_px_to_plot_ndc(layout, logical) == pytest.approx(ndc[:2])
+    assert unproject_view3d_plot_ndc_point(
         view, ndc, aspect_ratio=projection.aspect_ratio
     ) == pytest.approx(point)
     assert projection.aspect_ratio == pytest.approx(plot.width / plot.height)
-    assert (
-        projection.aspect_ratio_source
-        is PerspectiveAspectRatioSource.RESOLVED_LAYOUT
-    )
+    assert projection.aspect_ratio_source is PerspectiveAspectRatioSource.RESOLVED_LAYOUT
 
 
 def test_title_lane_is_outside_data_viewport_but_inside_outer_panel() -> None:
@@ -181,7 +201,7 @@ def test_title_lane_is_outside_data_viewport_but_inside_outer_panel() -> None:
         is LogicalCoordinateRegion.PANEL_GUIDE_LANE
     )
     with pytest.raises(ValueError, match="closed plot_rect_px"):
-        plot_logical_px_to_panel_ndc(layout, title_coordinate)
+        plot_logical_px_to_plot_ndc(layout, title_coordinate)
 
 
 def test_effective_plot_viewport_and_layout_identity_change_projection_identity() -> None:
@@ -198,22 +218,14 @@ def test_effective_plot_viewport_and_layout_identity_change_projection_identity(
     )
     stale_id = _layout(
         "layout:stale",
-        panel=full.panel_rect_px,
-        plot=full.plot_rect_px,
+        panel=full.only_panel().panel_rect_px,
+        plot=full.only_panel().plot_rect_px,
     )
 
-    full_projection = resolve_view3d_projection_snapshot(
-        view, layout_snapshot=full
-    )
-    repeated_projection = resolve_view3d_projection_snapshot(
-        view, layout_snapshot=full
-    )
-    inset_projection = resolve_view3d_projection_snapshot(
-        view, layout_snapshot=inset
-    )
-    stale_projection = resolve_view3d_projection_snapshot(
-        view, layout_snapshot=stale_id
-    )
+    full_projection = resolve_view3d_projection_snapshot(view, layout_snapshot=full)
+    repeated_projection = resolve_view3d_projection_snapshot(view, layout_snapshot=full)
+    inset_projection = resolve_view3d_projection_snapshot(view, layout_snapshot=inset)
+    stale_projection = resolve_view3d_projection_snapshot(view, layout_snapshot=stale_id)
 
     assert full_projection.view_projection_snapshot_id != (
         inset_projection.view_projection_snapshot_id
@@ -235,18 +247,13 @@ def test_authored_aspect_wins_and_legacy_id_only_path_is_diagnosed() -> None:
     explicit = resolve_view3d_projection_snapshot(
         _view(authored_aspect=2.0), layout_snapshot=layout
     )
-    legacy = resolve_view3d_projection_snapshot(
-        _view(), layout_snapshot_id="layout:legacy"
-    )
+    legacy = resolve_view3d_projection_snapshot(_view(), layout_snapshot_id="layout:legacy")
 
     assert explicit.aspect_ratio == pytest.approx(2.0)
     assert explicit.aspect_ratio_source is PerspectiveAspectRatioSource.EXPLICIT
     assert explicit.diagnostics == ()
     assert legacy.aspect_ratio == pytest.approx(1.0)
-    assert (
-        legacy.aspect_ratio_source
-        is PerspectiveAspectRatioSource.COMPATIBILITY_DEFAULT
-    )
+    assert legacy.aspect_ratio_source is PerspectiveAspectRatioSource.COMPATIBILITY_DEFAULT
     assert "layout_geometry_missing" in legacy.diagnostics[0]
 
 
@@ -271,19 +278,15 @@ def test_layout_resolved_navigation_refreshes_identity_and_rejects_stale_layout(
 
     assert result.accepted
     assert result.view is not None
-    updated = resolve_view3d_projection_snapshot(
-        result.view, layout_snapshot=layout
-    )
+    updated = resolve_view3d_projection_snapshot(result.view, layout_snapshot=layout)
     assert result.view_projection_snapshot_id == updated.view_projection_snapshot_id
 
     stale_layout = _layout(
         "layout:changed",
-        panel=layout.panel_rect_px,
+        panel=layout.only_panel().panel_rect_px,
         plot=LogicalPixelRect(120.0, 80.0, 560.0, 450.0),
     )
-    rejected = apply_view3d_navigation_action(
-        view, action, layout_snapshot=stale_layout
-    )
+    rejected = apply_view3d_navigation_action(view, action, layout_snapshot=stale_layout)
     assert not rejected.accepted
     assert "snapshot_mismatch" in rejected.diagnostics[0]
 
@@ -297,13 +300,12 @@ def test_guide_lane_cannot_construct_ray_or_mesh_pick_ndc() -> None:
     coordinate = (400.0, 50.0)
 
     assert (
-        classify_logical_coordinate(layout, coordinate)
-        is LogicalCoordinateRegion.PANEL_GUIDE_LANE
+        classify_logical_coordinate(layout, coordinate) is LogicalCoordinateRegion.PANEL_GUIDE_LANE
     )
     with pytest.raises(ValueError, match="closed plot_rect_px"):
-        plot_logical_px_to_panel_ndc(layout, coordinate)
+        plot_logical_px_to_plot_ndc(layout, coordinate)
     with pytest.raises(ValueError, match="closed data plot"):
         zoom_view3d(
             _view(),
-            Zoom3DPayload(scale=2.0, anchor_panel_ndc_xy=(0.0, 1.01)),
+            Zoom3DPayload(scale=2.0, anchor_plot_ndc_xy=(0.0, 1.01)),
         )

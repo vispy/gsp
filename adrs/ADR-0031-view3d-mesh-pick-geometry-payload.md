@@ -29,7 +29,7 @@ request, and at most one frontmost visible supported triangle. On hits, it adds 
 
 ```text
 hit_barycentric: tuple[float, float, float]
-hit_panel_ndc_z: float
+hit_plot_ndc_z: float
 hit_data_xyz: tuple[float, float, float]
 ```
 
@@ -48,7 +48,7 @@ When advertised, hits include:
 front_facing: bool
 ```
 
-Facing uses the P032 projected panel-NDC winding rule. `area2 > 0` is front-facing and `area2 < 0`
+Facing uses the P032 projected plot-NDC winding rule. `area2 > 0` is front-facing and `area2 < 0`
 is back-facing.
 
 ## Geometry Semantics
@@ -63,23 +63,23 @@ hit_data_xyz = lambda0 * p0 + lambda1 * p1 + lambda2 * p2
 ```
 
 The order is not sorted, winding-normalized, or remapped to backend draw order. For the accepted
-orthographic DATA-space scope, DATA/ray barycentrics and projected panel-NDC barycentrics must agree
+orthographic DATA-space scope, DATA/ray barycentrics and projected plot-NDC barycentrics must agree
 in exact arithmetic.
 
-`hit_panel_ndc_z` is:
+`hit_plot_ndc_z` is:
 
 ```text
-hit_panel_ndc_z = lambda0 * q0.z + lambda1 * q1.z + lambda2 * q2.z
+hit_plot_ndc_z = lambda0 * q0.z + lambda1 * q1.z + lambda2 * q2.z
 ```
 
-where `qk = View3D.project(pk)`. The panel-NDC depth convention remains `-1` near, `+1` far, smaller
-is closer. The canonical panel-NDC hit position is:
+where `qk = View3D.project(pk)`. The plot-NDC depth convention remains `-1` near, `+1` far, smaller
+is closer. The canonical plot-NDC hit position is:
 
 ```text
-(panel_ndc_xy[0], panel_ndc_xy[1], hit_panel_ndc_z)
+(plot_ndc_xy[0], plot_ndc_xy[1], hit_plot_ndc_z)
 ```
 
-No separate `hit_panel_ndc_xyz` field is accepted.
+No separate `hit_plot_ndc_xyz` field is accepted.
 
 ## Tolerances
 
@@ -94,7 +94,7 @@ Implementations must not clamp or snap barycentrics before returning them. First
 should avoid exact shared edges, equal-depth ties, near-zero projected area, and clipping-boundary
 hits.
 
-`hit_panel_ndc_z` fixtures should compare with `abs_tol <= 5e-5`. `hit_data_xyz` fixture tolerance is
+`hit_plot_ndc_z` fixtures should compare with `abs_tol <= 5e-5`. `hit_data_xyz` fixture tolerance is
 per-component:
 
 ```text
@@ -124,7 +124,7 @@ to diagnose CPU reference behavior rather than claiming GPU fragment-depth stric
 
 Datoviz must not advertise base mesh triangle picking or geometry payloads until public Datoviz
 APIs expose canonical public triangle identity. After that upstream primitive-id blocker is solved,
-GSP can reconstruct `hit_barycentric`, `hit_panel_ndc_z`, `hit_data_xyz`, and `front_facing` from
+GSP can reconstruct `hit_barycentric`, `hit_plot_ndc_z`, `hit_data_xyz`, and `front_facing` from
 public GSP scene records. Native Datoviz barycentric fields are optional; private Datoviz state is
 not public evidence.
 

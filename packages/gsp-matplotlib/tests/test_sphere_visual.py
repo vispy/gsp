@@ -20,9 +20,7 @@ def _view3d() -> View3D:
     return View3D(
         id="view:3d",
         panel_id="panel:1",
-        camera=Camera3D(
-            eye=(0.0, 0.0, 5.0), target=(0.0, 0.0, 0.0), up=(0.0, 1.0, 0.0)
-        ),
+        camera=Camera3D(eye=(0.0, 0.0, 5.0), target=(0.0, 0.0, 0.0), up=(0.0, 1.0, 0.0)),
         projection=OrthographicProjection3D(
             xlim=(-2.0, 2.0), ylim=(-2.0, 2.0), near_far=(0.1, 20.0)
         ),
@@ -73,9 +71,7 @@ def test_matplotlib_perspective_sphere_near_center_has_larger_projected_size() -
         )
         visual = SphereVisual(
             id="sphere:perspective",
-            positions=np.array(
-                [[0.0, 0.0, -1.0], [0.0, 0.0, 1.0]], dtype=np.float32
-            ),
+            positions=np.array([[0.0, 0.0, -1.0], [0.0, 0.0, 1.0]], dtype=np.float32),
             radii=0.5,
             colors=np.array([255, 0, 0, 255], dtype=np.uint8),
         )

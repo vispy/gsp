@@ -39,7 +39,9 @@ def _array_descriptor(**overrides: object) -> DataSourceDescriptor:
 
 
 def test_s022_http_array_descriptor_accepts_preconfigured_npy_array_shape():
-    result = validate_s022_http_array_source_descriptor(_array_descriptor(), allowed_source_refs=(SOURCE_REF,))
+    result = validate_s022_http_array_source_descriptor(
+        _array_descriptor(), allowed_source_refs=(SOURCE_REF,)
+    )
 
     assert result.accepted
     assert result.codes == ()

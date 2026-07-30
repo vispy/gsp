@@ -52,12 +52,12 @@ from gsp.protocol import (
     face_culling_excludes,
     mesh_pick_barycentric_2d,
     mesh_pick_data_xyz,
-    mesh_pick_panel_ndc_z,
+    mesh_pick_plot_ndc_z,
     mesh_pick_projected_front_facing,
     project_view3d_data_point,
     projected_triangle_area2,
-    plot_logical_px_to_panel_ndc,
-    unproject_view3d_panel_ndc_point,
+    plot_logical_px_to_plot_ndc,
+    unproject_view3d_plot_ndc_point,
 )
 from gsp.protocol.visuals import (
     DepthMode,
@@ -74,7 +74,7 @@ from gsp_matplotlib.color_mapping import map_scalar_value, resolve_color_scale
 from gsp_matplotlib.transforms import (
     binding_inline_digest,
     binding_transform_ids,
-    declared_to_panel_ndc,
+    declared_to_plot_ndc,
     inverse_transform_coordinate,
     transformed_positions,
 )
@@ -254,21 +254,22 @@ def query_view3d_ray_context(
             layout_snapshot_id=snapshot.layout_snapshot_id,
             view_snapshot_id=snapshot.view_projection_snapshot_id,
         )
-    panel_ndc = (
-        plot_logical_px_to_panel_ndc(layout_snapshot, request.coordinate)
+    plot_ndc = (
+        plot_logical_px_to_plot_ndc(layout_snapshot, request.coordinate)
         if layout_snapshot is not None
         else _panel_coordinate_to_ndc(request.coordinate, panel_bounds)
     )
     aspect_ratio = (
-        layout_snapshot.plot_rect_px.width / layout_snapshot.plot_rect_px.height
+        layout_snapshot.only_panel().plot_rect_px.width
+        / layout_snapshot.only_panel().plot_rect_px.height
         if layout_snapshot is not None
         else _panel_bounds_aspect_ratio(panel_bounds)
     )
-    near = unproject_view3d_panel_ndc_point(
-        view, (panel_ndc[0], panel_ndc[1], -1.0), aspect_ratio=aspect_ratio
+    near = unproject_view3d_plot_ndc_point(
+        view, (plot_ndc[0], plot_ndc[1], -1.0), aspect_ratio=aspect_ratio
     )
-    far = unproject_view3d_panel_ndc_point(
-        view, (panel_ndc[0], panel_ndc[1], 1.0), aspect_ratio=aspect_ratio
+    far = unproject_view3d_plot_ndc_point(
+        view, (plot_ndc[0], plot_ndc[1], 1.0), aspect_ratio=aspect_ratio
     )
     ray_direction = _normalized3(_sub3(far, near))
     payload = View3DQueryPayload(
@@ -277,7 +278,7 @@ def query_view3d_ray_context(
         layout_snapshot_id=snapshot.layout_snapshot_id,
         view_projection_snapshot_id=snapshot.view_projection_snapshot_id,
         panel_xy=request.coordinate,
-        panel_ndc=panel_ndc,
+        plot_ndc=plot_ndc,
         near_data_point=near,
         far_data_point=far,
         ray_direction=ray_direction,
@@ -287,7 +288,7 @@ def query_view3d_ray_context(
         status=QueryStatus.HIT,
         hit=True,
         panel_coordinate=request.coordinate,
-        visual_coordinate=panel_ndc,
+        visual_coordinate=plot_ndc,
         data_coordinate=(near[0], near[1]),
         value={
             "kind": "view3d-ray",
@@ -335,8 +336,8 @@ def query_view3d_mesh_triangle_pick(
     if invalid is not None:
         return invalid
 
-    panel_ndc = (
-        plot_logical_px_to_panel_ndc(layout_snapshot, request.panel_xy)
+    plot_ndc = (
+        plot_logical_px_to_plot_ndc(layout_snapshot, request.panel_xy)
         if layout_snapshot is not None
         else _panel_coordinate_to_ndc(request.panel_xy, panel_bounds)
     )
@@ -350,7 +351,7 @@ def query_view3d_mesh_triangle_pick(
                 QueryStatus.UNSUPPORTED,
                 view=view,
                 snapshot=snapshot,
-                panel_ndc=panel_ndc,
+                plot_ndc=plot_ndc,
                 pick_scene_snapshot_id=actual_pick_scene_snapshot_id,
                 diagnostics=(
                     _pick_diagnostic(
@@ -367,7 +368,7 @@ def query_view3d_mesh_triangle_pick(
                 QueryStatus.UNSUPPORTED,
                 view=view,
                 snapshot=snapshot,
-                panel_ndc=panel_ndc,
+                plot_ndc=plot_ndc,
                 pick_scene_snapshot_id=actual_pick_scene_snapshot_id,
                 diagnostics=(unsupported,),
                 geometry_payload=geometry_payload,
@@ -390,14 +391,14 @@ def query_view3d_mesh_triangle_pick(
             if np.any(triangle[:, 2] < -1.0) or np.any(triangle[:, 2] > 1.0):
                 continue
             barycentric = mesh_pick_barycentric_2d(
-                panel_ndc,
+                plot_ndc,
                 _float3(triangle[0]),
                 _float3(triangle[1]),
                 _float3(triangle[2]),
             )
             if barycentric is None:
                 continue
-            depth = mesh_pick_panel_ndc_z(
+            depth = mesh_pick_plot_ndc_z(
                 barycentric,
                 _float3(triangle[0]),
                 _float3(triangle[1]),
@@ -409,7 +410,7 @@ def query_view3d_mesh_triangle_pick(
                     QueryStatus.UNSUPPORTED,
                     view=view,
                     snapshot=snapshot,
-                    panel_ndc=panel_ndc,
+                    plot_ndc=plot_ndc,
                     pick_scene_snapshot_id=actual_pick_scene_snapshot_id,
                     diagnostics=(
                         _pick_diagnostic(
@@ -455,13 +456,13 @@ def query_view3d_mesh_triangle_pick(
             QueryStatus.MISS,
             view=view,
             snapshot=snapshot,
-            panel_ndc=panel_ndc,
+            plot_ndc=plot_ndc,
             pick_scene_snapshot_id=actual_pick_scene_snapshot_id,
             diagnostics=diagnostics,
             geometry_payload=geometry_payload,
         )
 
-    _, visual_id, primitive_index, barycentric, panel_ndc_z, data_xyz, front_facing = best
+    _, visual_id, primitive_index, barycentric, plot_ndc_z, data_xyz, front_facing = best
     diagnostics = (_pick_cpu_reference_diagnostic(),)
     if geometry_payload:
         diagnostics = diagnostics + (
@@ -476,14 +477,14 @@ def query_view3d_mesh_triangle_pick(
         QueryStatus.HIT,
         view=view,
         snapshot=snapshot,
-        panel_ndc=panel_ndc,
+        plot_ndc=plot_ndc,
         pick_scene_snapshot_id=actual_pick_scene_snapshot_id,
         visual_id=visual_id,
         primitive_index=primitive_index,
         diagnostics=diagnostics,
         geometry_payload=geometry_payload,
         hit_barycentric=barycentric,
-        hit_panel_ndc_z=panel_ndc_z,
+        hit_plot_ndc_z=plot_ndc_z,
         hit_data_xyz=data_xyz,
         front_facing=front_facing if include_facing else None,
     )
@@ -522,9 +523,7 @@ def _with_request_snapshots(result: QueryResult, request: QueryRequest) -> Query
     )
 
 
-def _contains(
-    bounds: tuple[float, float, float, float], coordinate: tuple[float, float]
-) -> bool:
+def _contains(bounds: tuple[float, float, float, float], coordinate: tuple[float, float]) -> bool:
     left, right, bottom, top = bounds
     x, y = coordinate
     x_min, x_max = sorted((left, right))
@@ -541,9 +540,7 @@ def _query_point_visual(
     transform_resources: Mapping[str, AffineTransform2DResource] | None,
 ) -> QueryResult | None:
     source_positions = visual.positions[:, :2]
-    positions = transformed_positions(
-        visual.positions, visual.transform, transform_resources
-    )
+    positions = transformed_positions(visual.positions, visual.transform, transform_resources)
     sizes = (
         visual.sizes
         if isinstance(visual.sizes, np.ndarray)
@@ -565,9 +562,7 @@ def _query_point_visual(
 
     point = positions[best_index]
     source = source_positions[best_index]
-    rgba, payload = _point_color_query_payload(
-        visual, best_index, color_scales=color_scales
-    )
+    rgba, payload = _point_color_query_payload(visual, best_index, color_scales=color_scales)
     extension_kind, extension_payload = _transform_or_existing_payload(
         visual,
         request,
@@ -619,9 +614,7 @@ def _query_image_visual(
     col = int(np.clip(np.floor(u * width), 0, width - 1))
     row = int(np.clip(np.floor(v * height), 0, height - 1))
     value = visual.image[row, col]
-    rgba, payload = _image_color_query_payload(
-        visual, value, row, col, color_scales=color_scales
-    )
+    rgba, payload = _image_color_query_payload(visual, value, row, col, color_scales=color_scales)
 
     return QueryResult(
         request_id=request.id,
@@ -649,9 +642,7 @@ def _query_marker_visual(
     transform_resources: Mapping[str, AffineTransform2DResource] | None,
 ) -> QueryResult | None:
     source_positions = visual.positions[:, :2]
-    positions = transformed_positions(
-        visual.positions, visual.transform, transform_resources
-    )
+    positions = transformed_positions(visual.positions, visual.transform, transform_resources)
     sizes = (
         visual.sizes
         if isinstance(visual.sizes, np.ndarray)
@@ -673,9 +664,7 @@ def _query_marker_visual(
 
     marker = positions[best_index]
     source = source_positions[best_index]
-    rgba, payload = _marker_color_query_payload(
-        visual, best_index, color_scales=color_scales
-    )
+    rgba, payload = _marker_color_query_payload(visual, best_index, color_scales=color_scales)
     extension_kind, extension_payload = _transform_or_existing_payload(
         visual,
         request,
@@ -710,9 +699,7 @@ def _query_text_visual(
     transform_resources: Mapping[str, AffineTransform2DResource] | None,
 ) -> QueryResult | None:
     source_positions = visual.positions[:, :2]
-    positions = transformed_positions(
-        visual.positions, visual.transform, transform_resources
-    )
+    positions = transformed_positions(visual.positions, visual.transform, transform_resources)
     sizes = visual.font_size_values()
     colors = _rgba01(visual.rgba_values())
     query = np.array(request.coordinate, dtype=np.float64)
@@ -790,9 +777,7 @@ def _query_mesh_visual(
         return None
 
     query = np.array(request.coordinate, dtype=np.float64)
-    positions = transformed_positions(
-        visual.positions, visual.transform, transform_resources
-    )
+    positions = transformed_positions(visual.positions, visual.transform, transform_resources)
     best_face_index: int | None = None
     best_order = float("-inf")
     for face_index, vertex_indices in enumerate(visual.faces):
@@ -827,9 +812,7 @@ def _query_mesh_visual(
         visual,
         request,
         declared_coord,
-        inverse_transform_coordinate(
-            declared_coord, visual.transform, transform_resources
-        ),
+        inverse_transform_coordinate(declared_coord, visual.transform, transform_resources),
         view,
         existing_kind=MESH_QUERY_PAYLOAD_KIND,
         existing_payload=payload,
@@ -867,13 +850,11 @@ def _transform_or_existing_payload(
 ) -> tuple[str | None, object | None]:
     if visual.transform is None and view is None:
         return existing_kind, existing_payload
-    data_coord = (
-        declared_coord if visual.coordinate_space is CoordinateSpace.DATA else None
-    )
+    data_coord = declared_coord if visual.coordinate_space is CoordinateSpace.DATA else None
     payload = TransformQueryPayload(
         visual_id=visual.id,
         panel_xy=request.coordinate,
-        panel_ndc=declared_to_panel_ndc(declared_coord, visual.coordinate_space, view),
+        plot_ndc=declared_to_plot_ndc(declared_coord, visual.coordinate_space, view),
         declared_coordinate_space=visual.coordinate_space.value,
         declared_space_coord=declared_coord,
         source_coord=source_coord,
@@ -969,9 +950,7 @@ def _validate_mesh_pick_request(
             QueryStatus.INVALID,
             view=view,
             snapshot=snapshot,
-            diagnostics=(
-                _pick_diagnostic(View3DMeshPickDiagnosticCode.INVALID_VIEW_ID),
-            ),
+            diagnostics=(_pick_diagnostic(View3DMeshPickDiagnosticCode.INVALID_VIEW_ID),),
             geometry_payload=geometry_payload,
         )
     if request.panel_id is not None and request.panel_id != view.panel_id:
@@ -980,9 +959,7 @@ def _validate_mesh_pick_request(
             QueryStatus.INVALID,
             view=view,
             snapshot=snapshot,
-            diagnostics=(
-                _pick_diagnostic(View3DMeshPickDiagnosticCode.INVALID_PANEL_ID),
-            ),
+            diagnostics=(_pick_diagnostic(View3DMeshPickDiagnosticCode.INVALID_PANEL_ID),),
             geometry_payload=geometry_payload,
         )
     if snapshot.projection_kind is not Projection3DKind.ORTHOGRAPHIC:
@@ -1000,9 +977,7 @@ def _validate_mesh_pick_request(
             geometry_payload=geometry_payload,
         )
     if layout_snapshot is not None:
-        coordinate_region = classify_logical_coordinate(
-            layout_snapshot, request.panel_xy
-        )
+        coordinate_region = classify_logical_coordinate(layout_snapshot, request.panel_xy)
         if coordinate_region is LogicalCoordinateRegion.PANEL_GUIDE_LANE:
             return QueryResult(
                 request_id=(
@@ -1017,9 +992,7 @@ def _validate_mesh_pick_request(
                 layout_snapshot_id=snapshot.layout_snapshot_id,
                 view_snapshot_id=snapshot.view_projection_snapshot_id,
             )
-        coordinate_is_outside_panel = (
-            coordinate_region is LogicalCoordinateRegion.OUTSIDE_PANEL
-        )
+        coordinate_is_outside_panel = coordinate_region is LogicalCoordinateRegion.OUTSIDE_PANEL
     else:
         coordinate_is_outside_panel = not _contains(panel_bounds, request.panel_xy)
     if coordinate_is_outside_panel:
@@ -1028,9 +1001,7 @@ def _validate_mesh_pick_request(
             QueryStatus.INVALID,
             view=view,
             snapshot=snapshot,
-            diagnostics=(
-                _pick_diagnostic(View3DMeshPickDiagnosticCode.INVALID_OUTSIDE_PANEL),
-            ),
+            diagnostics=(_pick_diagnostic(View3DMeshPickDiagnosticCode.INVALID_OUTSIDE_PANEL),),
             geometry_payload=geometry_payload,
         )
     if (
@@ -1042,9 +1013,7 @@ def _validate_mesh_pick_request(
             QueryStatus.STALE,
             view=view,
             snapshot=snapshot,
-            diagnostics=(
-                _pick_diagnostic(View3DMeshPickDiagnosticCode.STALE_LAYOUT_SNAPSHOT),
-            ),
+            diagnostics=(_pick_diagnostic(View3DMeshPickDiagnosticCode.STALE_LAYOUT_SNAPSHOT),),
             geometry_payload=geometry_payload,
         )
     if (
@@ -1056,15 +1025,12 @@ def _validate_mesh_pick_request(
             QueryStatus.STALE,
             view=view,
             snapshot=snapshot,
-            diagnostics=(
-                _pick_diagnostic(View3DMeshPickDiagnosticCode.STALE_VIEW_REVISION),
-            ),
+            diagnostics=(_pick_diagnostic(View3DMeshPickDiagnosticCode.STALE_VIEW_REVISION),),
             geometry_payload=geometry_payload,
         )
     if (
         request.expected_view_projection_snapshot_id is not None
-        and request.expected_view_projection_snapshot_id
-        != snapshot.view_projection_snapshot_id
+        and request.expected_view_projection_snapshot_id != snapshot.view_projection_snapshot_id
     ):
         return _mesh_pick_result(
             request,
@@ -1072,9 +1038,7 @@ def _validate_mesh_pick_request(
             view=view,
             snapshot=snapshot,
             diagnostics=(
-                _pick_diagnostic(
-                    View3DMeshPickDiagnosticCode.STALE_VIEW_PROJECTION_SNAPSHOT
-                ),
+                _pick_diagnostic(View3DMeshPickDiagnosticCode.STALE_VIEW_PROJECTION_SNAPSHOT),
             ),
             geometry_payload=geometry_payload,
         )
@@ -1087,9 +1051,7 @@ def _validate_mesh_pick_request(
             QueryStatus.STALE,
             view=view,
             snapshot=snapshot,
-            diagnostics=(
-                _pick_diagnostic(View3DMeshPickDiagnosticCode.STALE_PICK_SCENE_SNAPSHOT),
-            ),
+            diagnostics=(_pick_diagnostic(View3DMeshPickDiagnosticCode.STALE_PICK_SCENE_SNAPSHOT),),
             geometry_payload=geometry_payload,
         )
     return None
@@ -1101,24 +1063,20 @@ def _mesh_pick_result(
     *,
     view: View3D,
     snapshot: View3DProjectionSnapshot,
-    panel_ndc: tuple[float, float] | None = None,
+    plot_ndc: tuple[float, float] | None = None,
     pick_scene_snapshot_id: str | None = None,
     visual_id: str | None = None,
     primitive_index: int | None = None,
     diagnostics: tuple[QueryDiagnostic, ...] = (),
     geometry_payload: bool = False,
     hit_barycentric: tuple[float, float, float] | None = None,
-    hit_panel_ndc_z: float | None = None,
+    hit_plot_ndc_z: float | None = None,
     hit_data_xyz: tuple[float, float, float] | None = None,
     front_facing: bool | None = None,
 ) -> QueryResult:
-    panel_id = (
-        view.panel_id if status in (QueryStatus.HIT, QueryStatus.MISS) else view.panel_id
-    )
+    panel_id = view.panel_id if status in (QueryStatus.HIT, QueryStatus.MISS) else view.panel_id
     layout_snapshot_id = (
-        snapshot.layout_snapshot_id
-        if status in (QueryStatus.HIT, QueryStatus.MISS)
-        else None
+        snapshot.layout_snapshot_id if status in (QueryStatus.HIT, QueryStatus.MISS) else None
     )
     view_revision: int | str | None = (
         snapshot.view_revision if status in (QueryStatus.HIT, QueryStatus.MISS) else None
@@ -1129,13 +1087,9 @@ def _mesh_pick_result(
         else None
     )
     payload_pick_scene_snapshot_id = (
-        pick_scene_snapshot_id
-        if status in (QueryStatus.HIT, QueryStatus.MISS)
-        else None
+        pick_scene_snapshot_id if status in (QueryStatus.HIT, QueryStatus.MISS) else None
     )
-    depth_mode = (
-        view.depth_mode.value if status in (QueryStatus.HIT, QueryStatus.MISS) else None
-    )
+    depth_mode = view.depth_mode.value if status in (QueryStatus.HIT, QueryStatus.MISS) else None
     visual_type = "MeshVisual" if visual_id is not None else None
     primitive_kind = "triangle" if visual_id is not None else None
     payload: View3DMeshTrianglePickPayload | View3DMeshTrianglePickGeometryPayload
@@ -1146,7 +1100,7 @@ def _mesh_pick_result(
             view_id=view.id,
             panel_id=panel_id,
             panel_xy=request.panel_xy,
-            panel_ndc_xy=panel_ndc,
+            plot_ndc_xy=plot_ndc,
             layout_snapshot_id=layout_snapshot_id,
             view_revision=view_revision,
             view_projection_snapshot_id=view_projection_snapshot_id,
@@ -1157,7 +1111,7 @@ def _mesh_pick_result(
             primitive_kind=primitive_kind,
             primitive_index=primitive_index,
             hit_barycentric=hit_barycentric,
-            hit_panel_ndc_z=hit_panel_ndc_z,
+            hit_plot_ndc_z=hit_plot_ndc_z,
             hit_data_xyz=hit_data_xyz,
             front_facing=front_facing,
             diagnostics=diagnostics,
@@ -1169,7 +1123,7 @@ def _mesh_pick_result(
             view_id=view.id,
             panel_id=panel_id,
             panel_xy=request.panel_xy,
-            panel_ndc_xy=panel_ndc,
+            plot_ndc_xy=plot_ndc,
             layout_snapshot_id=layout_snapshot_id,
             view_revision=view_revision,
             view_projection_snapshot_id=view_projection_snapshot_id,
@@ -1198,7 +1152,7 @@ def _mesh_pick_result(
         visual_id=visual_id,
         visual_family=VisualFamily.MESH if visual_id is not None else None,
         item_id=primitive_index,
-        visual_coordinate=panel_ndc if status is QueryStatus.HIT else None,
+        visual_coordinate=plot_ndc if status is QueryStatus.HIT else None,
         extension_payload_kind=payload_kind,
         extension_payload=payload,
         diagnostic=_query_diagnostic_code(diagnostics[0]) if diagnostics else None,
@@ -1308,9 +1262,7 @@ def _normalized3(value: tuple[float, float, float]) -> tuple[float, float, float
     return (value[0] / norm, value[1] / norm, value[2] / norm)
 
 
-def _mesh_face_rgba(
-    visual: MeshVisual, face_index: int
-) -> tuple[float, float, float, float]:
+def _mesh_face_rgba(visual: MeshVisual, face_index: int) -> tuple[float, float, float, float]:
     color_mode = visual.resolved_color_mode()
     if visual.color is None:
         raise ValueError("MeshVisual color is required for face query")
@@ -1343,9 +1295,7 @@ def _point_color_query_payload(
 
     encoding = visual.color_encoding
     scale = resolve_color_scale(color_scales, encoding.color_scale_id)
-    mapped = map_scalar_value(
-        float(encoding.values[item_index]), scale, alpha=encoding.alpha
-    )
+    mapped = map_scalar_value(float(encoding.values[item_index]), scale, alpha=encoding.alpha)
     return mapped.displayed_rgba, ScalarColorQueryPayload(
         visual_id=visual.id,
         item_kind="point",
@@ -1381,9 +1331,7 @@ def _marker_color_query_payload(
 
     encoding = visual.fill_color_encoding
     scale = resolve_color_scale(color_scales, encoding.color_scale_id)
-    mapped = map_scalar_value(
-        float(encoding.values[item_index]), scale, alpha=encoding.alpha
-    )
+    mapped = map_scalar_value(float(encoding.values[item_index]), scale, alpha=encoding.alpha)
     return mapped.displayed_rgba, ScalarColorQueryPayload(
         visual_id=visual.id,
         item_kind="marker",

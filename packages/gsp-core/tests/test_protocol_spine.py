@@ -74,13 +74,16 @@ def test_capability_snapshot_adaptation_decision():
     assert rejected.outcome == AdaptationOutcome.REJECT
     assert rejected.diagnostic is not None
     assert caps.snapshot_id.startswith("capabilities:")
-    assert caps.snapshot_id == CapabilitySnapshot(
-        server_name="test-server",
-        protocol_versions=("0.1",),
-        transports=(TransportKind.INPROC,),
-        buffer_dtypes=("float32",),
-        visual_families=("point",),
-    ).snapshot_id
+    assert (
+        caps.snapshot_id
+        == CapabilitySnapshot(
+            server_name="test-server",
+            protocol_versions=("0.1",),
+            transports=(TransportKind.INPROC,),
+            buffer_dtypes=("float32",),
+            visual_families=("point",),
+        ).snapshot_id
+    )
 
 
 def test_structured_diagnostic_and_command_result_invariants():
@@ -145,7 +148,11 @@ def test_typed_query_capability_accepts_matching_request():
                     QueryTargetCapability(
                         target_kind=QueryTargetKind.VISUAL_FAMILY,
                         target="point",
-                        payloads=(QueryPayload.IDENTITY, QueryPayload.COORDINATE, QueryPayload.COLOR),
+                        payloads=(
+                            QueryPayload.IDENTITY,
+                            QueryPayload.COORDINATE,
+                            QueryPayload.COLOR,
+                        ),
                     ),
                 ),
             ),
@@ -178,7 +185,12 @@ def test_typed_query_capability_rejects_missing_scope_and_does_not_infer_all_ren
     )
 
     rejected = caps.adapt_query_request(
-        QueryRequest(id="query:all-rendered", panel_id="panel:main", coordinate=(0.0, 0.0), scope=QueryScope.ALL_RENDERED)
+        QueryRequest(
+            id="query:all-rendered",
+            panel_id="panel:main",
+            coordinate=(0.0, 0.0),
+            scope=QueryScope.ALL_RENDERED,
+        )
     )
 
     assert rejected.outcome == AdaptationOutcome.REJECT
@@ -242,7 +254,12 @@ def test_all_rendered_query_capability_requires_global_ordering():
     )
 
     rejected = caps.adapt_query_request(
-        QueryRequest(id="query:all-rendered", panel_id="panel:main", coordinate=(0.0, 0.0), scope=QueryScope.ALL_RENDERED)
+        QueryRequest(
+            id="query:all-rendered",
+            panel_id="panel:main",
+            coordinate=(0.0, 0.0),
+            scope=QueryScope.ALL_RENDERED,
+        )
     )
 
     assert rejected.outcome == AdaptationOutcome.REJECT
@@ -293,7 +310,9 @@ def test_query_planning_rejects_guides_scope_with_non_queryable_axis_provider():
     )
 
     decision = caps.adapt_query_request_for_scene(
-        QueryRequest(id="query:guides", panel_id="panel:main", coordinate=(0.0, 0.0), scope=QueryScope.GUIDES),
+        QueryRequest(
+            id="query:guides", panel_id="panel:main", coordinate=(0.0, 0.0), scope=QueryScope.GUIDES
+        ),
         QueryPlanningContext(selected_axis_provider=provider, guides_visible=True),
     )
 
@@ -322,7 +341,12 @@ def test_query_planning_rejects_all_rendered_when_visible_guides_are_not_queryab
     )
 
     decision = caps.adapt_query_request_for_scene(
-        QueryRequest(id="query:all-rendered", panel_id="panel:main", coordinate=(0.0, 0.0), scope=QueryScope.ALL_RENDERED),
+        QueryRequest(
+            id="query:all-rendered",
+            panel_id="panel:main",
+            coordinate=(0.0, 0.0),
+            scope=QueryScope.ALL_RENDERED,
+        ),
         QueryPlanningContext(selected_axis_provider=provider, guides_visible=True),
     )
 
@@ -346,8 +370,12 @@ def test_query_planning_accepts_guides_scope_with_queryable_axis_provider():
     )
 
     decision = caps.adapt_query_request_for_scene(
-        QueryRequest(id="query:guides", panel_id="panel:main", coordinate=(0.0, 0.0), scope=QueryScope.GUIDES),
-        QueryPlanningContext(selected_axis_provider=provider, guides_visible=True, text_query_required=True),
+        QueryRequest(
+            id="query:guides", panel_id="panel:main", coordinate=(0.0, 0.0), scope=QueryScope.GUIDES
+        ),
+        QueryPlanningContext(
+            selected_axis_provider=provider, guides_visible=True, text_query_required=True
+        ),
     )
 
     assert decision.outcome == AdaptationOutcome.ACCEPT
@@ -369,7 +397,9 @@ def test_query_planning_rejects_text_query_when_axis_provider_lacks_text_query()
     )
 
     decision = caps.adapt_query_request_for_scene(
-        QueryRequest(id="query:guides", panel_id="panel:main", coordinate=(0.0, 0.0), scope=QueryScope.GUIDES),
+        QueryRequest(
+            id="query:guides", panel_id="panel:main", coordinate=(0.0, 0.0), scope=QueryScope.GUIDES
+        ),
         QueryPlanningContext(selected_axis_provider=provider, text_query_required=True),
     )
 
@@ -408,7 +438,9 @@ def test_buffer_resource_rejects_non_contiguous_v0_1_buffers():
 
 def test_command_batch_validation_and_single_helper():
     """Command batches are ordered and tied to a session."""
-    command = ProtocolCommand(CommandKind.CREATE_RESOURCE, target="buffer:positions", payload={"dtype": "float32"})
+    command = ProtocolCommand(
+        CommandKind.CREATE_RESOURCE, target="buffer:positions", payload={"dtype": "float32"}
+    )
     batch = CommandBatch.single("session:test", 7, command)
 
     assert batch.session_id == "session:test"
@@ -456,7 +488,9 @@ def test_inprocess_transport_checks_session_and_forwards_batch():
     transport = InProcessTransport(server)
 
     with pytest.raises(RuntimeError):
-        transport.submit(CommandBatch.single("session:fake", 0, ProtocolCommand(CommandKind.QUERY_CAPABILITIES)))
+        transport.submit(
+            CommandBatch.single("session:fake", 0, ProtocolCommand(CommandKind.QUERY_CAPABILITIES))
+        )
 
     initialized = transport.initialize()
     assert initialized.session_id == "session:fake"
@@ -471,7 +505,9 @@ def test_inprocess_transport_checks_session_and_forwards_batch():
         transport.submit(batch)
 
     with pytest.raises(ValueError, match="does not match"):
-        transport.submit(CommandBatch.single("session:other", 2, ProtocolCommand(CommandKind.QUERY_CAPABILITIES)))
+        transport.submit(
+            CommandBatch.single("session:other", 2, ProtocolCommand(CommandKind.QUERY_CAPABILITIES))
+        )
 
     transport.shutdown()
     assert server.closed

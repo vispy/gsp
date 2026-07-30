@@ -65,9 +65,13 @@ def _configure_runtime_env(source: Path) -> None:
         os.environ.setdefault("DVZ_SHADERC_RUNTIME_LIBRARY", str(shaderc))
 
     if build_src.is_dir():
-        existing = [path for path in os.environ.get("DVZ_WHEEL_RUNTIME_DIRS", "").split(os.pathsep) if path]
+        existing = [
+            path for path in os.environ.get("DVZ_WHEEL_RUNTIME_DIRS", "").split(os.pathsep) if path
+        ]
         build_src_str = str(build_src)
-        os.environ["DVZ_WHEEL_RUNTIME_DIRS"] = os.pathsep.join([build_src_str, *[path for path in existing if path != build_src_str]])
+        os.environ["DVZ_WHEEL_RUNTIME_DIRS"] = os.pathsep.join(
+            [build_src_str, *[path for path in existing if path != build_src_str]]
+        )
 
 
 def _native_library_name() -> str:

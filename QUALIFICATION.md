@@ -1,5 +1,28 @@
 # Local bootstrap qualification
 
+## M305 P038 canonical protocol refactor gate
+
+Date: 2026-07-30
+
+The unpublished P038 working tree replaces the singular panel viewport model with identity-only
+panels, required versioned scene layout, per-panel resolved geometry, attachment-owned clipping,
+and provider-neutral session capabilities. It deliberately provides no runtime aliases for the
+superseded unpublished protocol.
+
+| Gate | Result |
+|---|---|
+| Complete GSP source pytest | 802 passed |
+| Strict mypy | 51 source files clean |
+| Ruff | packages and conformance clean |
+| JSON schema syntax | all P038 schemas valid |
+| Fresh installed-wheel set with VisPy2 | 928 passed |
+| Built distributions | `gsp-core`, `gsp-matplotlib`, `gsp-datoviz`, and `vispy2` wheels built and installed |
+
+The installed-wheel gate used Matplotlib 3.11.1 and NumPy 2.5.1. Repository-local conformance
+fixtures were supplied only as test data; all product imports resolved from the fresh environment.
+`gsp-datoviz` remains a development-only artifact until an ordinary compatible Datoviz dependency
+is available. No version, tag, push, publication, merge, or Datoviz source change was performed.
+
 ## M303 pre-release mechanical correction gate
 
 Date: 2026-07-30

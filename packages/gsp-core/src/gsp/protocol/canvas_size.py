@@ -175,12 +175,8 @@ class CanvasSize:
             canvas_height = self.height
             target_width_mm = canvas_width / self.reference_dpi * MM_PER_INCH
             target_height_mm = canvas_height / self.reference_dpi * MM_PER_INCH
-            framebuffer_width = int(
-                round(canvas_width * raster_dpi / self.reference_dpi)
-            )
-            framebuffer_height = int(
-                round(canvas_height * raster_dpi / self.reference_dpi)
-            )
+            framebuffer_width = int(round(canvas_width * raster_dpi / self.reference_dpi))
+            framebuffer_height = int(round(canvas_height * raster_dpi / self.reference_dpi))
             host_width = max(1, int(round(framebuffer_width / content_scale)))
             host_height = max(1, int(round(framebuffer_height / content_scale)))
             exactness = CanvasResolveExactness.APPROXIMATE
@@ -189,12 +185,8 @@ class CanvasSize:
             target_height_mm = self.height
             canvas_width = target_width_mm / MM_PER_INCH * self.reference_dpi
             canvas_height = target_height_mm / MM_PER_INCH * self.reference_dpi
-            framebuffer_width = int(
-                round(canvas_width * raster_dpi / self.reference_dpi)
-            )
-            framebuffer_height = int(
-                round(canvas_height * raster_dpi / self.reference_dpi)
-            )
+            framebuffer_width = int(round(canvas_width * raster_dpi / self.reference_dpi))
+            framebuffer_height = int(round(canvas_height * raster_dpi / self.reference_dpi))
             host_width = max(1, int(round(framebuffer_width / content_scale)))
             host_height = max(1, int(round(framebuffer_height / content_scale)))
             exactness = CanvasResolveExactness.APPROXIMATE
@@ -214,8 +206,7 @@ class CanvasSize:
             canvas_to_host_scale_x=float(host_width) / float(canvas_width),
             canvas_to_host_scale_y=float(host_height) / float(canvas_height),
             framebuffer_per_canvas_px_x=float(framebuffer_width) / float(canvas_width),
-            framebuffer_per_canvas_px_y=float(framebuffer_height)
-            / float(canvas_height),
+            framebuffer_per_canvas_px_y=float(framebuffer_height) / float(canvas_height),
             target_width_mm=float(target_width_mm),
             target_height_mm=float(target_height_mm),
             estimated_width_mm=float(target_width_mm),
@@ -265,12 +256,8 @@ class ResolvedCanvas:
         _validate_positive("device_scale_y", self.device_scale_y)
         _validate_positive("canvas_to_host_scale_x", self.canvas_to_host_scale_x)
         _validate_positive("canvas_to_host_scale_y", self.canvas_to_host_scale_y)
-        _validate_positive(
-            "framebuffer_per_canvas_px_x", self.framebuffer_per_canvas_px_x
-        )
-        _validate_positive(
-            "framebuffer_per_canvas_px_y", self.framebuffer_per_canvas_px_y
-        )
+        _validate_positive("framebuffer_per_canvas_px_x", self.framebuffer_per_canvas_px_x)
+        _validate_positive("framebuffer_per_canvas_px_y", self.framebuffer_per_canvas_px_y)
         _validate_positive("target_width_mm", self.target_width_mm)
         _validate_positive("target_height_mm", self.target_height_mm)
         _validate_positive("estimated_width_mm", self.estimated_width_mm)
@@ -280,9 +267,7 @@ class ResolvedCanvas:
     @property
     def framebuffer_per_canvas_px(self) -> float:
         """Average scalar framebuffer-per-canvas scale for isotropic visual sizes."""
-        return 0.5 * (
-            self.framebuffer_per_canvas_px_x + self.framebuffer_per_canvas_px_y
-        )
+        return 0.5 * (self.framebuffer_per_canvas_px_x + self.framebuffer_per_canvas_px_y)
 
     def canvas_px_to_points(self, value_px: float) -> float:
         """Convert canvas/reference pixels to Matplotlib point units."""

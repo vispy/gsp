@@ -21,10 +21,11 @@ from gsp.protocol import (
     QueryScope,
     ResolvedLayoutSnapshot,
     CanvasSize,
+    ClipScope,
     TextVisual,
     VIEW3D_QUERY_PAYLOAD_KIND,
     View2D,
-    resolve_panel_viewport_rect,
+    resolve_panel_layout_intent,
     resolve_view3d_projection_snapshot,
 )
 
@@ -65,9 +66,7 @@ class _MatplotlibLiveView2DBinding:
         self.view = view
         self.revision_index = 1
         self.view2d_revision = "view-rev:matplotlib-live-1"
-        self.view_snapshot_id = (
-            result.view_snapshot_id or "view-snapshot:matplotlib-live-1"
-        )
+        self.view_snapshot_id = result.view_snapshot_id or "view-snapshot:matplotlib-live-1"
         self._applying_canonical_view = False
         self._closed = False
         self._callback_ids = (
@@ -127,6 +126,7 @@ class _MatplotlibLiveView2DBinding:
                 self.result.figure,
                 self.result.axes,
                 snapshot_id=f"layout:matplotlib-live-{self.revision_index}",
+                panel_id=self.scene.panels[0].id,
                 view=view,
                 axis_guides=self.scene.axis_guides,
                 panel_text_guides=self.scene.panel_text_guides,
@@ -168,6 +168,18 @@ class MatplotlibSession:
         self._require_open()
         if not isinstance(scene, Scene):
             raise TypeError("render() requires a gsp.Scene")
+        if len(scene.panels) != 1:
+            raise ValueError("Matplotlib adapter supports exactly one scene panel")
+        unsupported_clip_scopes = {
+            attachment.clip_scope
+            for attachment in scene.attachments
+            if attachment.clip_scope is not ClipScope.PLOT
+        }
+        if unsupported_clip_scopes:
+            raise ValueError(
+                "Matplotlib adapter does not support attachment clip scopes "
+                f"{sorted(scope.value for scope in unsupported_clip_scopes)!r}"
+            )
         _validate_consumed_layout_scene(scene, layout_snapshot)
         result = render_protocol_scene_with_layout(
             visuals=scene.visuals,
@@ -181,9 +193,8 @@ class MatplotlibSession:
             canvas_size=scene.canvas_size,
             output_dpi=output_dpi,
             layout_snapshot=layout_snapshot,
-            panel_viewport_rect=(
-                scene.panels[0].viewport_rect if scene.panels else None
-            ),
+            panel_id=scene.panels[0].id,
+            panel_layout=scene.panel_layout,
         )
         self._results.append(result)
         self._scene_results[scene.id] = (scene, result)
@@ -243,8 +254,7 @@ class MatplotlibSession:
 
         if (
             scene.view3d is not None
-            and VIEW3D_QUERY_PAYLOAD_KIND
-            in effective_request.requested_extension_payload_kinds
+            and VIEW3D_QUERY_PAYLOAD_KIND in effective_request.requested_extension_payload_kinds
         ):
             snapshot = resolve_view3d_projection_snapshot(
                 scene.view3d, layout_snapshot=result.layout_snapshot
@@ -257,16 +267,10 @@ class MatplotlibSession:
                 layout_snapshot=result.layout_snapshot,
             )
 
-        guide_extension_request = (
-            effective_request.scope is QueryScope.GUIDES
-            and set(effective_request.requested_extension_payload_kinds).issubset(
-                {GUIDE_QUERY_PAYLOAD_KIND}
-            )
-        )
-        if (
+        guide_extension_request = effective_request.scope is QueryScope.GUIDES and set(
             effective_request.requested_extension_payload_kinds
-            and not guide_extension_request
-        ):
+        ).issubset({GUIDE_QUERY_PAYLOAD_KIND})
+        if effective_request.requested_extension_payload_kinds and not guide_extension_request:
             return unsupported_query_result(
                 effective_request,
                 "Matplotlib public panel query does not support extension payloads: "
@@ -312,9 +316,7 @@ class MatplotlibSession:
                 transform_resources={item.id: item for item in scene.transforms},
             )
         if effective_request.scope is QueryScope.GUIDES:
-            return query_resolved_layout_guides(
-                effective_request, result.layout_snapshot
-            )
+            return query_resolved_layout_guides(effective_request, result.layout_snapshot)
         return query_scoped_scene(
             effective_request,
             visual_entries=entries,
@@ -327,9 +329,7 @@ class MatplotlibSession:
             ),
         )
 
-    def _query_target(
-        self, scene_id: str | None
-    ) -> tuple[Scene, MatplotlibProtocolRenderResult]:
+    def _query_target(self, scene_id: str | None) -> tuple[Scene, MatplotlibProtocolRenderResult]:
         target = self._latest_scene_id if scene_id is None else scene_id
         if target is None:
             raise RuntimeError("query() requires a rendered scene")
@@ -377,7 +377,7 @@ def _scene_panel_ids(scene: Scene) -> frozenset[str]:
 def _matplotlib_panel_bounds(
     result: MatplotlibProtocolRenderResult,
 ) -> tuple[float, float, float, float]:
-    rect = result.layout_snapshot.plot_rect_px
+    rect = result.layout_snapshot.only_panel().plot_rect_px
     return (rect.x, rect.x + rect.width, rect.y, rect.y + rect.height)
 
 
@@ -389,40 +389,33 @@ def _validate_consumed_layout_scene(
     if not isinstance(layout_snapshot, ResolvedLayoutSnapshot):
         raise TypeError("layout_snapshot must be a ResolvedLayoutSnapshot")
     if len(scene.panels) != 1:
-        raise ValueError(
-            "resolved-layout consumption supports exactly one scene panel"
-        )
+        raise ValueError("resolved-layout consumption supports exactly one scene panel")
     panel = scene.panels[0]
     active_view = scene.view2d if scene.view2d is not None else scene.view3d
     if active_view is not None:
         if active_view.panel_id != panel.id:
             raise ValueError("active view panel_id does not match the consumed scene panel")
-        if layout_snapshot.view_id != active_view.id:
+        if layout_snapshot.only_panel().view_id != active_view.id:
             raise ValueError("layout_snapshot view_id does not match the active scene view")
-    elif layout_snapshot.view_id is not None:
+    elif layout_snapshot.only_panel().view_id is not None:
         raise ValueError("viewless scene cannot consume a view-bound layout_snapshot")
-    expected = resolve_panel_viewport_rect(panel, layout_snapshot.render_target)
-    if expected != layout_snapshot.panel_rect_px:
-        raise ValueError(
-            "layout_snapshot panel_rect_px does not match the scene panel allocation"
-        )
+    expected = resolve_panel_layout_intent(scene.panel_layout, layout_snapshot.render_target)
+    if (
+        len(expected) != 1
+        or expected[0].panel_rect_px != layout_snapshot.only_panel().panel_rect_px
+    ):
+        raise ValueError("layout_snapshot panel_rect_px does not match the scene panel allocation")
     _validate_scene_canvas_target(scene.canvas_size, layout_snapshot)
     if scene.axis_guides or scene.colorbar_guides:
         raise ValueError(
             "consumed Matplotlib layout does not prove native axis/colorbar guide geometry"
         )
-    title_guides = tuple(
-        guide for guide in scene.panel_text_guides if guide.role.value == "title"
-    )
+    title_guides = tuple(guide for guide in scene.panel_text_guides if guide.role.value == "title")
     if len(title_guides) != len(scene.panel_text_guides) or len(title_guides) > 1:
-        raise ValueError(
-            "consumed Matplotlib layout supports at most one title PanelTextGuide"
-        )
-    title_box_ids = {box.guide_id for box in layout_snapshot.title_boxes}
+        raise ValueError("consumed Matplotlib layout supports at most one title PanelTextGuide")
+    title_box_ids = {box.guide_id for box in layout_snapshot.only_panel().title_boxes}
     if title_guides and title_guides[0].id not in title_box_ids:
-        raise ValueError(
-            "supplied title guide requires matching resolved title geometry"
-        )
+        raise ValueError("supplied title guide requires matching resolved title geometry")
 
 
 def _validate_scene_canvas_target(

@@ -60,8 +60,12 @@ def query_tiled_image_source(
     visual_id: str = "visual:tiled-image",
 ) -> QueryResult:
     """Answer a reference query against a materialized tiled-image source."""
-    if not set(request.requested_extension_payload_kinds).issubset({TILED_IMAGE_QUERY_PAYLOAD_KIND}):
-        return unsupported_query_result(request, "tiled-image query cannot satisfy requested extension payloads")
+    if not set(request.requested_extension_payload_kinds).issubset(
+        {TILED_IMAGE_QUERY_PAYLOAD_KIND}
+    ):
+        return unsupported_query_result(
+            request, "tiled-image query cannot satisfy requested extension payloads"
+        )
 
     try:
         mosaic = provider.get_viewport_mosaic(
@@ -159,4 +163,9 @@ def _clipped_extent(
         rendered_bottom = bottom + y0 * (top - bottom)
         rendered_top = bottom + y1 * (top - bottom)
 
-    return (float(rendered_left), float(rendered_right), float(rendered_bottom), float(rendered_top))
+    return (
+        float(rendered_left),
+        float(rendered_right),
+        float(rendered_bottom),
+        float(rendered_top),
+    )

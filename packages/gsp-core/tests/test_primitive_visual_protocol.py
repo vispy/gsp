@@ -5,6 +5,7 @@ import numpy as np
 import pytest
 
 from gsp import Scene
+from gsp.protocol import Panel, full_target_panel_layout
 from gsp.protocol import (
     Camera3D,
     CoordinateSpace,
@@ -20,9 +21,7 @@ def _primitive(**kwargs: object) -> PrimitiveVisual:
     values: dict[str, object] = {
         "id": "primitive:test",
         "topology": PrimitiveTopology.TRIANGLE_LIST,
-        "positions": np.array(
-            [[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]], dtype=np.float32
-        ),
+        "positions": np.array([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]], dtype=np.float32),
         "colors": np.array([255, 0, 0, 255], dtype=np.uint8),
     }
     values.update(kwargs)
@@ -51,14 +50,10 @@ def test_primitive_visual_accepts_every_bounded_topology(
     visual = _primitive(
         topology=topology,
         positions=np.asarray(positions, dtype=np.float64),
-        colors=np.tile(
-            np.array([255, 0, 0, 255], dtype=np.uint8), (len(positions), 1)
-        ),
+        colors=np.tile(np.array([255, 0, 0, 255], dtype=np.uint8), (len(positions), 1)),
     )
     assert visual.topology is topology
-    np.testing.assert_array_equal(
-        visual.resolved_vertex_indices(), np.arange(len(positions))
-    )
+    np.testing.assert_array_equal(visual.resolved_vertex_indices(), np.arange(len(positions)))
 
 
 @pytest.mark.parametrize("topology", list(PrimitiveTopology))
@@ -102,9 +97,7 @@ def test_primitive_visual_rejects_malformed_cardinality(
     with pytest.raises(ValueError, match="primitivevisual_invalid_cardinality"):
         _primitive(
             topology=topology,
-            positions=np.arange(max(count, 3) * 2, dtype=np.float32).reshape(
-                max(count, 3), 2
-            ),
+            positions=np.arange(max(count, 3) * 2, dtype=np.float32).reshape(max(count, 3), 2),
             colors=np.array([255, 0, 0, 255], dtype=np.uint8),
             indices=np.arange(count, dtype=np.int32),
         )
@@ -121,9 +114,7 @@ def test_primitive_visual_rejects_malformed_cardinality(
         (np.array([0, 1, 3]), "index_out_of_range"),
     ],
 )
-def test_primitive_visual_rejects_invalid_indices(
-    indices: np.ndarray, diagnostic: str
-) -> None:
+def test_primitive_visual_rejects_invalid_indices(indices: np.ndarray, diagnostic: str) -> None:
     with pytest.raises((TypeError, ValueError), match=f"primitivevisual_{diagnostic}"):
         _primitive(indices=indices)
 
@@ -141,13 +132,13 @@ def test_primitive_visual_validates_dimensions_colors_views_and_topology_type() 
         _primitive(topology="triangle_list")
 
     visual2d = _primitive()
-    Scene(
+    _scene(
         id="scene:2d",
         visuals=(visual2d,),
         view2d=View2D(id="view:2d", panel_id="panel:2d"),
     )
     with pytest.raises(ValueError, match="Scene.view2d"):
-        Scene(id="scene:missing-2d", visuals=(visual2d,))
+        _scene(id="scene:missing-2d", visuals=(visual2d,))
 
     visual3d = _primitive(
         positions=np.array(
@@ -165,11 +156,11 @@ def test_primitive_visual_validates_dimensions_colors_views_and_topology_type() 
         ),
         projection=PerspectiveProjection3D(near_far=(0.1, 100.0)),
     )
-    Scene(id="scene:3d", visuals=(visual3d,), view3d=view3d)
+    _scene(id="scene:3d", visuals=(visual3d,), view3d=view3d)
     with pytest.raises(ValueError, match="Scene.view3d"):
-        Scene(id="scene:missing-3d", visuals=(visual3d,))
+        _scene(id="scene:missing-3d", visuals=(visual3d,))
     with pytest.raises(ValueError, match="CoordinateSpace.DATA"):
-        Scene(
+        _scene(
             id="scene:ndc-3d",
             visuals=(
                 _primitive(
@@ -218,3 +209,13 @@ def test_primitive_visual_public_surface_has_no_raw_gpu_fields() -> None:
         "native_handle",
     }
     assert expected.isdisjoint(forbidden)
+
+
+def _scene(**kwargs: object) -> Scene:
+    view = kwargs.get("view2d") or kwargs.get("view3d")
+    panel_id = view.panel_id if isinstance(view, (View2D, View3D)) else "panel:main"
+    return Scene(
+        panels=(Panel(id=panel_id),),
+        panel_layout=full_target_panel_layout(panel_id),
+        **kwargs,  # type: ignore[arg-type]
+    )

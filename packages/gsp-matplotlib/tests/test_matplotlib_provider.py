@@ -10,20 +10,24 @@ import numpy as np
 import pytest
 
 import gsp
+from conformance.p038_support import resolved_single_panel_fixture, single_panel_scene
 from gsp.backends import SessionRequest
 from gsp.protocol import (
     AdaptationOutcome,
     Camera3D,
     CanvasSize,
     CoordinateSpace,
+    ExplicitPanelLayoutV1,
     GUIDE_QUERY_PAYLOAD_KIND,
     MeshVisual,
+    NormalizedRenderTargetRect,
     LogicalPixelRect,
     Orbit3DPayload,
     Pan3DPayload,
     PerspectiveProjection3D,
     PointVisual,
     Panel,
+    PanelPlacement,
     PixelOrigin,
     QueryCoordinateSpace,
     QueryPayload,
@@ -31,7 +35,6 @@ from gsp.protocol import (
     QueryScope,
     QueryStatus,
     RenderTarget,
-    ResolvedLayoutSnapshot,
     SphereVisual,
     VIEW3D_QUERY_PAYLOAD_KIND,
     View2D,
@@ -58,8 +61,32 @@ assert "matplotlib.pyplot" not in sys.modules
     subprocess.run([sys.executable, "-c", code], check=True)
 
 
-def test_matplotlib_session_renders_gsp_scene() -> None:
+def test_matplotlib_rejects_direct_multi_panel_scene_before_resource_creation() -> None:
+    panels = (Panel("panel:left"), Panel("panel:right"))
     scene = gsp.Scene(
+        id="scene:multi",
+        panels=panels,
+        panel_layout=ExplicitPanelLayoutV1(
+            (
+                PanelPlacement(
+                    panels[0].id,
+                    NormalizedRenderTargetRect(0.0, 0.0, 0.5, 1.0),
+                ),
+                PanelPlacement(
+                    panels[1].id,
+                    NormalizedRenderTargetRect(0.5, 0.0, 0.5, 1.0),
+                ),
+            )
+        ),
+    )
+    session = MatplotlibSession(request=SessionRequest())
+    with pytest.raises(ValueError, match="exactly one scene panel"):
+        session.render(scene)
+    assert session._results == []
+
+
+def test_matplotlib_session_renders_gsp_scene() -> None:
+    scene = single_panel_scene(
         id="scene:test",
         visuals=(
             PointVisual(
@@ -84,17 +111,23 @@ def test_matplotlib_session_renders_gsp_scene() -> None:
 def test_matplotlib_session_consumed_layout_validates_scene_target_before_render() -> None:
     panel = Panel(
         id="panel:consumed",
-        figure_id="figure:consumed",
-        viewport_rect=(0.1, 0.2, 0.8, 0.6),
     )
     view = View2D(id="view:consumed", panel_id=panel.id)
-    scene = gsp.Scene(
+    scene = single_panel_scene(
         id="scene:consumed",
         panels=(panel,),
+        panel_layout=ExplicitPanelLayoutV1(
+            (
+                PanelPlacement(
+                    panel.id,
+                    NormalizedRenderTargetRect(0.1, 0.2, 0.8, 0.6),
+                ),
+            )
+        ),
         view2d=view,
         canvas_size=CanvasSize.pixel_exact(320, 240),
     )
-    layout = ResolvedLayoutSnapshot(
+    layout = resolved_single_panel_fixture(
         snapshot_id="layout:consumed",
         render_target=RenderTarget(640, 480, pixel_origin=PixelOrigin.TOP_LEFT),
         panel_rect_px=LogicalPixelRect(64, 96, 512, 288),
@@ -111,7 +144,7 @@ def test_matplotlib_session_consumed_layout_validates_scene_target_before_render
 
 
 def test_matplotlib_session_captures_static_perspective_mesh(tmp_path: Path) -> None:
-    scene = gsp.Scene(
+    scene = single_panel_scene(
         id="scene:mesh3d",
         visuals=(
             MeshVisual(
@@ -146,7 +179,7 @@ def test_matplotlib_session_captures_static_perspective_mesh(tmp_path: Path) -> 
 
 
 def test_matplotlib_session_preserves_pixel_exact_png_dimensions(tmp_path: Path) -> None:
-    scene = gsp.Scene(
+    scene = single_panel_scene(
         id="scene:pixel-exact",
         canvas_size=CanvasSize.pixel_exact(800, 600),
     )
@@ -201,30 +234,24 @@ def test_matplotlib_session_deterministically_rerenders_revised_view3d_state() -
     views = (home, orbited, panned, zoomed, reset)
 
     projected: list[np.ndarray] = []
-    with MatplotlibSession(
-        request=SessionRequest(require=frozenset({"visual.mesh"}))
-    ) as session:
+    with MatplotlibSession(request=SessionRequest(require=frozenset({"visual.mesh"}))) as session:
         for view in views:
             result = session.render(
-                gsp.Scene(
+                single_panel_scene(
                     id=f"scene:camera-{view.revision}",
                     visuals=(mesh,),
                     view3d=view,
                 )
             )
-            projected.append(
-                np.asarray(result.axes.collections[0].get_paths()[0].vertices)[:3]
-            )
+            projected.append(np.asarray(result.axes.collections[0].get_paths()[0].vertices)[:3])
         repeated = session.render(
-            gsp.Scene(
+            single_panel_scene(
                 id="scene:camera-repeat",
                 visuals=(mesh,),
                 view3d=zoomed,
             )
         )
-        repeated_projection = np.asarray(
-            repeated.axes.collections[0].get_paths()[0].vertices
-        )[:3]
+        repeated_projection = np.asarray(repeated.axes.collections[0].get_paths()[0].vertices)[:3]
 
     assert [view.revision for view in views] == [0, 1, 2, 3, 4]
     assert not np.allclose(projected[0], projected[1])
@@ -235,7 +262,7 @@ def test_matplotlib_session_deterministically_rerenders_revised_view3d_state() -
 
 
 def _query_scene(scene_id: str, x: float) -> gsp.Scene:
-    return gsp.Scene(
+    return single_panel_scene(
         id=scene_id,
         visuals=(
             PointVisual(
@@ -257,14 +284,10 @@ def test_public_query_routes_latest_and_explicit_scene_ids() -> None:
         session.render(second)
 
         latest = session.query(
-            QueryRequest(
-                id="query:latest", panel_id="panel:main", coordinate=(10.0, 0.0)
-            )
+            QueryRequest(id="query:latest", panel_id="panel:main", coordinate=(10.0, 0.0))
         )
         explicit = session.query(
-            QueryRequest(
-                id="query:first", panel_id="panel:main", coordinate=(0.0, 0.0)
-            ),
+            QueryRequest(id="query:first", panel_id="panel:main", coordinate=(0.0, 0.0)),
             scene_id=first.id,
         )
 
@@ -275,9 +298,7 @@ def test_public_query_routes_latest_and_explicit_scene_ids() -> None:
 
 
 def test_public_query_session_state_errors_are_clear() -> None:
-    request = QueryRequest(
-        id="query:state", panel_id="panel:main", coordinate=(0.0, 0.0)
-    )
+    request = QueryRequest(id="query:state", panel_id="panel:main", coordinate=(0.0, 0.0))
     session = MatplotlibSession(request=SessionRequest())
     with np.testing.assert_raises_regex(RuntimeError, "requires a rendered scene"):
         session.query(request)
@@ -294,14 +315,10 @@ def test_public_query_preserves_hit_miss_and_existing_payloads() -> None:
     with MatplotlibSession(request=SessionRequest()) as session:
         render = session.render(scene)
         hit = session.query(
-            QueryRequest(
-                id="query:hit", panel_id="panel:main", coordinate=(0.0, 0.0)
-            )
+            QueryRequest(id="query:hit", panel_id="panel:main", coordinate=(0.0, 0.0))
         )
         miss = session.query(
-            QueryRequest(
-                id="query:miss", panel_id="panel:main", coordinate=(20.0, 20.0)
-            )
+            QueryRequest(id="query:miss", panel_id="panel:main", coordinate=(20.0, 20.0))
         )
 
     assert hit.status is QueryStatus.HIT
@@ -340,9 +357,7 @@ def test_public_query_rejects_unwired_extension_payload(scope: QueryScope) -> No
         panel_id="panel:main",
         coordinate=(0.0, 0.0),
         coordinate_space=(
-            QueryCoordinateSpace.PANEL
-            if scope is QueryScope.GUIDES
-            else QueryCoordinateSpace.DATA
+            QueryCoordinateSpace.PANEL if scope is QueryScope.GUIDES else QueryCoordinateSpace.DATA
         ),
         scope=scope,
         requested_extension_payload_kinds=("unknown.extension",),
@@ -396,7 +411,7 @@ def test_matplotlib_public_capabilities_do_not_claim_incoherent_all_rendered_sco
 
 
 def test_public_query_capability_and_unproven_s065_visual_are_structured() -> None:
-    sphere_scene = gsp.Scene(
+    sphere_scene = single_panel_scene(
         id="scene:sphere",
         visuals=(
             SphereVisual(
@@ -421,9 +436,7 @@ def test_public_query_capability_and_unproven_s065_visual_are_structured() -> No
         assert session.capabilities.supports_query_scope(QueryScope.DATA)
         session.render(sphere_scene)
         unsupported = session.query(
-            QueryRequest(
-                id="query:sphere", panel_id="panel:main", coordinate=(0.0, 0.0)
-            )
+            QueryRequest(id="query:sphere", panel_id="panel:main", coordinate=(0.0, 0.0))
         )
 
     assert unsupported.status is QueryStatus.UNSUPPORTED
@@ -432,7 +445,7 @@ def test_public_query_capability_and_unproven_s065_visual_are_structured() -> No
 
 
 def test_public_query_routes_proven_matplotlib_view3d_ray_path() -> None:
-    scene = gsp.Scene(
+    scene = single_panel_scene(
         id="scene:ray",
         view3d=View3D(
             id="view:ray",

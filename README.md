@@ -21,6 +21,10 @@ lists installed provider metadata without importing Matplotlib or Datoviz;
 backend explicitly with `gsp.open_session("matplotlib")`, `gsp.open_session("datoviz")`, or a
 caller-supplied ordered `prefer=` policy.
 
+Scenes carry explicit versioned panel-allocation intent. GSP resolves it once into per-panel logical
+geometry consumed by adapters; DATA transforms and interactions use each resolved plot rectangle.
+Attachment clipping is explicit and producer-emission support is never a renderer capability.
+
 Start with the [protocol and backend guide](docs/protocol-and-backends.md) for session ownership,
 capability checks, queries, and backend limitations. High-level plotting journeys and reviewed
 artifacts live in the VisPy2 repository.

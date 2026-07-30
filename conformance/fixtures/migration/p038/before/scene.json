@@ -1,0 +1,28 @@
+{
+  "scenes": [
+    {
+      "attachments": [
+        {
+          "panel_id": "panel:main",
+          "view_id": "view:main",
+          "visual_id": "visual:main"
+        }
+      ],
+      "id": "scene:migration",
+      "panels": [
+        {
+          "figure_id": "figure:main",
+          "id": "panel:main",
+          "viewport_rect": [0.1, 0.2, 0.8, 0.6]
+        }
+      ],
+      "view2d": [
+        {
+          "clip": false,
+          "id": "view:main",
+          "panel_id": "panel:main"
+        }
+      ]
+    }
+  ]
+}

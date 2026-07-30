@@ -32,18 +32,14 @@ def test_matplotlib_vector_2d_uses_resolved_endpoints_widths_and_caps() -> None:
         id="vector:mpl-2d",
         positions=np.array([[0.0, 0.0], [2.0, 1.0]], dtype=np.float32),
         vectors=np.array([[2.0, 0.0], [0.0, 2.0]], dtype=np.float32),
-        colors=np.array(
-            [[255, 0, 0, 255], [0, 0, 255, 255]], dtype=np.uint8
-        ),
+        colors=np.array([[255, 0, 0, 255], [0, 0, 255, 255]], dtype=np.uint8),
         widths_px=np.array([2.0, 4.0], dtype=np.float32),
         scale=0.5,
         anchor=VectorAnchor.CENTER,
         start_cap=VectorCap.ROUND,
         end_cap=VectorCap.TRIANGLE_OUT,
     )
-    artists = render_vector_visual(
-        axes, visual, view=View2D(id="view:2d", panel_id="panel:2d")
-    )
+    artists = render_vector_visual(axes, visual, view=View2D(id="view:2d", panel_id="panel:2d"))
 
     lines = artists[0]
     assert isinstance(lines, matplotlib.collections.LineCollection)
@@ -85,9 +81,7 @@ def test_matplotlib_vector_3d_projects_line_and_declares_adaptation() -> None:
     aspect = float(axes_box.width * width / (axes_box.height * height))
     expected_ndc = np.asarray(
         [
-            project_view3d_data_point(
-                view3d, endpoint, aspect_ratio=aspect
-            )[:2]
+            project_view3d_data_point(view3d, endpoint, aspect_ratio=aspect)[:2]
             for endpoint in ((0.0, 0.0, 0.0), (0.0, 0.0, 1.0))
         ]
     )
@@ -100,12 +94,8 @@ def test_matplotlib_vector_3d_projects_line_and_declares_adaptation() -> None:
     capabilities = capability_snapshot()
     assert capabilities.supports_visual("vector")
     assert capabilities.supports_view3d_capability("vectorvisual.straight.v1")
-    assert capabilities.supports_view3d_capability(
-        "vectorvisual.positions3d.data.view3d.v1"
-    )
-    assert "cap rasterization differs" in cast(
-        str, capabilities.metadata["vectorvisual"]
-    )
+    assert capabilities.supports_view3d_capability("vectorvisual.positions3d.data.view3d.v1")
+    assert "cap rasterization differs" in cast(str, capabilities.metadata["vectorvisual"])
     plt.close(figure)
 
 
@@ -120,9 +110,7 @@ def test_matplotlib_vector_3d_projects_line_and_declares_adaptation() -> None:
         (VectorCap.SQUARE, 3),
     ],
 )
-def test_matplotlib_vector_maps_every_cap(
-    cap: VectorCap, artist_count: int
-) -> None:
+def test_matplotlib_vector_maps_every_cap(cap: VectorCap, artist_count: int) -> None:
     figure, axes = plt.subplots()
     visual = VectorVisual(
         id=f"vector:cap:{cap.value}",
@@ -132,9 +120,7 @@ def test_matplotlib_vector_maps_every_cap(
         start_cap=cap,
         end_cap=cap,
     )
-    artists = render_vector_visual(
-        axes, visual, view=View2D(id="view:cap", panel_id="panel:cap")
-    )
+    artists = render_vector_visual(axes, visual, view=View2D(id="view:cap", panel_id="panel:cap"))
     assert len(artists) == artist_count
     assert all(artist.get_gid() == visual.id for artist in artists)
     plt.close(figure)

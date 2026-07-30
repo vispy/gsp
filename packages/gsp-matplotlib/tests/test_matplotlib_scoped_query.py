@@ -1,6 +1,7 @@
 """Tests for Matplotlib reference scoped query routing."""
 
 import numpy as np
+from conformance.p038_support import resolved_single_panel_fixture
 
 from gsp.protocol import (
     AxisDimension,
@@ -83,7 +84,7 @@ def _tiled_source() -> TiledImageSource:
 
 
 def _layout_snapshot() -> ResolvedLayoutSnapshot:
-    return ResolvedLayoutSnapshot(
+    return resolved_single_panel_fixture(
         snapshot_id="layout:main",
         render_target=RenderTarget(logical_width_px=200, logical_height_px=120),
         panel_rect_px=LogicalPixelRect(0, 0, 200, 120),
@@ -118,7 +119,9 @@ def _tiled_entry(*, z_order: int = 0) -> QueryExtensionEntry:
 
 def test_scoped_query_data_ignores_overlapping_guides():
     result = query_scoped_scene(
-        QueryRequest(id="query:data", panel_id="panel:main", coordinate=(0.5, -1.0), scope=QueryScope.DATA),
+        QueryRequest(
+            id="query:data", panel_id="panel:main", coordinate=(0.5, -1.0), scope=QueryScope.DATA
+        ),
         visual_entries=(QueryVisualEntry(_point(), z_order=0),),
         view=_view(),
         guide_entries=(QueryGuideEntry(_x_guide(), z_order=1),),
@@ -131,7 +134,12 @@ def test_scoped_query_data_ignores_overlapping_guides():
 
 def test_scoped_query_guides_ignores_overlapping_data():
     result = query_scoped_scene(
-        QueryRequest(id="query:guides", panel_id="panel:main", coordinate=(0.5, -1.0), scope=QueryScope.GUIDES),
+        QueryRequest(
+            id="query:guides",
+            panel_id="panel:main",
+            coordinate=(0.5, -1.0),
+            scope=QueryScope.GUIDES,
+        ),
         visual_entries=(QueryVisualEntry(_point(), z_order=2),),
         view=_view(),
         guide_entries=(QueryGuideEntry(_x_guide(), z_order=0),),
@@ -221,15 +229,33 @@ def test_scoped_query_all_rendered_all_returns_hits_front_to_back():
 
     assert result.status == QueryStatus.HIT
     assert [hit.visual_id for hit in result.hits] == ["guide:x", "visual:points"]
-    assert [hit.contribution_kind for hit in result.hits] == [QueryContributionKind.GUIDE, QueryContributionKind.DATA]
+    assert [hit.contribution_kind for hit in result.hits] == [
+        QueryContributionKind.GUIDE,
+        QueryContributionKind.DATA,
+    ]
 
 
 def test_scoped_query_guides_uses_reversed_view2d_snapshot():
     result = query_scoped_scene(
-        QueryRequest(id="query:guides-reversed", panel_id="panel:main", coordinate=(0.5, 1.0), scope=QueryScope.GUIDES),
+        QueryRequest(
+            id="query:guides-reversed",
+            panel_id="panel:main",
+            coordinate=(0.5, 1.0),
+            scope=QueryScope.GUIDES,
+        ),
         visual_entries=(QueryVisualEntry(_point_on_reversed_x_axis(), z_order=2),),
         view=_reversed_view(),
-        guide_entries=(QueryGuideEntry(AxisGuide(id="guide:x", view_id="view:main", dimension=AxisDimension.X, side=AxisSide.BOTTOM), z_order=0),),
+        guide_entries=(
+            QueryGuideEntry(
+                AxisGuide(
+                    id="guide:x",
+                    view_id="view:main",
+                    dimension=AxisDimension.X,
+                    side=AxisSide.BOTTOM,
+                ),
+                z_order=0,
+            ),
+        ),
     )
 
     assert result.status == QueryStatus.HIT
@@ -250,18 +276,36 @@ def test_scoped_query_all_rendered_reversed_view2d_keeps_reference_ordering():
         ),
         visual_entries=(QueryVisualEntry(_point_on_reversed_x_axis(), z_order=0),),
         view=_reversed_view(),
-        guide_entries=(QueryGuideEntry(AxisGuide(id="guide:x", view_id="view:main", dimension=AxisDimension.X, side=AxisSide.BOTTOM), z_order=1),),
+        guide_entries=(
+            QueryGuideEntry(
+                AxisGuide(
+                    id="guide:x",
+                    view_id="view:main",
+                    dimension=AxisDimension.X,
+                    side=AxisSide.BOTTOM,
+                ),
+                z_order=1,
+            ),
+        ),
     )
 
     assert result.status == QueryStatus.HIT
     assert [hit.visual_id for hit in result.hits] == ["guide:x", "visual:points"]
-    assert [hit.contribution_kind for hit in result.hits] == [QueryContributionKind.GUIDE, QueryContributionKind.DATA]
+    assert [hit.contribution_kind for hit in result.hits] == [
+        QueryContributionKind.GUIDE,
+        QueryContributionKind.DATA,
+    ]
     assert result.hits[0].extension_payload_kind == GUIDE_QUERY_PAYLOAD_KIND
 
 
 def test_scoped_query_all_rendered_with_guides_requires_view():
     result = query_scoped_scene(
-        QueryRequest(id="query:unsupported", panel_id="panel:main", coordinate=(0.5, -1.0), scope=QueryScope.ALL_RENDERED),
+        QueryRequest(
+            id="query:unsupported",
+            panel_id="panel:main",
+            coordinate=(0.5, -1.0),
+            scope=QueryScope.ALL_RENDERED,
+        ),
         visual_entries=(QueryVisualEntry(_point(), z_order=0),),
         view=None,
         guide_entries=(QueryGuideEntry(_x_guide(), z_order=1),),

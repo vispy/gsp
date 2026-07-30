@@ -28,7 +28,9 @@ def resolve_ticks(tick_spec: TickSpec, data_range: tuple[float, float]) -> Resol
     if tick_spec.kind == TickSpecKind.NONE:
         return ResolvedTicks(values=(), labels=(), step=None, source=tick_spec.kind)
     if tick_spec.kind == TickSpecKind.EXPLICIT:
-        labels = tick_spec.explicit_labels or tuple(_format_tick(value, None) for value in tick_spec.explicit_values)
+        labels = tick_spec.explicit_labels or tuple(
+            _format_tick(value, None) for value in tick_spec.explicit_values
+        )
         return ResolvedTicks(
             values=tuple(tick_spec.explicit_values),
             labels=tuple(labels),
@@ -41,7 +43,9 @@ def resolve_ticks(tick_spec: TickSpec, data_range: tuple[float, float]) -> Resol
     return _resolve_auto_linear_nice(low, high, tick_spec.target_count or 7, tick_spec.kind)
 
 
-def _resolve_auto_linear_nice(start: float, end: float, target_count: int, source: TickSpecKind) -> ResolvedTicks:
+def _resolve_auto_linear_nice(
+    start: float, end: float, target_count: int, source: TickSpecKind
+) -> ResolvedTicks:
     low, high = _expanded_range(start, end)
     step = _nice_step(low, high, target_count)
     first = math.ceil(low / step) * step

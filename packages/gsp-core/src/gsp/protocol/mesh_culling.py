@@ -13,9 +13,7 @@ Float3Like = Sequence[float]
 MESH_FACE_CULLING_DATA3D_PROJECTED_NDC_CAPABILITY = (
     "meshvisual.face_culling.data3d.projected_ndc.v1"
 )
-MESH_FACE_CULLING_NDC3_PANEL_WINDING_CAPABILITY = (
-    "meshvisual.face_culling.ndc3.panel_winding.v1"
-)
+MESH_FACE_CULLING_NDC3_PANEL_WINDING_CAPABILITY = "meshvisual.face_culling.ndc3.panel_winding.v1"
 QUERY_VIEW3D_MESH_TRIANGLE_PICK_FACE_CULLING_CAPABILITY = (
     "query.view3d.mesh_triangle_pick.face_culling.v1"
 )
@@ -29,10 +27,8 @@ class ProjectedFaceClassification(str, Enum):
     DEGENERATE = "degenerate"
 
 
-def projected_triangle_area2(
-    q0: Float3Like, q1: Float3Like, q2: Float3Like
-) -> float:
-    """Return the signed 2D area in panel NDC x/y.
+def projected_triangle_area2(q0: Float3Like, q1: Float3Like, q2: Float3Like) -> float:
+    """Return the signed 2D area in plot NDC x/y.
 
     Positive area is front-facing under the S050 projected-NDC contract.
     """

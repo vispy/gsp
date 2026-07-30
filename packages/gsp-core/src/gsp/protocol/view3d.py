@@ -21,9 +21,7 @@ MESH3D_NDC_CAPABILITY = "meshvisual.positions3d.ndc.v1"
 MESH3D_OPAQUE_DEPTH_CAPABILITY = "meshvisual.positions3d.opaque_depth.v1"
 QUERY_VIEW3D_RAY_READBACK_CAPABILITY = "query.view3d.ray_readback.v1"
 QUERY_VIEW3D_MESH_TRIANGLE_PICK_CAPABILITY = "query.view3d.mesh_triangle_pick.v1"
-VIEW3D_RETAINED_DATA_SPACE_VISUALS_CAPABILITY = (
-    "view3d.retained_data_space_visuals.v1"
-)
+VIEW3D_RETAINED_DATA_SPACE_VISUALS_CAPABILITY = "view3d.retained_data_space_visuals.v1"
 VIEW3D_NAVIGATION_ORBIT_PAN_ZOOM_CAPABILITY = "view3d.navigation.orbit_pan_zoom.v1"
 VIEW3D_LIGHT_AMBIENT_CAPABILITY = "view3d.light.ambient.v1"
 VIEW3D_LIGHT_DIRECTIONAL_CAPABILITY = "view3d.light.directional.v1"
@@ -61,9 +59,7 @@ class View3DDiagnosticCode(str, Enum):
     VIEW3D_PROJECTION_UNSUPPORTED = "view3d_projection_unsupported"
     VIEW3D_INVALID_CAMERA_DEGENERATE = "view3d_invalid_camera_degenerate"
     VIEW3D_INVALID_PROJECTION = "view3d_invalid_projection"
-    VIEW3D_PROJECTION_LAYOUT_GEOMETRY_MISSING = (
-        "view3d_projection_layout_geometry_missing"
-    )
+    VIEW3D_PROJECTION_LAYOUT_GEOMETRY_MISSING = "view3d_projection_layout_geometry_missing"
     MESH3D_REQUIRES_VIEW3D = "mesh3d_requires_view3d"
     MESH3D_COORDINATE_SPACE_UNSUPPORTED = "mesh3d_coordinate_space_unsupported"
     MESH3D_TRANSFORM_UNSUPPORTED = "mesh3d_transform_unsupported"
@@ -142,16 +138,10 @@ class View3DProjectionSnapshot:
                 raise ValueError("perspective snapshots require a positive aspect_ratio")
             if not math.isfinite(self.aspect_ratio):
                 raise ValueError("perspective snapshot aspect_ratio must be finite")
-            if not isinstance(
-                self.aspect_ratio_source, PerspectiveAspectRatioSource
-            ):
-                raise TypeError(
-                    "perspective snapshots require a PerspectiveAspectRatioSource"
-                )
+            if not isinstance(self.aspect_ratio_source, PerspectiveAspectRatioSource):
+                raise TypeError("perspective snapshots require a PerspectiveAspectRatioSource")
         elif self.aspect_ratio is not None or self.aspect_ratio_source is not None:
-            raise ValueError(
-                "orthographic snapshots must not contain perspective aspect state"
-            )
+            raise ValueError("orthographic snapshots must not contain perspective aspect state")
 
 
 @dataclass(frozen=True, slots=True)
@@ -217,7 +207,7 @@ class Zoom3DPayload:
     """Scale orthographic bounds or dolly a perspective camera."""
 
     scale: float
-    anchor_panel_ndc_xy: Float2 | None = None
+    anchor_plot_ndc_xy: Float2 | None = None
 
     def __post_init__(self) -> None:
         _validate_finite(
@@ -230,10 +220,10 @@ class Zoom3DPayload:
                 f"{View3DDiagnosticCode.VIEW3D_NAVIGATION_INVALID_ZOOM.value}: "
                 "scale must be positive"
             )
-        if self.anchor_panel_ndc_xy is not None:
+        if self.anchor_plot_ndc_xy is not None:
             _validate_float2(
-                "anchor_panel_ndc_xy",
-                self.anchor_panel_ndc_xy,
+                "anchor_plot_ndc_xy",
+                self.anchor_plot_ndc_xy,
                 View3DDiagnosticCode.VIEW3D_NAVIGATION_INVALID_ZOOM,
             )
 
@@ -524,7 +514,7 @@ class View3D:
 def project_view3d_data_point(
     view: View3D, point: Float3, *, aspect_ratio: float | None = None
 ) -> Float3:
-    """Project one DATA-space point into GSP panel NDC3."""
+    """Project one DATA-space point into GSP plot NDC3."""
     if not isinstance(view, View3D):
         raise TypeError("view must be a View3D")
     _validate_float3("point", point)
@@ -535,9 +525,7 @@ def project_view3d_data_point(
     camera_z = _dot3(relative, basis.forward)
     near, far = view.projection.near_far
     if isinstance(view.projection, PerspectiveProjection3D):
-        resolved_aspect = _resolve_perspective_aspect_ratio(
-            view.projection, aspect_ratio
-        )
+        resolved_aspect = _resolve_perspective_aspect_ratio(view.projection, aspect_ratio)
         if camera_z <= 0.0:
             raise ValueError(
                 f"{View3DDiagnosticCode.VIEW3D_INVALID_PROJECTION.value}: "
@@ -559,10 +547,10 @@ def project_view3d_data_point(
     )
 
 
-def unproject_view3d_panel_ndc_point(
+def unproject_view3d_plot_ndc_point(
     view: View3D, point: Float3, *, aspect_ratio: float | None = None
 ) -> Float3:
-    """Unproject one panel NDC3 point into DATA space."""
+    """Unproject one plot NDC3 point into DATA space."""
     if not isinstance(view, View3D):
         raise TypeError("view must be a View3D")
     _validate_float3("point", point)
@@ -570,9 +558,7 @@ def unproject_view3d_panel_ndc_point(
     near, far = view.projection.near_far
     camera_z = near + (point[2] + 1.0) * 0.5 * (far - near)
     if isinstance(view.projection, PerspectiveProjection3D):
-        resolved_aspect = _resolve_perspective_aspect_ratio(
-            view.projection, aspect_ratio
-        )
+        resolved_aspect = _resolve_perspective_aspect_ratio(view.projection, aspect_ratio)
         half_height = camera_z * _perspective_tan_half_fov(view.projection)
         half_width = half_height * resolved_aspect
         camera_x = point[0] * half_width
@@ -610,9 +596,7 @@ def resolve_view3d_projection_snapshot(
         layout_snapshot=layout_snapshot,
         layout_snapshot_id=layout_snapshot_id,
     )
-    aspect_ratio, aspect_source, diagnostics = _resolve_snapshot_aspect_ratio(
-        view, layout_snapshot
-    )
+    aspect_ratio, aspect_source, diagnostics = _resolve_snapshot_aspect_ratio(view, layout_snapshot)
     basis = view.camera.basis()
     snapshot_id = _projection_snapshot_id(
         view,
@@ -659,13 +643,9 @@ def orbit_view3d(view: View3D, payload: Orbit3DPayload) -> View3D:
         raise TypeError("payload must be an Orbit3DPayload")
     basis = view.camera.basis()
     eye_from_target = _sub3(view.camera.eye, view.camera.target)
-    yawed_eye = _rotate3(
-        eye_from_target, basis.true_up, payload.delta_yaw_radians
-    )
+    yawed_eye = _rotate3(eye_from_target, basis.true_up, payload.delta_yaw_radians)
     yawed_right = _rotate3(basis.right, basis.true_up, payload.delta_yaw_radians)
-    pitched_eye = _rotate3(
-        yawed_eye, yawed_right, payload.delta_pitch_radians
-    )
+    pitched_eye = _rotate3(yawed_eye, yawed_right, payload.delta_pitch_radians)
     return _replace_view3d(
         view,
         camera=Camera3D(
@@ -703,15 +683,15 @@ def zoom_view3d(view: View3D, payload: Zoom3DPayload) -> View3D:
         raise TypeError("view must be a View3D")
     if not isinstance(payload, Zoom3DPayload):
         raise TypeError("payload must be a Zoom3DPayload")
-    if payload.anchor_panel_ndc_xy is not None and not _panel_ndc_in_data_viewport(
-        payload.anchor_panel_ndc_xy
+    if payload.anchor_plot_ndc_xy is not None and not _plot_ndc_in_data_viewport(
+        payload.anchor_plot_ndc_xy
     ):
         raise ValueError(
             f"{View3DDiagnosticCode.VIEW3D_NAVIGATION_INVALID_ZOOM.value}: "
-            "anchor_panel_ndc_xy must be inside the closed data plot"
+            "anchor_plot_ndc_xy must be inside the closed data plot"
         )
     if isinstance(view.projection, PerspectiveProjection3D):
-        if payload.anchor_panel_ndc_xy is not None:
+        if payload.anchor_plot_ndc_xy is not None:
             raise ValueError(
                 f"{View3DDiagnosticCode.VIEW3D_NAVIGATION_ACTION_UNSUPPORTED.value}: "
                 "anchored perspective zoom semantics are deferred"
@@ -728,12 +708,12 @@ def zoom_view3d(view: View3D, payload: Zoom3DPayload) -> View3D:
                 up=view.camera.up,
             ),
         )
-    if payload.anchor_panel_ndc_xy is None:
+    if payload.anchor_plot_ndc_xy is None:
         x_anchor_t = 0.5
         y_anchor_t = 0.5
     else:
-        x_anchor_t = (payload.anchor_panel_ndc_xy[0] + 1.0) * 0.5
-        y_anchor_t = (payload.anchor_panel_ndc_xy[1] + 1.0) * 0.5
+        x_anchor_t = (payload.anchor_plot_ndc_xy[0] + 1.0) * 0.5
+        y_anchor_t = (payload.anchor_plot_ndc_xy[1] + 1.0) * 0.5
 
     x0, x1 = view.projection.xlim
     y0, y1 = view.projection.ylim
@@ -793,10 +773,7 @@ def apply_view3d_navigation_action(
             layout_snapshot_id=resolved_layout_id,
             diagnostics=(f"{mismatch_diagnostic}: stale view revision",),
         )
-    if (
-        action.base_view_projection_snapshot_id
-        != current_snapshot.view_projection_snapshot_id
-    ):
+    if action.base_view_projection_snapshot_id != current_snapshot.view_projection_snapshot_id:
         return _reject_view3d_navigation(
             view,
             action,
@@ -822,8 +799,7 @@ def apply_view3d_navigation_action(
             action,
             layout_snapshot_id=resolved_layout_id,
             diagnostics=(
-                f"{View3DDiagnosticCode.VIEW3D_NAVIGATION_INVALID_RESULT.value}: "
-                f"{error}",
+                f"{View3DDiagnosticCode.VIEW3D_NAVIGATION_INVALID_RESULT.value}: {error}",
             ),
         )
 
@@ -846,22 +822,18 @@ def apply_view3d_navigation_action(
     )
 
 
-def validate_projection3d_range(
-    name: str, limits: Float2, *, allow_reversed: bool
-) -> None:
+def validate_projection3d_range(name: str, limits: Float2, *, allow_reversed: bool) -> None:
     """Validate a finite non-degenerate S036 projection range."""
     if len(limits) != 2:
         raise ValueError(f"{name} must contain two values")
     low, high = limits
     if not math.isfinite(low) or not math.isfinite(high):
         raise ValueError(
-            f"{View3DDiagnosticCode.VIEW3D_INVALID_PROJECTION.value}: "
-            f"{name} values must be finite"
+            f"{View3DDiagnosticCode.VIEW3D_INVALID_PROJECTION.value}: {name} values must be finite"
         )
     if low == high:
         raise ValueError(
-            f"{View3DDiagnosticCode.VIEW3D_INVALID_PROJECTION.value}: "
-            f"{name} endpoints must differ"
+            f"{View3DDiagnosticCode.VIEW3D_INVALID_PROJECTION.value}: {name} endpoints must differ"
         )
     if not allow_reversed and high < low:
         raise ValueError(
@@ -870,9 +842,7 @@ def validate_projection3d_range(
         )
 
 
-def _apply_fresh_view3d_navigation_action(
-    view: View3D, action: View3DNavigationAction
-) -> View3D:
+def _apply_fresh_view3d_navigation_action(view: View3D, action: View3DNavigationAction) -> View3D:
     if action.kind is View3DNavigationActionKind.ORBIT:
         return orbit_view3d(view, _expect_payload(action.payload, Orbit3DPayload))
     if action.kind is View3DNavigationActionKind.PAN:
@@ -963,9 +933,7 @@ def _expect_payload(payload: View3DNavigationPayload, expected: type[_PayloadT])
     return payload
 
 
-def _validate_float2(
-    name: str, value: Float2, diagnostic: View3DDiagnosticCode
-) -> None:
+def _validate_float2(name: str, value: Float2, diagnostic: View3DDiagnosticCode) -> None:
     if len(value) != 2:
         raise ValueError(f"{name} must contain two values")
     _validate_finite(f"{name}[0]", value[0], diagnostic)
@@ -991,21 +959,15 @@ def _validate_float3_with_diagnostic(
 
 def _validate_projection3d_instance(projection: Projection3D) -> None:
     if not isinstance(projection, (OrthographicProjection3D, PerspectiveProjection3D)):
-        raise TypeError(
-            "projection must be an OrthographicProjection3D or PerspectiveProjection3D"
-        )
+        raise TypeError("projection must be an OrthographicProjection3D or PerspectiveProjection3D")
 
 
-def _validate_finite(
-    name: str, value: float, diagnostic: View3DDiagnosticCode
-) -> None:
+def _validate_finite(name: str, value: float, diagnostic: View3DDiagnosticCode) -> None:
     if not math.isfinite(value):
         raise ValueError(f"{diagnostic.value}: {name} must be finite")
 
 
-def _validate_unit_interval(
-    name: str, value: float, diagnostic: View3DDiagnosticCode
-) -> None:
+def _validate_unit_interval(name: str, value: float, diagnostic: View3DDiagnosticCode) -> None:
     _validate_finite(name, value, diagnostic)
     if value < 0.0 or value > 1.0:
         raise ValueError(f"{diagnostic.value}: {name} must be within [0, 1]")
@@ -1024,8 +986,7 @@ def _resolve_perspective_aspect_ratio(
     )
     if resolved <= 0.0:
         raise ValueError(
-            f"{View3DDiagnosticCode.VIEW3D_INVALID_PROJECTION.value}: "
-            "aspect_ratio must be positive"
+            f"{View3DDiagnosticCode.VIEW3D_INVALID_PROJECTION.value}: aspect_ratio must be positive"
         )
     return resolved
 
@@ -1113,9 +1074,7 @@ def _projection_snapshot_id(
         _format_float3(basis.forward),
         view.projection.kind.value,
         _format_projection_parameters(view.projection),
-        ""
-        if effective_aspect_ratio is None
-        else f"{effective_aspect_ratio:.17g}",
+        "" if effective_aspect_ratio is None else f"{effective_aspect_ratio:.17g}",
         "" if aspect_ratio_source is None else aspect_ratio_source.value,
         plot_rect_state,
         _format_float2(view.projection.near_far),
@@ -1134,25 +1093,15 @@ def _resolve_projection_layout_context(
     if layout_snapshot is not None:
         if not isinstance(layout_snapshot, ResolvedLayoutSnapshot):
             raise TypeError("layout_snapshot must be a ResolvedLayoutSnapshot")
-        if (
-            layout_snapshot.view_id is not None
-            and layout_snapshot.view_id != view.id
-        ):
+        resolved_panel = layout_snapshot.only_panel()
+        if resolved_panel.view_id is not None and resolved_panel.view_id != view.id:
             raise ValueError("layout_snapshot view_id does not match the View3D")
-        if (
-            layout_snapshot_id is not None
-            and layout_snapshot_id != layout_snapshot.snapshot_id
-        ):
-            raise ValueError(
-                "layout_snapshot_id does not match layout_snapshot.snapshot_id"
-            )
-        plot = layout_snapshot.plot_rect_px
+        if layout_snapshot_id is not None and layout_snapshot_id != layout_snapshot.snapshot_id:
+            raise ValueError("layout_snapshot_id does not match layout_snapshot.snapshot_id")
+        plot = resolved_panel.plot_rect_px
         return (
             layout_snapshot.snapshot_id,
-            ",".join(
-                f"{value:.17g}"
-                for value in (plot.x, plot.y, plot.width, plot.height)
-            ),
+            ",".join(f"{value:.17g}" for value in (plot.x, plot.y, plot.width, plot.height)),
         )
     if layout_snapshot_id is None:
         raise TypeError("layout_snapshot or layout_snapshot_id is required")
@@ -1191,7 +1140,7 @@ def _resolve_snapshot_aspect_ratio(
     )
 
 
-def _panel_ndc_in_data_viewport(coordinate: Float2) -> bool:
+def _plot_ndc_in_data_viewport(coordinate: Float2) -> bool:
     return -1.0 <= coordinate[0] <= 1.0 and -1.0 <= coordinate[1] <= 1.0
 
 

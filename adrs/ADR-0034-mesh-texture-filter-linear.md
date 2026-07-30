@@ -63,8 +63,11 @@ readback permits absolute per-channel error at most `2/255` from the real-valued
 requires the additional `meshvisual.texture_filter.linear.v1`, which depends on
 `texture2d.rgba8.v1`, `meshvisual.uv.vertex2d.v1`, and the existing material capability.
 
-The producer capability `gsp_vispy2.producer.mesh.texture_filter.linear.v1` is independent of
-renderer support and depends on `gsp_vispy2.producer.mesh.texture2d_unlit.v1`.
+P038 supersedes the former GSP producer-capability namespace. Producer discovery is now local and
+non-wire: VisPy2 exposes `vispy2.emit.meshvisual.texture_filter.linear.v1`, independently of
+renderer support, alongside `vispy2.emit.meshvisual.material.texture2d_unlit.v1`. GSP sessions
+reject both the removed producer-prefixed GSP identifiers and producer-local `vispy2.emit.*`
+values.
 
 ## Backend And Producer Boundary
 

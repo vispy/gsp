@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 
 from gsp import Scene
+from gsp.protocol import Panel, full_target_panel_layout
 from gsp.protocol import (
     Camera3D,
     CoordinateSpace,
@@ -66,5 +67,15 @@ def test_sphere_visual_rejects_invalid_inputs(field: str, value: object, error: 
 def test_sphere_visual_requires_scene_view3d() -> None:
     visual = _sphere()
     with pytest.raises(ValueError, match="Scene.view3d"):
-        Scene(id="scene:no-view", visuals=(visual,))
-    Scene(id="scene:view3d", visuals=(visual,), view3d=_view3d())
+        _scene(id="scene:no-view", visuals=(visual,))
+    _scene(id="scene:view3d", visuals=(visual,), view3d=_view3d())
+
+
+def _scene(**kwargs: object) -> Scene:
+    view = kwargs.get("view3d")
+    panel_id = view.panel_id if isinstance(view, View3D) else "panel:main"
+    return Scene(
+        panels=(Panel(id=panel_id),),
+        panel_layout=full_target_panel_layout(panel_id),
+        **kwargs,  # type: ignore[arg-type]
+    )

@@ -27,9 +27,7 @@ from gsp.protocol import (
 )
 
 
-POSITIONS_2D = np.array(
-    [[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5]], dtype=np.float32
-)
+POSITIONS_2D = np.array([[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5]], dtype=np.float32)
 FACES = np.array([[0, 1, 2], [0, 2, 3]], dtype=np.uint32)
 UVS = np.array([[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]], dtype=np.float32)
 

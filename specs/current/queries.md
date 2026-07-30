@@ -13,7 +13,7 @@ Scopes distinguish data visuals, guides, and all rendered contributions. A backe
 | `id` | identifier | required request identity |
 | `panel_id` | panel identifier | required |
 | `coordinate` | finite pair | required |
-| `coordinate_space` | panel logical pixels or panel NDC | required; no guessing |
+| `coordinate_space` | panel logical pixels or plot NDC | required; no guessing |
 | `scope` | data/guides/all-rendered | default data |
 | `hit_policy` | frontmost/all | default frontmost |
 | `payloads` | non-empty set of payload kinds | default identity |

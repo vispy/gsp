@@ -5,6 +5,15 @@ the current experimental candidate rather than a package-index release.
 
 ## Unreleased
 
+### Protocol
+
+- Made `Panel` identity-only and moved outer allocation into required scene-level
+  `layout.panel.explicit_rects.v1` intent.
+- Made resolved layout explicitly per-panel with one protocol-defined edge quantizer.
+- Moved rectangular clipping from `View2D` to `VisualAttachment.clip_scope`.
+- Removed producer-emission identifiers from GSP capabilities; only renderer execution
+  capabilities remain.
+
 ### Packaging
 
 - Defined `gsp-core` and `gsp-matplotlib` as the intended first ordinary publication set.

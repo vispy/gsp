@@ -41,9 +41,7 @@ def test_matplotlib_pixel_visual_renders_square_logical_sizes_and_colors() -> No
         visual = PixelVisual(
             id="pixel:2d",
             positions=np.array([[0.0, 0.0], [1.0, 1.0]], dtype=np.float32),
-            colors=np.array(
-                [[255, 0, 0, 255], [0, 255, 0, 128]], dtype=np.uint8
-            ),
+            colors=np.array([[255, 0, 0, 255], [0, 255, 0, 128]], dtype=np.uint8),
             pixel_size_px=np.array([4.0, 8.0], dtype=np.float32),
         )
         artist = render_pixel_visual(axes, visual)
@@ -83,9 +81,7 @@ def test_matplotlib_pixel_visual_rejects_transform_on_3d_anchors() -> None:
             id="pixel:3d-transform",
             positions=np.array([[0.0, 0.0, 0.0]], dtype=np.float32),
             colors=np.array([255, 255, 255, 255], dtype=np.uint8),
-            transform=VisualTransformBinding.inline_affine(
-                np.eye(3, dtype=np.float64)
-            ),
+            transform=VisualTransformBinding.inline_affine(np.eye(3, dtype=np.float64)),
         )
         with pytest.raises(NotImplementedError, match="2D transform"):
             render_pixel_visual(axes, visual, view3d=_view3d())
@@ -97,10 +93,6 @@ def test_matplotlib_capabilities_advertise_pixel_strict_and_adapted_scope() -> N
     capabilities = capability_snapshot()
     assert capabilities.supports_visual("pixel")
     assert capabilities.supports_view3d_capability("pixelvisual.v1")
-    assert capabilities.supports_view3d_capability(
-        "pixelvisual.positions3d.data.view3d.v1"
-    )
-    assert capabilities.supports_view3d_capability(
-        "pixelvisual.exact_logical_size.v1"
-    )
+    assert capabilities.supports_view3d_capability("pixelvisual.positions3d.data.view3d.v1")
+    assert capabilities.supports_view3d_capability("pixelvisual.exact_logical_size.v1")
     assert "adapted projected-square" in capabilities.metadata["pixelvisual_3d"]

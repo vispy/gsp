@@ -5,6 +5,7 @@ import matplotlib
 matplotlib.use("Agg")
 
 import numpy as np
+from conformance.p038_support import single_panel_scene
 import pytest
 
 import gsp
@@ -12,7 +13,7 @@ from gsp.protocol import CoordinateSpace, PointVisual, View2D
 
 
 def _scene(coordinate_space: CoordinateSpace) -> gsp.Scene:
-    return gsp.Scene(
+    return single_panel_scene(
         id=f"scene:{coordinate_space.value}",
         visuals=(
             PointVisual(

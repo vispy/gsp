@@ -67,8 +67,12 @@ class ExtensionManifest:
                 raise ValueError("extension implementation status is invalid")
         if self.query_contract is not None:
             payload = self.query_contract.get("payload")
-            if payload is not None and (not isinstance(payload, str) or not payload.startswith(f"{self.capability}.query")):
-                raise ValueError("extension query payload must be namespaced by extension capability")
+            if payload is not None and (
+                not isinstance(payload, str) or not payload.startswith(f"{self.capability}.query")
+            ):
+                raise ValueError(
+                    "extension query payload must be namespaced by extension capability"
+                )
 
     @property
     def capability(self) -> str:
@@ -140,4 +144,6 @@ def _validate_extension_version(version: str) -> None:
 def _valid_extension_segment(segment: str) -> bool:
     if not segment:
         return False
-    return all(character.islower() or character.isdigit() or character == "-" for character in segment)
+    return all(
+        character.islower() or character.isdigit() or character == "-" for character in segment
+    )

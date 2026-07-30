@@ -10,7 +10,20 @@ from gsp.protocol import (
     PixelVisual,
     View2D,
     View3D,
+    full_target_panel_layout,
 )
+
+
+def _scene(**kwargs: object) -> Scene:
+    supplied_panels = kwargs.pop("panels", None)
+    view = kwargs.get("view2d") or kwargs.get("view3d")
+    panel_id = view.panel_id if isinstance(view, (View2D, View3D)) else "panel:main"
+    panels = supplied_panels if supplied_panels is not None else (Panel(id=panel_id),)
+    return Scene(
+        panels=panels,  # type: ignore[arg-type]
+        panel_layout=full_target_panel_layout(panels[0].id),  # type: ignore[index,union-attr]
+        **kwargs,  # type: ignore[arg-type]
+    )
 
 
 def _pixels(**kwargs: object) -> PixelVisual:
@@ -43,9 +56,7 @@ def test_pixel_visual_accepts_uniform_and_per_item_fields() -> None:
     uniform = _pixels(pixel_size_px=2.0)
     assert uniform.pixel_size_values().tolist() == [2.0, 2.0]
     per_item = _pixels(
-        colors=np.array(
-            [[255, 0, 0, 255], [0, 255, 0, 128]], dtype=np.uint8
-        ),
+        colors=np.array([[255, 0, 0, 255], [0, 255, 0, 128]], dtype=np.uint8),
         pixel_size_px=np.array([2.0, 4.0], dtype=np.float32),
     )
     assert per_item.pixel_size_values().tolist() == [2.0, 4.0]
@@ -84,9 +95,7 @@ def test_pixel_visual_accepts_uniform_and_per_item_fields() -> None:
         ("pixel_size_px", np.inf, "finite"),
     ],
 )
-def test_pixel_visual_rejects_malformed_fields(
-    field: str, value: object, error: str
-) -> None:
+def test_pixel_visual_rejects_malformed_fields(field: str, value: object, error: str) -> None:
     with pytest.raises((TypeError, ValueError), match=error):
         _pixels(**{field: value})
 
@@ -94,12 +103,12 @@ def test_pixel_visual_rejects_malformed_fields(
 def test_pixel_visual_scene_view_requirements() -> None:
     pixels2d = _pixels()
     with pytest.raises(ValueError, match="Scene.view2d"):
-        Scene(id="scene:missing-2d", visuals=(pixels2d,))
+        _scene(id="scene:missing-2d", visuals=(pixels2d,))
     view2d = View2D(id="view:2d", panel_id="panel:1")
-    Scene(
+    _scene(
         id="scene:2d",
         visuals=(pixels2d,),
-        panels=(Panel(id="panel:1", figure_id="figure:1"),),
+        panels=(Panel(id="panel:1"),),
         view2d=view2d,
     )
 
@@ -108,10 +117,10 @@ def test_pixel_visual_scene_view_requirements() -> None:
         colors=np.array([255, 255, 255, 255], dtype=np.uint8),
     )
     with pytest.raises(ValueError, match="Scene.view3d"):
-        Scene(id="scene:missing-3d", visuals=(pixels3d,))
-    Scene(id="scene:3d", visuals=(pixels3d,), view3d=_view3d())
+        _scene(id="scene:missing-3d", visuals=(pixels3d,))
+    _scene(id="scene:3d", visuals=(pixels3d,), view3d=_view3d())
     with pytest.raises(ValueError, match="CoordinateSpace.DATA"):
-        Scene(
+        _scene(
             id="scene:ndc3",
             visuals=(
                 _pixels(

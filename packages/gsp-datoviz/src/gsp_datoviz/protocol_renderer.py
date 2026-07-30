@@ -44,6 +44,7 @@ from gsp.protocol import (
     LayoutLayer,
     LogicalCoordinateRegion,
     LogicalPixelRect,
+    PanelLayoutIntent,
     MeshColorMode,
     MeshShading,
     MeshVisual,
@@ -89,9 +90,12 @@ from gsp.protocol import (
     ResolvedCanvas,
     ResolvedGuideBox,
     ResolvedLayoutSnapshot,
+    ResolvedPanelLayout,
     classify_logical_coordinate,
     project_view3d_data_point,
+    quantize_logical_rect,
     resolve_view3d_projection_snapshot,
+    resolve_panel_layout_intent,
     SCALAR_COLOR_QUERY_PAYLOAD_KIND,
     ScalarColorQueryPayload,
     ScalarColorSlot,
@@ -469,9 +473,7 @@ def datoviz_v04_live_input_diagnostics(module: ModuleType | Any) -> tuple[str, .
         if input_event is None or not hasattr(input_event, "content"):
             diagnostics.append("DvzInputEvent missing content union")
     input_event_content_type = getattr(module, "DvzInputEventContent", None)
-    if input_event_content_type is not None and not hasattr(
-        input_event_content_type, "pointer"
-    ):
+    if input_event_content_type is not None and not hasattr(input_event_content_type, "pointer"):
         diagnostics.append("DvzInputEventContent missing pointer field")
     return tuple(diagnostics)
 
@@ -479,9 +481,7 @@ def datoviz_v04_live_input_diagnostics(module: ModuleType | Any) -> tuple[str, .
 def datoviz_v04_mesh_diagnostics(module: ModuleType | Any) -> tuple[str, ...]:
     """Return why Datoviz MeshVisual rendering is disabled for this slice."""
     diagnostics = [
-        f"missing {name}"
-        for name in _REQUIRED_DVZ_MESH_FUNCTIONS
-        if not hasattr(module, name)
+        f"missing {name}" for name in _REQUIRED_DVZ_MESH_FUNCTIONS if not hasattr(module, name)
     ]
     diagnostics.extend(
         f"unverified {name}"
@@ -624,9 +624,7 @@ def datoviz_v04_view3d_live_navigation_diagnostics(
     readback_diagnostics = datoviz_v04_view3d_state_readback_diagnostics(module)
     if readback_diagnostics:
         diagnostics.extend(readback_diagnostics)
-        diagnostics.append(
-            "Datoviz View3D live navigation requires native View3D state readback"
-        )
+        diagnostics.append("Datoviz View3D live navigation requires native View3D state readback")
     return tuple(diagnostics)
 
 
@@ -667,16 +665,10 @@ def capability_snapshot() -> CapabilitySnapshot:
     return datoviz_v04_capability_snapshot()
 
 
-def _datoviz_color_pipeline_value(
-    dvz: Any, color_pipeline: DatovizColorPipeline
-) -> int:
+def _datoviz_color_pipeline_value(dvz: Any, color_pipeline: DatovizColorPipeline) -> int:
     """Return the Datoviz enum value for a GSP color-pipeline option."""
     if color_pipeline == "linear_srgb":
-        return int(
-            getattr(
-                dvz, "DVZ_COLOR_PIPELINE_LINEAR_SRGB", DVZ_COLOR_PIPELINE_LINEAR_SRGB
-            )
-        )
+        return int(getattr(dvz, "DVZ_COLOR_PIPELINE_LINEAR_SRGB", DVZ_COLOR_PIPELINE_LINEAR_SRGB))
     if color_pipeline == "legacy_srgb_blend":
         return int(
             getattr(
@@ -688,9 +680,7 @@ def _datoviz_color_pipeline_value(
     raise ValueError(f"unsupported Datoviz color pipeline: {color_pipeline!r}")
 
 
-def _set_figure_color_pipeline(
-    dvz: Any, figure: Any, color_pipeline: DatovizColorPipeline
-) -> None:
+def _set_figure_color_pipeline(dvz: Any, figure: Any, color_pipeline: DatovizColorPipeline) -> None:
     """Set the Datoviz figure color pipeline when the facade supports or requires it."""
     value = _datoviz_color_pipeline_value(dvz, color_pipeline)
     setter = getattr(dvz, "dvz_figure_set_color_pipeline", None)
@@ -698,8 +688,7 @@ def _set_figure_color_pipeline(
         if color_pipeline == "linear_srgb":
             return
         raise DatovizV04Unavailable(
-            "Datoviz legacy sRGB blend mode is unavailable: "
-            "missing dvz_figure_set_color_pipeline"
+            "Datoviz legacy sRGB blend mode is unavailable: missing dvz_figure_set_color_pipeline"
         )
     setter(figure, value)
 
@@ -719,9 +708,7 @@ def _configure_datoviz_view3d_camera(dvz: Any, panel: Any, view3d: View3D) -> An
     )
     camera = dvz.dvz_panel_camera(panel)
     if _is_null_handle(camera):
-        raise DatovizV04Unsupported(
-            "Datoviz retained View3D panel camera is unavailable"
-        )
+        raise DatovizV04Unsupported("Datoviz retained View3D panel camera is unavailable")
     _set_datoviz_camera_projection_state(dvz, camera, view3d)
     return camera
 
@@ -755,13 +742,9 @@ def _set_datoviz_camera_projection_state(dvz: Any, camera: Any, view3d: View3D) 
         _set_datoviz_camera_orthographic_bounds(dvz, camera, view3d)
 
 
-def _set_datoviz_camera_orthographic_bounds(
-    dvz: Any, camera: Any, view3d: View3D
-) -> None:
+def _set_datoviz_camera_orthographic_bounds(dvz: Any, camera: Any, view3d: View3D) -> None:
     if not isinstance(view3d.projection, OrthographicProjection3D):
-        raise DatovizV04Unsupported(
-            "Datoviz orthographic bounds require OrthographicProjection3D"
-        )
+        raise DatovizV04Unsupported("Datoviz orthographic bounds require OrthographicProjection3D")
     x0, x1 = view3d.projection.xlim
     y0, y1 = view3d.projection.ylim
     near, far = view3d.projection.near_far
@@ -777,8 +760,7 @@ def _update_datoviz_view3d_camera(dvz: Any, panel: Any, view3d: View3D) -> Any:
     diagnostics = datoviz_v04_view3d_camera_diagnostics(dvz)
     if diagnostics:
         raise DatovizV04Unavailable(
-            "Datoviz retained View3D descriptor binding is unavailable: "
-            + "; ".join(diagnostics)
+            "Datoviz retained View3D descriptor binding is unavailable: " + "; ".join(diagnostics)
         )
     panel_desc = dvz.dvz_panel_view3d_desc()
     _fill_datoviz_camera_desc(dvz, _panel_view3d_camera_desc(panel_desc), view3d)
@@ -788,9 +770,7 @@ def _update_datoviz_view3d_camera(dvz: Any, panel: Any, view3d: View3D) -> Any:
     )
     camera = dvz.dvz_panel_camera(panel)
     if _is_null_handle(camera):
-        raise DatovizV04Unsupported(
-            "Datoviz retained View3D panel camera update failed"
-        )
+        raise DatovizV04Unsupported("Datoviz retained View3D panel camera update failed")
     _set_datoviz_camera_projection_state(dvz, camera, view3d)
     return camera
 
@@ -834,9 +814,7 @@ def _datoviz_view_size_desc(dvz: Any, requested: CanvasSize) -> Any | None:
         desc = factory(requested.width, requested.height, requested.reference_dpi)
     else:
         desc = factory(requested.width, requested.height)
-    if requested.requested_device_scale is not None and hasattr(
-        desc, "requested_device_scale"
-    ):
+    if requested.requested_device_scale is not None and hasattr(desc, "requested_device_scale"):
         desc.requested_device_scale = float(requested.requested_device_scale)
     if requested.monitor_dpi_override is not None:
         _set_datoviz_monitor_dpi_override(desc, float(requested.monitor_dpi_override))
@@ -862,24 +840,12 @@ def _set_datoviz_monitor_dpi_override(desc: Any, dpi: float) -> None:
 
 def _resolved_canvas_from_datoviz(requested: CanvasSize, native: Any) -> ResolvedCanvas:
     fallback = requested.resolve()
-    framebuffer_per_canvas_px_x = float(
-        getattr(native, "framebuffer_per_canvas_px_x", 1.0)
-    )
-    framebuffer_per_canvas_px_y = float(
-        getattr(native, "framebuffer_per_canvas_px_y", 1.0)
-    )
-    target_width_mm = _positive_native_float(
-        native, "target_width_mm", fallback.target_width_mm
-    )
-    target_height_mm = _positive_native_float(
-        native, "target_height_mm", fallback.target_height_mm
-    )
-    estimated_width_mm = _positive_native_float(
-        native, "estimated_width_mm", target_width_mm
-    )
-    estimated_height_mm = _positive_native_float(
-        native, "estimated_height_mm", target_height_mm
-    )
+    framebuffer_per_canvas_px_x = float(getattr(native, "framebuffer_per_canvas_px_x", 1.0))
+    framebuffer_per_canvas_px_y = float(getattr(native, "framebuffer_per_canvas_px_y", 1.0))
+    target_width_mm = _positive_native_float(native, "target_width_mm", fallback.target_width_mm)
+    target_height_mm = _positive_native_float(native, "target_height_mm", fallback.target_height_mm)
+    estimated_width_mm = _positive_native_float(native, "estimated_width_mm", target_width_mm)
+    estimated_height_mm = _positive_native_float(native, "estimated_height_mm", target_height_mm)
     return ResolvedCanvas(
         requested_size=requested,
         canvas_width_px=float(getattr(native, "canvas_width_px")),
@@ -994,6 +960,8 @@ class DatovizV04ProtocolRenderer:
     view3d: View3D | None = None
     transform_resources: Mapping[str, AffineTransform2DResource] | None = None
     panel_bounds: tuple[float, float, float, float] | None = None
+    panel_id: str = "panel:default"
+    panel_layout: PanelLayoutIntent | None = None
     consumed_layout_snapshot: ResolvedLayoutSnapshot | None = None
     scene: Any = field(init=False)
     figure: Any = field(init=False)
@@ -1003,21 +971,15 @@ class DatovizV04ProtocolRenderer:
     live_view: Any | None = field(default=None, init=False)
     native_panzoom: Any | None = field(default=None, init=False)
     native_arcball: Any | None = field(default=None, init=False)
-    live_navigation: "_DatovizLiveView2DNavigation | None" = field(
-        default=None, init=False
-    )
-    live_view3d_navigation: "_DatovizLiveView3DNavigation | None" = field(
-        default=None, init=False
-    )
+    live_navigation: "_DatovizLiveView2DNavigation | None" = field(default=None, init=False)
+    live_view3d_navigation: "_DatovizLiveView3DNavigation | None" = field(default=None, init=False)
     visuals: dict[str, Any] = field(default_factory=dict, init=False)
     sampled_fields: dict[str, Any] = field(default_factory=dict, init=False)
     native_scales: dict[str, Any] = field(default_factory=dict, init=False)
     native_colormaps: dict[str, Any] = field(default_factory=dict, init=False)
     colorbars: dict[str, Any] = field(default_factory=dict, init=False)
     resolved_canvas: ResolvedCanvas = field(init=False)
-    scalar_visuals: dict[str, _ScalarVisualData] = field(
-        default_factory=dict, init=False
-    )
+    scalar_visuals: dict[str, _ScalarVisualData] = field(default_factory=dict, init=False)
     retained_view2d_position_uploads: list[_RetainedView2DPositionUpload] = field(
         default_factory=list, init=False
     )
@@ -1032,12 +994,8 @@ class DatovizV04ProtocolRenderer:
     )
     view2d_axis_state: _DatovizView2DAxisState | None = field(default=None, init=False)
     native_view3d_camera: Any | None = field(default=None, init=False)
-    transform_adaptations: dict[str, tuple[str, ...]] = field(
-        default_factory=dict, init=False
-    )
-    last_view2d_carrier_diagnostics: dict[str, object] = field(
-        default_factory=dict, init=False
-    )
+    transform_adaptations: dict[str, tuple[str, ...]] = field(default_factory=dict, init=False)
+    last_view2d_carrier_diagnostics: dict[str, object] = field(default_factory=dict, init=False)
     _cpu_map_data_visuals_to_view: bool = field(default=False, init=False)
     _closed: bool = field(default=False, init=False)
 
@@ -1049,14 +1007,8 @@ class DatovizV04ProtocolRenderer:
         if self.dvz is None:
             self.dvz = import_datoviz_v04()
         elif not is_datoviz_v04_facade(self.dvz):
-            missing = [
-                name
-                for name in _REQUIRED_DVZ_V04_FUNCTIONS
-                if not hasattr(self.dvz, name)
-            ]
-            raise DatovizV04Unavailable(
-                f"Datoviz facade is missing v0.4 functions: {missing}"
-            )
+            missing = [name for name in _REQUIRED_DVZ_V04_FUNCTIONS if not hasattr(self.dvz, name)]
+            raise DatovizV04Unavailable(f"Datoviz facade is missing v0.4 functions: {missing}")
         if self.consumed_layout_snapshot is not None:
             _preflight_consumed_layout_panel_api(self.dvz)
             _validate_renderer_consumed_layout_view(
@@ -1064,23 +1016,15 @@ class DatovizV04ProtocolRenderer:
                 view=self.view,
                 view3d=self.view3d,
             )
-            _validate_consumed_perspective_aspect(
-                self.consumed_layout_snapshot, self.view3d
-            )
-            expected_bounds = _consumed_layout_native_panel_bounds(
-                self.consumed_layout_snapshot
-            )
+            _validate_consumed_perspective_aspect(self.consumed_layout_snapshot, self.view3d)
+            expected_bounds = _consumed_layout_native_panel_bounds(self.consumed_layout_snapshot)
             if self.panel_bounds is None:
                 self.panel_bounds = expected_bounds
             elif not all(
                 math.isclose(actual, expected, rel_tol=0.0, abs_tol=1e-12)
-                for actual, expected in zip(
-                    self.panel_bounds, expected_bounds, strict=True
-                )
+                for actual, expected in zip(self.panel_bounds, expected_bounds, strict=True)
             ):
-                raise ValueError(
-                    "panel_bounds conflicts with the consumed layout plot rectangle"
-                )
+                raise ValueError("panel_bounds conflicts with the consumed layout plot rectangle")
             if self.canvas_size is None:
                 target = self.consumed_layout_snapshot.render_target
                 self.canvas_size = CanvasSize.reference_px(
@@ -1089,13 +1033,33 @@ class DatovizV04ProtocolRenderer:
                     reference_dpi=target.dpi or 96.0,
                 ).with_requested_device_scale(target.device_scale)
 
-        requested_size = self.canvas_size or CanvasSize.pixel_exact(
-            self.width, self.height
-        )
+        requested_size = self.canvas_size or CanvasSize.pixel_exact(self.width, self.height)
         self.resolved_canvas = _resolve_datoviz_canvas_size(self.dvz, requested_size)
         if self.consumed_layout_snapshot is not None:
             _validate_resolved_canvas_matches_layout(
                 self.resolved_canvas, self.consumed_layout_snapshot
+            )
+        elif self.panel_layout is not None:
+            target = RenderTarget(
+                logical_width_px=self.resolved_canvas.canvas_width_px,
+                logical_height_px=self.resolved_canvas.canvas_height_px,
+                device_scale=self.resolved_canvas.framebuffer_per_canvas_px,
+                dpi=self.resolved_canvas.output_dpi,
+                pixel_origin=PixelOrigin.TOP_LEFT,
+                query_coordinate_space="plot",
+            )
+            resolved_panels = resolve_panel_layout_intent(self.panel_layout, target)
+            matching_panels = tuple(
+                panel for panel in resolved_panels if panel.panel_id == self.panel_id
+            )
+            if len(matching_panels) != 1:
+                raise ValueError("panel_layout must resolve the rendered panel exactly once")
+            panel = matching_panels[0].panel_rect_px
+            self.panel_bounds = (
+                panel.x / target.logical_width_px,
+                panel.y / target.logical_height_px,
+                panel.width / target.logical_width_px,
+                panel.height / target.logical_height_px,
             )
         self.width = self.resolved_canvas.framebuffer_width
         self.height = self.resolved_canvas.framebuffer_height
@@ -1132,7 +1096,20 @@ class DatovizV04ProtocolRenderer:
             self.dvz,
             self.panel,
             resolved_canvas=self.resolved_canvas,
-            view=self.view,
+            panel_id=(
+                self.view.panel_id
+                if self.view is not None
+                else self.view3d.panel_id
+                if self.view3d is not None
+                else "panel:default"
+            ),
+            view_id=(
+                self.view.id
+                if self.view is not None
+                else self.view3d.id
+                if self.view3d is not None
+                else None
+            ),
             snapshot_id_prefix=snapshot_id_prefix,
         )
 
@@ -1153,9 +1130,7 @@ class DatovizV04ProtocolRenderer:
             + self.resolved_canvas.canvas_to_host_scale_y
         )
 
-    def _scale_canvas_px_array(
-        self, values: npt.NDArray[np.float32]
-    ) -> npt.NDArray[np.float32]:
+    def _scale_canvas_px_array(self, values: npt.NDArray[np.float32]) -> npt.NDArray[np.float32]:
         return np.ascontiguousarray(
             values.astype(np.float32, copy=False) * np.float32(self._canvas_px_scale())
         )
@@ -1200,9 +1175,7 @@ class DatovizV04ProtocolRenderer:
                 cpu_map_data_to_view=self._cpu_map_data_visuals_to_view,
             )
         )
-        _record_transform_adaptation(
-            self.transform_adaptations, visual.id, visual.transform
-        )
+        _record_transform_adaptation(self.transform_adaptations, visual.id, visual.transform)
         colors = _point_colors(visual, color_scales=self.color_scales)
         diameters = self._scale_canvas_px_array(
             _diameters_from_pixel_diameters(visual.sizes, positions.shape[0])
@@ -1235,9 +1208,7 @@ class DatovizV04ProtocolRenderer:
             visual.coordinate_space,
         )
         if visual.color_encoding is not None:
-            scale = resolve_color_scale(
-                self.color_scales, visual.color_encoding.color_scale_id
-            )
+            scale = resolve_color_scale(self.color_scales, visual.color_encoding.color_scale_id)
             self.scalar_visuals[visual.id] = _ScalarVisualData(
                 visual_id=visual.id,
                 visual_family=VisualFamily.POINT,
@@ -1257,17 +1228,12 @@ class DatovizV04ProtocolRenderer:
                 raise DatovizV04Unsupported(
                     "Datoviz PixelVisual positions3d do not support a 2D transform"
                 )
-            if (
-                visual.coordinate_space is not CoordinateSpace.DATA
-                or self.view3d is None
-            ):
+            if visual.coordinate_space is not CoordinateSpace.DATA or self.view3d is None:
                 raise DatovizV04Unsupported(
                     "Datoviz PixelVisual positions3d require DATA space and View3D"
                 )
         elif visual.coordinate_space is CoordinateSpace.DATA and self.view is None:
-            raise DatovizV04Unsupported(
-                "Datoviz PixelVisual DATA positions2d require View2D"
-            )
+            raise DatovizV04Unsupported("Datoviz PixelVisual DATA positions2d require View2D")
         positions = _positions_3d(
             _adapt_visual_positions(
                 visual.id,
@@ -1279,9 +1245,7 @@ class DatovizV04ProtocolRenderer:
                 cpu_map_data_to_view=self._cpu_map_data_visuals_to_view,
             )
         )
-        _record_transform_adaptation(
-            self.transform_adaptations, visual.id, visual.transform
-        )
+        _record_transform_adaptation(self.transform_adaptations, visual.id, visual.transform)
         colors = _rgba8_broadcast(visual.colors, positions.shape[0])
         sizes = self._scale_canvas_px_array(visual.pixel_size_values())
         dvz_visual = self.dvz.dvz_pixel(self.scene, 0)
@@ -1313,9 +1277,7 @@ class DatovizV04ProtocolRenderer:
     def add_sphere_visual(self, visual: SphereVisual) -> Any:
         """Create accurate public Datoviz raycast sphere impostors."""
         if self.view3d is None:
-            raise DatovizV04Unsupported(
-                "Datoviz SphereVisual DATA positions3d require View3D"
-            )
+            raise DatovizV04Unsupported("Datoviz SphereVisual DATA positions3d require View3D")
         missing = tuple(
             name
             for name in ("dvz_sphere", "dvz_sphere_set_mode")
@@ -1323,13 +1285,11 @@ class DatovizV04ProtocolRenderer:
         )
         if missing:
             raise DatovizV04Unsupported(
-                "Datoviz SphereVisual requires public callable(s): "
-                + ", ".join(missing)
+                "Datoviz SphereVisual requires public callable(s): " + ", ".join(missing)
             )
         if not hasattr(self.dvz, "DVZ_SPHERE_MODE_RAYCAST_IMPOSTOR"):
             raise DatovizV04Unsupported(
-                "Datoviz SphereVisual requires "
-                "DVZ_SPHERE_MODE_RAYCAST_IMPOSTOR"
+                "Datoviz SphereVisual requires DVZ_SPHERE_MODE_RAYCAST_IMPOSTOR"
             )
         positions = np.ascontiguousarray(visual.positions, dtype=np.float32)
         colors = _rgba8_broadcast(visual.colors, positions.shape[0])
@@ -1338,9 +1298,7 @@ class DatovizV04ProtocolRenderer:
         if _is_null_handle(dvz_visual):
             raise DatovizV04Unavailable("Datoviz dvz_sphere() failed")
         _require_datoviz_success(
-            self.dvz.dvz_sphere_set_mode(
-                dvz_visual, self.dvz.DVZ_SPHERE_MODE_RAYCAST_IMPOSTOR
-            ),
+            self.dvz.dvz_sphere_set_mode(dvz_visual, self.dvz.DVZ_SPHERE_MODE_RAYCAST_IMPOSTOR),
             "Datoviz accurate sphere raycast mode setup failed",
         )
         _set_alpha_mode_if_translucent(self.dvz, dvz_visual, colors)
@@ -1368,17 +1326,12 @@ class DatovizV04ProtocolRenderer:
                 raise DatovizV04Unsupported(
                     "Datoviz VectorVisual positions3d do not support a 2D transform"
                 )
-            if (
-                visual.coordinate_space is not CoordinateSpace.DATA
-                or self.view3d is None
-            ):
+            if visual.coordinate_space is not CoordinateSpace.DATA or self.view3d is None:
                 raise DatovizV04Unsupported(
                     "Datoviz VectorVisual positions3d require DATA space and View3D"
                 )
         elif visual.coordinate_space is CoordinateSpace.DATA and self.view is None:
-            raise DatovizV04Unsupported(
-                "Datoviz VectorVisual DATA positions2d require View2D"
-            )
+            raise DatovizV04Unsupported("Datoviz VectorVisual DATA positions2d require View2D")
         cap_values = _preflight_datoviz_vector_api(self.dvz)
         source_tails, source_heads = visual.endpoint_values()
         positions = _adapt_visual_positions(
@@ -1441,9 +1394,7 @@ class DatovizV04ProtocolRenderer:
             ),
         )
         self.visuals[visual.id] = dvz_visual
-        _record_transform_adaptation(
-            self.transform_adaptations, visual.id, visual.transform
-        )
+        _record_transform_adaptation(self.transform_adaptations, visual.id, visual.transform)
         return dvz_visual
 
     def add_primitive_visual(self, visual: PrimitiveVisual) -> Any:
@@ -1455,10 +1406,7 @@ class DatovizV04ProtocolRenderer:
                     "primitivevisual_transform_unsupported: Datoviz positions3d "
                     "do not support a 2D transform"
                 )
-            if (
-                visual.coordinate_space is not CoordinateSpace.DATA
-                or self.view3d is None
-            ):
+            if visual.coordinate_space is not CoordinateSpace.DATA or self.view3d is None:
                 raise DatovizV04Unsupported(
                     "primitivevisual_view3d_required: Datoviz positions3d "
                     "require DATA space and View3D"
@@ -1472,8 +1420,7 @@ class DatovizV04ProtocolRenderer:
         )
         if diagnostics:
             raise DatovizV04Unsupported(
-                "primitivevisual_capability_unsupported: "
-                + ", ".join(diagnostics)
+                "primitivevisual_capability_unsupported: " + ", ".join(diagnostics)
             )
         topology_name = _PRIMITIVE_TOPOLOGY_NAMES[visual.topology]
         positions = _positions_3d(
@@ -1488,9 +1435,7 @@ class DatovizV04ProtocolRenderer:
             )
         )
         colors = _rgba8_broadcast(visual.colors, positions.shape[0])
-        dvz_visual = self.dvz.dvz_primitive(
-            self.scene, int(getattr(self.dvz, topology_name)), 0
-        )
+        dvz_visual = self.dvz.dvz_primitive(self.scene, int(getattr(self.dvz, topology_name)), 0)
         if _is_null_handle(dvz_visual):
             raise DatovizV04Unavailable("Datoviz dvz_primitive() failed")
         _set_alpha_mode_if_translucent(self.dvz, dvz_visual, colors)
@@ -1510,9 +1455,7 @@ class DatovizV04ProtocolRenderer:
             ),
         )
         self.visuals[visual.id] = dvz_visual
-        _record_transform_adaptation(
-            self.transform_adaptations, visual.id, visual.transform
-        )
+        _record_transform_adaptation(self.transform_adaptations, visual.id, visual.transform)
         return dvz_visual
 
     def update_point_visual(self, visual: PointVisual) -> None:
@@ -1572,9 +1515,7 @@ class DatovizV04ProtocolRenderer:
                 cpu_map_data_to_view=self._cpu_map_data_visuals_to_view,
             )
         )
-        _record_transform_adaptation(
-            self.transform_adaptations, visual.id, visual.transform
-        )
+        _record_transform_adaptation(self.transform_adaptations, visual.id, visual.transform)
         fill_colors = _marker_fill_colors(visual, color_scales=self.color_scales)
         diameters = self._scale_canvas_px_array(
             _diameters_from_pixel_diameters(visual.sizes, positions.shape[0])
@@ -1663,13 +1604,9 @@ class DatovizV04ProtocolRenderer:
                 cpu_map_data_to_view=self._cpu_map_data_visuals_to_view,
             )
         )
-        _record_transform_adaptation(
-            self.transform_adaptations, visual.id, visual.transform
-        )
+        _record_transform_adaptation(self.transform_adaptations, visual.id, visual.transform)
         colors = _rgba8(visual.colors)
-        widths = self._scale_canvas_px_array(
-            np.ascontiguousarray(visual.width_values())
-        )
+        widths = self._scale_canvas_px_array(np.ascontiguousarray(visual.width_values()))
 
         dvz_visual = self.dvz.dvz_segment(self.scene, 0)
         if dvz_visual is None:
@@ -1733,9 +1670,7 @@ class DatovizV04ProtocolRenderer:
                 cpu_map_data_to_view=self._cpu_map_data_visuals_to_view,
             )
         )
-        _record_transform_adaptation(
-            self.transform_adaptations, visual.id, visual.transform
-        )
+        _record_transform_adaptation(self.transform_adaptations, visual.id, visual.transform)
         colors = _expand_path_colors(visual)
         widths = self._scale_canvas_px_array(_expand_path_widths(visual))
         subpaths = np.ascontiguousarray(np.array(visual.path_lengths, dtype=np.uint32))
@@ -1757,9 +1692,7 @@ class DatovizV04ProtocolRenderer:
             "Datoviz path join configuration failed",
         )
         _require_datoviz_success(
-            _set_path_subpaths(
-                self.dvz, dvz_visual, len(visual.path_lengths), subpaths
-            ),
+            _set_path_subpaths(self.dvz, dvz_visual, len(visual.path_lengths), subpaths),
             "Datoviz path subpath configuration failed",
         )
         _set_alpha_mode_if_translucent(self.dvz, dvz_visual, colors)
@@ -1805,9 +1738,7 @@ class DatovizV04ProtocolRenderer:
         if datoviz_v04_sampled_field_ready(self.dvz):
             sampled_field = self._create_rgba8_sampled_field(pixels, width, height)
             if not _set_visual_field(self.dvz, dvz_visual, "field", sampled_field):
-                raise DatovizV04Unsupported(
-                    "Datoviz sampled-field image binding failed"
-                )
+                raise DatovizV04Unsupported("Datoviz sampled-field image binding failed")
             self.sampled_fields[visual.id] = sampled_field
         else:
             raise DatovizV04Unavailable(
@@ -1844,8 +1775,7 @@ class DatovizV04ProtocolRenderer:
             diagnostics = _datoviz_texture2d_mesh_diagnostics(self.dvz)
             if diagnostics:
                 raise DatovizV04Unsupported(
-                    "meshvisual_material_texture2d_unlit_unsupported: "
-                    + "; ".join(diagnostics)
+                    "meshvisual_material_texture2d_unlit_unsupported: " + "; ".join(diagnostics)
                 )
             validate_mesh_visual_texture2d_unlit(
                 visual, texture_resources=self.texture_resources or {}
@@ -1856,8 +1786,7 @@ class DatovizV04ProtocolRenderer:
         diagnostics = datoviz_v04_mesh_diagnostics(self.dvz)
         if diagnostics:
             raise DatovizV04Unsupported(
-                "Datoviz v0.4 MeshVisual support is unavailable: "
-                + "; ".join(diagnostics)
+                "Datoviz v0.4 MeshVisual support is unavailable: " + "; ".join(diagnostics)
             )
 
         face_order: npt.NDArray[np.int64] | None = None
@@ -1868,22 +1797,18 @@ class DatovizV04ProtocolRenderer:
             and datoviz_v04_view3d_retained_data_ready(self.dvz)
         )
         if retained_view3d_data_path:
-            adapted_positions = np.ascontiguousarray(
-                np.asarray(visual.positions, dtype=np.float32)
-            )
+            adapted_positions = np.ascontiguousarray(np.asarray(visual.positions, dtype=np.float32))
         elif is_3d_mesh:
             panel_width, panel_height = _panel_pixel_size(
                 self.width, self.height, self.panel_bounds
             )
-            adapted_positions = _datoviz_mesh3d_panel_ndc_positions(
+            adapted_positions = _datoviz_mesh3d_plot_ndc_positions(
                 visual,
                 view3d=self.view3d,
                 aspect_ratio=panel_width / panel_height,
             )
             if visual.depth_test is not DepthMode.DISABLED:
-                face_order = _mesh3d_face_depth_order(
-                    adapted_positions[:, 2], visual.faces
-                )
+                face_order = _mesh3d_face_depth_order(adapted_positions[:, 2], visual.faces)
         else:
             adapted_positions = _adapt_visual_positions(
                 visual.id,
@@ -1894,9 +1819,7 @@ class DatovizV04ProtocolRenderer:
                 self.transform_resources,
                 cpu_map_data_to_view=self._cpu_map_data_visuals_to_view,
             )
-        _record_transform_adaptation(
-            self.transform_adaptations, visual.id, visual.transform
-        )
+        _record_transform_adaptation(self.transform_adaptations, visual.id, visual.transform)
         positions, colors, indices = _datoviz_mesh_payload(
             visual,
             adapted_positions,
@@ -1943,11 +1866,7 @@ class DatovizV04ProtocolRenderer:
                 ),
                 z_layer=round(visual.order),
                 controller_mode=(
-                    "apply"
-                    if retained_view3d_data_path
-                    else "fixed"
-                    if is_3d_mesh
-                    else "apply"
+                    "apply" if retained_view3d_data_path else "fixed" if is_3d_mesh else "apply"
                 ),
             ),
         )
@@ -1969,9 +1888,7 @@ class DatovizV04ProtocolRenderer:
     ) -> None:
         """Bind strict RGBA8 nearest-or-linear unlit Texture2D mesh state."""
         if visual.texture2d_id is None or visual.uvs is None:
-            raise DatovizV04Unsupported(
-                "texture2d_unlit mesh is missing texture or UV data"
-            )
+            raise DatovizV04Unsupported("texture2d_unlit mesh is missing texture or UV data")
         texture = (self.texture_resources or {}).get(visual.texture2d_id)
         if texture is None:
             raise DatovizV04Unsupported(
@@ -2030,8 +1947,7 @@ class DatovizV04ProtocolRenderer:
         diagnostics = datoviz_v04_text_diagnostics(self.dvz)
         if diagnostics:
             raise DatovizV04Unsupported(
-                "Datoviz v0.4 TextVisual support is unavailable: "
-                + "; ".join(diagnostics)
+                "Datoviz v0.4 TextVisual support is unavailable: " + "; ".join(diagnostics)
             )
 
         is_billboard3d = visual.positions.shape[1] == 3
@@ -2040,10 +1956,7 @@ class DatovizV04ProtocolRenderer:
                 raise DatovizV04Unsupported(
                     "Datoviz TextVisual billboard3d does not support a 2D transform"
                 )
-            if (
-                visual.coordinate_space is not CoordinateSpace.DATA
-                or self.view3d is None
-            ):
+            if visual.coordinate_space is not CoordinateSpace.DATA or self.view3d is None:
                 raise DatovizV04Unsupported(
                     "Datoviz TextVisual positions3d require DATA space and View3D"
                 )
@@ -2059,9 +1972,7 @@ class DatovizV04ProtocolRenderer:
                     self.transform_resources,
                 )
             )
-        _record_transform_adaptation(
-            self.transform_adaptations, visual.id, visual.transform
-        )
+        _record_transform_adaptation(self.transform_adaptations, visual.id, visual.transform)
         colors = _rgba8(visual.rgba_values())
         sizes = self._scale_canvas_px_array(visual.font_size_values())
         rotations = visual.rotation_values()
@@ -2135,9 +2046,7 @@ class DatovizV04ProtocolRenderer:
 
     def _update_billboard_text_placements(self, view3d: View3D) -> None:
         """Move retained overlay labels after a View3D camera/projection update."""
-        panel_width, panel_height = _panel_pixel_size(
-            self.width, self.height, self.panel_bounds
-        )
+        panel_width, panel_height = _panel_pixel_size(self.width, self.height, self.panel_bounds)
         aspect_ratio = panel_width / panel_height
         for attachment in self.retained_view3d_texts:
             visual = attachment.visual
@@ -2157,12 +2066,8 @@ class DatovizV04ProtocolRenderer:
                     self.panel_bounds,
                 )
                 placement = _text_placement(self.dvz)
-                placement.mode = _text_placement_mode_value(
-                    self.dvz, CoordinateSpace.NDC
-                )
-                placement.anchor = _text_anchor_value(
-                    self.dvz, CoordinateSpace.NDC
-                )
+                placement.mode = _text_placement_mode_value(self.dvz, CoordinateSpace.NDC)
+                placement.anchor = _text_anchor_value(self.dvz, CoordinateSpace.NDC)
                 placement.position[0] = position_x
                 placement.position[1] = position_y
                 placement.position[2] = 0.0
@@ -2174,10 +2079,7 @@ class DatovizV04ProtocolRenderer:
                 _set_text_placement(self.dvz, text, placement)
 
     def _visual_coord_space(self, coordinate_space: CoordinateSpace) -> str:
-        if (
-            coordinate_space is CoordinateSpace.DATA
-            and self._cpu_map_data_visuals_to_view
-        ):
+        if coordinate_space is CoordinateSpace.DATA and self._cpu_map_data_visuals_to_view:
             return "view"
         return _datoviz_visual_coord_space(coordinate_space)
 
@@ -2190,10 +2092,7 @@ class DatovizV04ProtocolRenderer:
         transform: VisualTransformBinding | None,
         coordinate_space: CoordinateSpace,
     ) -> None:
-        if (
-            not self._cpu_map_data_visuals_to_view
-            or coordinate_space is not CoordinateSpace.DATA
-        ):
+        if not self._cpu_map_data_visuals_to_view or coordinate_space is not CoordinateSpace.DATA:
             return
         self.retained_view2d_position_uploads.append(
             _RetainedView2DPositionUpload(
@@ -2219,9 +2118,7 @@ class DatovizV04ProtocolRenderer:
                     cpu_map_data_to_view=True,
                 )
             )
-            _set_visual_data(
-                self.dvz, upload.native_visual, upload.attr_name, positions
-            )
+            _set_visual_data(self.dvz, upload.native_visual, upload.attr_name, positions)
 
     def add_colorbar_guide(self, guide: ColorbarGuide) -> Any:
         """Create a native Datoviz colorbar bound to the guide's color scale."""
@@ -2248,9 +2145,7 @@ class DatovizV04ProtocolRenderer:
         if hasattr(desc, "title"):
             desc.title = guide.label.encode("utf-8") if guide.label else None
 
-        colorbar = self.dvz.dvz_colorbar(
-            self.panel, native_scale, _ctypes_pointer_arg(desc)
-        )
+        colorbar = self.dvz.dvz_colorbar(self.panel, native_scale, _ctypes_pointer_arg(desc))
         if colorbar is None:
             raise DatovizV04Unsupported("Datoviz colorbar allocation failed")
         self.dvz.dvz_colorbar_set_orientation(
@@ -2269,9 +2164,7 @@ class DatovizV04ProtocolRenderer:
         self.colorbars[guide.id] = colorbar
         return colorbar
 
-    def _create_native_colorbar_scale(
-        self, scale: ColorScale, guide: ColorbarGuide
-    ) -> Any:
+    def _create_native_colorbar_scale(self, scale: ColorScale, guide: ColorbarGuide) -> Any:
         if scale.id in self.native_scales:
             return self.native_scales[scale.id]
 
@@ -2285,12 +2178,8 @@ class DatovizV04ProtocolRenderer:
         native_scale = self.dvz.dvz_scale(self.scene, _ctypes_pointer_arg(desc))
         if native_scale is None:
             raise DatovizV04Unsupported("Datoviz scale allocation failed")
-        self.dvz.dvz_scale_set_domain(
-            native_scale, scale.normalize.vmin, scale.normalize.vmax
-        )
-        self.dvz.dvz_scale_set_view_range(
-            native_scale, scale.normalize.vmin, scale.normalize.vmax
-        )
+        self.dvz.dvz_scale_set_domain(native_scale, scale.normalize.vmin, scale.normalize.vmax)
+        self.dvz.dvz_scale_set_view_range(native_scale, scale.normalize.vmin, scale.normalize.vmax)
         colormap = self.dvz.dvz_colormap_builtin(
             self.scene, _builtin_colormap_value(self.dvz, scale.colormap.id)
         )
@@ -2384,9 +2273,7 @@ class DatovizV04ProtocolRenderer:
             )
         target_view = view or self.view
         if target_view is None:
-            raise DatovizV04Unavailable(
-                "Datoviz GSP navigation requires an initial View2D"
-            )
+            raise DatovizV04Unavailable("Datoviz GSP navigation requires an initial View2D")
         live_view = self._ensure_live_view()
         router = self.dvz.dvz_view_input(live_view)
         if _is_null_handle(router):
@@ -2421,9 +2308,7 @@ class DatovizV04ProtocolRenderer:
         """Enable Datoviz pointer input as canonical S037 View3D navigation."""
         target_view3d = view3d or self.view3d
         if target_view3d is None:
-            raise DatovizV04Unavailable(
-                "Datoviz GSP View3D navigation requires an initial View3D"
-            )
+            raise DatovizV04Unavailable("Datoviz GSP View3D navigation requires an initial View3D")
         diagnostics = datoviz_v04_view3d_live_navigation_diagnostics(self.dvz)
         if diagnostics:
             raise DatovizV04Unavailable("; ".join(diagnostics))
@@ -2446,10 +2331,8 @@ class DatovizV04ProtocolRenderer:
             controller_id=controller_id,
             layout_snapshot_id=effective_layout_snapshot_id,
         )
-        self.live_view3d_navigation.subscription_id = (
-            self.dvz.dvz_input_subscribe_event(
-                router, self.live_view3d_navigation.handle_input_event, None
-            )
+        self.live_view3d_navigation.subscription_id = self.dvz.dvz_input_subscribe_event(
+            router, self.live_view3d_navigation.handle_input_event, None
         )
         return self.live_view3d_navigation
 
@@ -2541,9 +2424,7 @@ class DatovizV04ProtocolRenderer:
                 b"GSP Datoviz review",
             )
             if _is_null_handle(self.live_view):
-                raise DatovizV04Unavailable(
-                    "Datoviz interactive window view creation failed"
-                )
+                raise DatovizV04Unavailable("Datoviz interactive window view creation failed")
             return self.live_view
 
         view_glfw = getattr(self.dvz, "dvz_view_glfw", None)
@@ -2556,16 +2437,12 @@ class DatovizV04ProtocolRenderer:
                 b"GSP Datoviz review",
             )
             if _is_null_handle(self.live_view):
-                raise DatovizV04Unavailable(
-                    "Datoviz interactive GLFW view creation failed"
-                )
+                raise DatovizV04Unavailable("Datoviz interactive GLFW view creation failed")
             return self.live_view
 
         view = getattr(self.dvz, "dvz_view", None)
         if view is None:
-            raise DatovizV04Unavailable(
-                "Datoviz interactive view is unavailable: missing dvz_view"
-            )
+            raise DatovizV04Unavailable("Datoviz interactive view is unavailable: missing dvz_view")
         self.live_view = view(self.app, self.figure, None)
         if _is_null_handle(self.live_view):
             raise DatovizV04Unavailable("Datoviz interactive view creation failed")
@@ -2622,9 +2499,7 @@ class DatovizV04ProtocolRenderer:
 
         dvz_request = self.dvz.dvz_query_request()
         dvz_request.request_id = _datoviz_request_id(request.id)
-        dvz_request.target = getattr(
-            self.dvz, "DVZ_SCENE_TARGET_ITEM", DVZ_SCENE_TARGET_ITEM
-        )
+        dvz_request.target = getattr(self.dvz, "DVZ_SCENE_TARGET_ITEM", DVZ_SCENE_TARGET_ITEM)
         dvz_request.hit_policy = getattr(
             self.dvz, "DVZ_QUERY_HIT_FRONTMOST", DVZ_QUERY_HIT_FRONTMOST
         )
@@ -2694,16 +2569,14 @@ class DatovizV04ProtocolRenderer:
             is not LogicalCoordinateRegion.DATA_PLOT
         ):
             return None
-        plot = snapshot.plot_rect_px
+        plot = snapshot.only_panel().plot_rect_px
         x, y = coordinate
         local_y = y - plot.y
         if snapshot.render_target.pixel_origin is PixelOrigin.BOTTOM_LEFT:
             local_y = plot.height - local_y
         return (float(x - plot.x), float(local_y))
 
-    def _stale_consumed_layout_result(
-        self, request: QueryRequest
-    ) -> QueryResult | None:
+    def _stale_consumed_layout_result(self, request: QueryRequest) -> QueryResult | None:
         snapshot = self.consumed_layout_snapshot
         if (
             snapshot is None
@@ -2728,9 +2601,7 @@ class DatovizV04ProtocolRenderer:
                 status=QueryStatus.UNSUPPORTED,
                 hit=False,
                 panel_coordinate=request.coordinate,
-                diagnostic=(
-                    "Datoviz guide query requires panel logical-pixel coordinates"
-                ),
+                diagnostic=("Datoviz guide query requires panel logical-pixel coordinates"),
                 layout_snapshot_id=request.layout_snapshot_id,
             )
         if request.hit_policy != QueryHitPolicy.FRONTMOST:
@@ -2791,13 +2662,9 @@ class DatovizV04ProtocolRenderer:
         self, request: QueryRequest, *, layout_snapshot_id: str
     ) -> QueryResult:
         """Return a canonical View3D ray-context payload for the current Datoviz panel."""
-        if (
-            self.consumed_layout_snapshot is not None
-            and (
-                layout_snapshot_id != self.consumed_layout_snapshot.snapshot_id
-                or request.layout_snapshot_id
-                not in (None, self.consumed_layout_snapshot.snapshot_id)
-            )
+        if self.consumed_layout_snapshot is not None and (
+            layout_snapshot_id != self.consumed_layout_snapshot.snapshot_id
+            or request.layout_snapshot_id not in (None, self.consumed_layout_snapshot.snapshot_id)
         ):
             return QueryResult(
                 request_id=request.id,
@@ -2836,7 +2703,7 @@ class DatovizV04ProtocolRenderer:
 
     def _query_plot_bounds(self) -> tuple[float, float, float, float]:
         if self.consumed_layout_snapshot is not None:
-            plot = self.consumed_layout_snapshot.plot_rect_px
+            plot = self.consumed_layout_snapshot.only_panel().plot_rect_px
             return (plot.x, plot.x + plot.width, plot.y, plot.y + plot.height)
         return _datoviz_query_panel_bounds(
             self.resolved_canvas.framebuffer_width,
@@ -2851,13 +2718,10 @@ class DatovizV04ProtocolRenderer:
         layout_snapshot_id: str,
     ) -> QueryResult:
         """Return structured unsupported for S044 until Datoviz has strict pick evidence."""
-        if (
-            self.consumed_layout_snapshot is not None
-            and (
-                layout_snapshot_id != self.consumed_layout_snapshot.snapshot_id
-                or request.expected_layout_snapshot_id
-                not in (None, self.consumed_layout_snapshot.snapshot_id)
-            )
+        if self.consumed_layout_snapshot is not None and (
+            layout_snapshot_id != self.consumed_layout_snapshot.snapshot_id
+            or request.expected_layout_snapshot_id
+            not in (None, self.consumed_layout_snapshot.snapshot_id)
         ):
             diagnostic = QueryDiagnostic(
                 code=View3DMeshPickDiagnosticCode.STALE_LAYOUT_SNAPSHOT,
@@ -2894,8 +2758,7 @@ class DatovizV04ProtocolRenderer:
             status=QueryStatus.UNSUPPORTED,
             hit=False,
             view_id=request.view_id,
-            panel_id=request.panel_id
-            or (self.view3d.panel_id if self.view3d else None),
+            panel_id=request.panel_id or (self.view3d.panel_id if self.view3d else None),
             panel_xy=request.panel_xy,
             diagnostics=(diagnostic,),
         )
@@ -2972,9 +2835,7 @@ class DatovizV04ProtocolRenderer:
             extension_payload=payload,
         )
 
-    def _scalar_metadata_for_query_result(
-        self, result: QueryResult
-    ) -> _ScalarVisualData | None:
+    def _scalar_metadata_for_query_result(self, result: QueryResult) -> _ScalarVisualData | None:
         if not self.scalar_visuals:
             return None
         if result.visual_id in self.scalar_visuals:
@@ -3054,9 +2915,7 @@ class DatovizV04ProtocolRenderer:
         if has_panel_domain:
             _set_datoviz_panel_domains(self.dvz, self.panel, view.x_range, view.y_range)
         panel_view = _datoviz_panel_view2d_desc(self.dvz)
-        descriptor_has_data_domains = _datoviz_view2d_descriptor_has_data_domains(
-            panel_view
-        )
+        descriptor_has_data_domains = _datoviz_view2d_descriptor_has_data_domains(panel_view)
         if descriptor_has_data_domains:
             _set_datoviz_data_domain(panel_view, "data_x", view.x_range)
             _set_datoviz_data_domain(panel_view, "data_y", view.y_range)
@@ -3082,14 +2941,10 @@ class DatovizV04ProtocolRenderer:
             "reversed_y": view.y_range[0] > view.y_range[1],
             "legacy_panel_domain_sync": has_panel_domain,
             "datoviz_visible_domain_readback": (
-                "available"
-                if hasattr(self.dvz, "dvz_panel_visible_domain")
-                else "missing"
+                "available" if hasattr(self.dvz, "dvz_panel_visible_domain") else "missing"
             ),
             "datoviz_transform_point": (
-                "available"
-                if hasattr(self.dvz, "dvz_panel_transform_point")
-                else "missing"
+                "available" if hasattr(self.dvz, "dvz_panel_transform_point") else "missing"
             ),
         }
         return panel_view
@@ -3117,15 +2972,11 @@ class DatovizV04ProtocolRenderer:
                 "Datoviz retained View3D navigation state readback is unavailable: "
                 + "; ".join(readback_diagnostics)
             )
-        self.native_view3d_camera = _update_datoviz_view3d_camera(
-            self.dvz, self.panel, view3d
-        )
+        self.native_view3d_camera = _update_datoviz_view3d_camera(self.dvz, self.panel, view3d)
         self._update_billboard_text_placements(view3d)
         self.view3d = view3d
         self.retained_view3d_update_stats.view_projection_uniform_updates += 1
-        return self.resolve_retained_view3d_state_snapshot(
-            layout_snapshot_id=layout_snapshot_id
-        )
+        return self.resolve_retained_view3d_state_snapshot(layout_snapshot_id=layout_snapshot_id)
 
     def apply_gsp_view3d_navigation_action(
         self,
@@ -3134,13 +2985,10 @@ class DatovizV04ProtocolRenderer:
         layout_snapshot_id: str = "layout:datoviz-live-3d",
     ) -> View3DNavigationResult:
         """Replay one canonical S037 View3D navigation action into retained Datoviz state."""
-        if (
-            self.consumed_layout_snapshot is not None
-            and (
-                layout_snapshot_id != self.consumed_layout_snapshot.snapshot_id
-                or action.base_layout_snapshot_id
-                not in (None, self.consumed_layout_snapshot.snapshot_id)
-            )
+        if self.consumed_layout_snapshot is not None and (
+            layout_snapshot_id != self.consumed_layout_snapshot.snapshot_id
+            or action.base_layout_snapshot_id
+            not in (None, self.consumed_layout_snapshot.snapshot_id)
         ):
             return View3DNavigationResult(
                 accepted=False,
@@ -3173,9 +3021,7 @@ class DatovizV04ProtocolRenderer:
         snapshot = self.apply_retained_view3d_navigation(
             result.view, layout_snapshot_id=layout_snapshot_id
         )
-        state_diagnostics = _retained_view3d_state_mismatch_diagnostics(
-            result.view, snapshot
-        )
+        state_diagnostics = _retained_view3d_state_mismatch_diagnostics(result.view, snapshot)
         if state_diagnostics:
             return View3DNavigationResult(
                 accepted=False,
@@ -3194,8 +3040,7 @@ class DatovizV04ProtocolRenderer:
         diagnostics = datoviz_v04_view3d_state_readback_diagnostics(self.dvz)
         if diagnostics:
             raise DatovizV04Unavailable(
-                "Datoviz retained View3D state readback is unavailable: "
-                + "; ".join(diagnostics)
+                "Datoviz retained View3D state readback is unavailable: " + "; ".join(diagnostics)
             )
         if self.view3d is None:
             raise DatovizV04Unavailable(
@@ -3214,9 +3059,7 @@ class DatovizV04ProtocolRenderer:
         projection = getattr(state, "projection", None)
         return {
             "layout_snapshot_id": layout_snapshot_id,
-            "view_projection_snapshot_id": (
-                projection_snapshot.view_projection_snapshot_id
-            ),
+            "view_projection_snapshot_id": (projection_snapshot.view_projection_snapshot_id),
             "native_view_id": int(getattr(state, "view_id", 0)),
             "native_revision": int(getattr(state, "revision", 0)),
             "enabled": bool(getattr(state, "enabled", False)),
@@ -3253,13 +3096,9 @@ class DatovizV04ProtocolRenderer:
         self.dvz.dvz_axis_set_tick_policy(state.x_axis, tick_policy)
         self.dvz.dvz_axis_set_tick_policy(state.y_axis, tick_policy)
         if state.x_tick_values and hasattr(self.dvz, "dvz_axis_set_ticks"):
-            _set_axis_ticks(
-                self.dvz, state.x_axis, state.x_tick_values, state.x_tick_labels
-            )
+            _set_axis_ticks(self.dvz, state.x_axis, state.x_tick_values, state.x_tick_labels)
         if state.y_tick_values and hasattr(self.dvz, "dvz_axis_set_ticks"):
-            _set_axis_ticks(
-                self.dvz, state.y_axis, state.y_tick_values, state.y_tick_labels
-            )
+            _set_axis_ticks(self.dvz, state.y_axis, state.y_tick_values, state.y_tick_labels)
         if hasattr(self.dvz, "dvz_axis_set_grid"):
             self.dvz.dvz_axis_set_grid(state.x_axis, state.grid)
             self.dvz.dvz_axis_set_grid(state.y_axis, state.grid)
@@ -3331,7 +3170,7 @@ class _DatovizLiveView2DNavigation:
             getattr(self.renderer, "consumed_layout_snapshot", None),
         )
         if consumed_layout is not None:
-            return consumed_layout.plot_rect_px
+            return consumed_layout.only_panel().plot_rect_px
         return LogicalPixelRect(
             x=0.0,
             y=0.0,
@@ -3347,9 +3186,7 @@ class _DatovizLiveView2DNavigation:
         if unsubscribe is not None and self.subscription_id is not None:
             unsubscribe(self.router, self.subscription_id)
         else:
-            unsubscribe_event = getattr(
-                self.renderer.dvz, "dvz_input_unsubscribe_event", None
-            )
+            unsubscribe_event = getattr(self.renderer.dvz, "dvz_input_unsubscribe_event", None)
             if unsubscribe_event is not None:
                 unsubscribe_event(self.router, self.handle_input_event, None)
         self._closed = True
@@ -3383,9 +3220,7 @@ class _DatovizLiveView2DNavigation:
         ):
             self._refresh_view_after_viewport_change()
 
-    def handle_pointer_event(
-        self, _router: Any, event_ptr: Any, _user_data: Any
-    ) -> None:
+    def handle_pointer_event(self, _router: Any, event_ptr: Any, _user_data: Any) -> None:
         """Handle one raw Datoviz pointer callback."""
         event = getattr(event_ptr, "contents", event_ptr)
         consumed_layout = cast(
@@ -3396,9 +3231,7 @@ class _DatovizLiveView2DNavigation:
             self.renderer.dvz,
             event,
             pixel_origin=(
-                consumed_layout.render_target.pixel_origin
-                if consumed_layout is not None
-                else None
+                consumed_layout.render_target.pixel_origin if consumed_layout is not None else None
             ),
         )
         if pointer_event is None:
@@ -3439,11 +3272,7 @@ class _DatovizLiveView2DNavigation:
             expected_layout_snapshot_id=self.layout_snapshot_id,
             layout_snapshot=consumed_layout,
         )
-        if (
-            not result.accepted
-            or result.view is None
-            or result.new_view2d_revision is None
-        ):
+        if not result.accepted or result.view is None or result.new_view2d_revision is None:
             return
         self.view = result.view
         self.controller = replace(
@@ -3504,7 +3333,7 @@ class _DatovizLiveView3DNavigation:
             getattr(self.renderer, "consumed_layout_snapshot", None),
         )
         if consumed_layout is not None:
-            return consumed_layout.plot_rect_px
+            return consumed_layout.only_panel().plot_rect_px
         return LogicalPixelRect(
             x=0.0,
             y=0.0,
@@ -3520,9 +3349,7 @@ class _DatovizLiveView3DNavigation:
         if unsubscribe is not None and self.subscription_id is not None:
             unsubscribe(self.router, self.subscription_id)
         else:
-            unsubscribe_event = getattr(
-                self.renderer.dvz, "dvz_input_unsubscribe_event", None
-            )
+            unsubscribe_event = getattr(self.renderer.dvz, "dvz_input_unsubscribe_event", None)
             if unsubscribe_event is not None:
                 unsubscribe_event(self.router, self.handle_input_event, None)
         self._closed = True
@@ -3556,9 +3383,7 @@ class _DatovizLiveView3DNavigation:
         ):
             self._request_frame()
 
-    def handle_pointer_event(
-        self, _router: Any, event_ptr: Any, _user_data: Any
-    ) -> None:
+    def handle_pointer_event(self, _router: Any, event_ptr: Any, _user_data: Any) -> None:
         """Handle one raw Datoviz pointer callback."""
         event = getattr(event_ptr, "contents", event_ptr)
         consumed_layout = getattr(self.renderer, "consumed_layout_snapshot", None)
@@ -3566,9 +3391,7 @@ class _DatovizLiveView3DNavigation:
             self.renderer.dvz,
             event,
             pixel_origin=(
-                consumed_layout.render_target.pixel_origin
-                if consumed_layout is not None
-                else None
+                consumed_layout.render_target.pixel_origin if consumed_layout is not None else None
             ),
         )
         if pointer_event is None:
@@ -3693,9 +3516,7 @@ class _DatovizLiveView3DNavigation:
                 projection.near_far[0],
             )
             aspect_ratio = projection.aspect_ratio or (rect.width / rect.height)
-            half_height = target_distance * math.tan(
-                math.radians(projection.fov_y_degrees) * 0.5
-            )
+            half_height = target_distance * math.tan(math.radians(projection.fov_y_degrees) * 0.5)
             x_span = 2.0 * half_height * aspect_ratio
             y_span = 2.0 * half_height
         return Pan3DPayload(
@@ -3724,9 +3545,7 @@ def _navigation_pointer_event_from_datoviz(
 ) -> NavigationPointerEvent | None:
     event_type = int(getattr(event, "type"))
     x_px = float(event.pos[0])
-    y_px = _datoviz_pointer_y_to_gsp_logical_px(
-        event, pixel_origin=pixel_origin
-    )
+    y_px = _datoviz_pointer_y_to_gsp_logical_px(event, pixel_origin=pixel_origin)
     if event_type == _enum_value(
         dvz,
         "DvzPointerEventType",
@@ -3758,9 +3577,7 @@ def _navigation_pointer_event_from_datoviz(
         "DVZ_POINTER_EVENT_RELEASE",
         DVZ_POINTER_EVENT_RELEASE,
     ):
-        return NavigationPointerEvent(
-            NavigationPointerEventKind.BUTTON_RELEASE, x_px, y_px
-        )
+        return NavigationPointerEvent(NavigationPointerEventKind.BUTTON_RELEASE, x_px, y_px)
     if event_type == _enum_value(
         dvz,
         "DvzPointerEventType",
@@ -3781,9 +3598,7 @@ def _navigation_pointer_event_from_datoviz(
         "DVZ_POINTER_EVENT_DRAG_STOP",
         DVZ_POINTER_EVENT_DRAG_STOP,
     ):
-        return NavigationPointerEvent(
-            NavigationPointerEventKind.BUTTON_RELEASE, x_px, y_px
-        )
+        return NavigationPointerEvent(NavigationPointerEventKind.BUTTON_RELEASE, x_px, y_px)
     if event_type == _enum_value(
         dvz,
         "DvzPointerEventType",
@@ -3833,12 +3648,7 @@ def _datoviz_resize_logical_size(event: Any) -> tuple[float, float]:
     framebuffer_height = float(getattr(event, "framebuffer_height", 0))
     scale_x = float(getattr(event, "content_scale_x", 1.0))
     scale_y = float(getattr(event, "content_scale_y", 1.0))
-    if (
-        framebuffer_width > 0.0
-        and framebuffer_height > 0.0
-        and scale_x > 0.0
-        and scale_y > 0.0
-    ):
+    if framebuffer_width > 0.0 and framebuffer_height > 0.0 and scale_x > 0.0 and scale_y > 0.0:
         return framebuffer_width / scale_x, framebuffer_height / scale_y
     return 0.0, 0.0
 
@@ -3989,9 +3799,7 @@ def _configure_axis_review_plot_margins(dvz: Any, axis: Any) -> None:
     )
 
 
-def _assign_style_color(
-    style: Any, field_name: str, color: tuple[int, int, int, int]
-) -> None:
+def _assign_style_color(style: Any, field_name: str, color: tuple[int, int, int, int]) -> None:
     target = getattr(style, field_name, None)
     if target is None:
         return
@@ -3999,18 +3807,12 @@ def _assign_style_color(
         target[index] = channel
 
 
-def _set_datoviz_data_domain(
-    panel_view: Any, field_name: str, limits: tuple[float, float]
-) -> None:
+def _set_datoviz_data_domain(panel_view: Any, field_name: str, limits: tuple[float, float]) -> None:
     domain = getattr(panel_view, field_name, None)
     if domain is None:
-        raise DatovizV04Unsupported(
-            f"Datoviz View2D descriptor is missing {field_name}"
-        )
+        raise DatovizV04Unsupported(f"Datoviz View2D descriptor is missing {field_name}")
     if not hasattr(domain, "min") or not hasattr(domain, "max"):
-        raise DatovizV04Unsupported(
-            f"Datoviz View2D descriptor {field_name} is not writable"
-        )
+        raise DatovizV04Unsupported(f"Datoviz View2D descriptor {field_name} is not writable")
     domain.min = float(limits[0])
     domain.max = float(limits[1])
 
@@ -4092,9 +3894,7 @@ def _adapt_visual_positions(
     *,
     cpu_map_data_to_view: bool = False,
 ) -> npt.NDArray[np.float32] | npt.NDArray[np.float64]:
-    transformed = _cpu_adapt_affine_positions(
-        visual_id, positions, transform, transform_resources
-    )
+    transformed = _cpu_adapt_affine_positions(visual_id, positions, transform, transform_resources)
     if coordinate_space is CoordinateSpace.NDC:
         return transformed
     if coordinate_space is CoordinateSpace.DATA:
@@ -4210,7 +4010,7 @@ def _validate_datoviz_mesh3d_visual(visual: MeshVisual, view3d: View3D | None) -
         )
 
 
-def _datoviz_mesh3d_panel_ndc_positions(
+def _datoviz_mesh3d_plot_ndc_positions(
     visual: MeshVisual, *, view3d: View3D | None, aspect_ratio: float
 ) -> npt.NDArray[np.float64]:
     source = np.asarray(visual.positions, dtype=np.float64)
@@ -4222,9 +4022,7 @@ def _datoviz_mesh3d_panel_ndc_positions(
             )
         return np.asarray(
             [
-                project_view3d_data_point(
-                    view3d, tuple(point), aspect_ratio=aspect_ratio
-                )
+                project_view3d_data_point(view3d, tuple(point), aspect_ratio=aspect_ratio)
                 for point in source
             ],
             dtype=np.float64,
@@ -4240,9 +4038,7 @@ def _datoviz_mesh3d_panel_ndc_positions(
 def _rgba8(colors: npt.NDArray[Any]) -> npt.NDArray[np.uint8]:
     if colors.dtype == np.dtype(np.uint8):
         return np.ascontiguousarray(colors)
-    return np.ascontiguousarray(
-        np.rint(np.asarray(colors) * 255.0).clip(0, 255).astype(np.uint8)
-    )
+    return np.ascontiguousarray(np.rint(np.asarray(colors) * 255.0).clip(0, 255).astype(np.uint8))
 
 
 def _datoviz_mesh_payload(
@@ -4253,9 +4049,7 @@ def _datoviz_mesh_payload(
     face_order: npt.NDArray[np.int64] | None = None,
 ) -> tuple[npt.NDArray[np.float32], npt.NDArray[np.uint8], npt.NDArray[np.uint32]]:
     if visual.face_color_encoding is not None:
-        raise DatovizV04Unsupported(
-            "Datoviz MeshVisual face scalar color encoding is unavailable"
-        )
+        raise DatovizV04Unsupported("Datoviz MeshVisual face scalar color encoding is unavailable")
     if visual.color is None:
         raise DatovizV04Unsupported("Datoviz MeshVisual requires resolved RGBA colors")
     color_mode = visual.resolved_color_mode()
@@ -4322,9 +4116,7 @@ def _resolve_datoviz_flat_lambert_facecolors(
     except ValueError as exc:
         raise DatovizV04Unsupported(str(exc)) from exc
     if view3d is None:
-        raise DatovizV04Unsupported(
-            "flat_lambert_requires_view3d: flat_lambert requires a View3D"
-        )
+        raise DatovizV04Unsupported("flat_lambert_requires_view3d: flat_lambert requires a View3D")
     if color_mode is MeshColorMode.UNIFORM:
         facecolors = np.repeat(
             np.asarray(colors).reshape(1, 4),
@@ -4356,9 +4148,7 @@ def _resolve_datoviz_flat_lambert_facecolors(
         )
         light_direction = light_direction / np.linalg.norm(light_direction)
         lambert = np.maximum(0.0, normals @ light_direction)
-        light_factor = light_factor + (
-            float(view3d.directional_light.intensity) * lambert
-        )
+        light_factor = light_factor + (float(view3d.directional_light.intensity) * lambert)
     light_factor = np.clip(light_factor, 0.0, 1.0)
     resolved = base.copy()
     resolved[:, :3] = np.clip(base[:, :3] * light_factor[:, np.newaxis], 0.0, 1.0)
@@ -4412,9 +4202,7 @@ def _visual_attach_desc(
     else:
         raise ValueError(f"unsupported Datoviz coordinate space: {coord_space}")
     if hasattr(desc, "clip_rect"):
-        desc.clip_rect = _enum_value(
-            dvz, "DvzVisualClipRect", "DVZ_VISUAL_CLIP_AUTO", 0
-        )
+        desc.clip_rect = _enum_value(dvz, "DvzVisualClipRect", "DVZ_VISUAL_CLIP_AUTO", 0)
     if hasattr(desc, "viewport_rect"):
         desc.viewport_rect = _enum_value(
             dvz, "DvzVisualViewportRect", "DVZ_VISUAL_VIEWPORT_AUTO", 0
@@ -4423,9 +4211,7 @@ def _visual_attach_desc(
 
 
 def _validate_visual_attach_desc_binding(desc: Any) -> None:
-    missing = [
-        name for name in ("clip_rect", "viewport_rect") if not hasattr(desc, name)
-    ]
+    missing = [name for name in ("clip_rect", "viewport_rect") if not hasattr(desc, name)]
     if missing:
         raise DatovizV04Unavailable(
             "Datoviz Python binding is stale: DvzVisualAttachDesc is missing "
@@ -4540,14 +4326,14 @@ def _resolve_datoviz_partial_layout_snapshot(
     panel: Any,
     *,
     resolved_canvas: ResolvedCanvas,
-    view: View2D | None,
+    panel_id: str,
+    view_id: str | None,
     snapshot_id_prefix: str,
 ) -> ResolvedLayoutSnapshot:
     diagnostics = datoviz_v04_panel_frame_snapshot_diagnostics(dvz)
     if diagnostics:
         raise DatovizV04Unavailable(
-            "Datoviz panel frame snapshot binding is unavailable: "
-            + "; ".join(diagnostics)
+            "Datoviz panel frame snapshot binding is unavailable: " + "; ".join(diagnostics)
         )
 
     snapshot = dvz.dvz_panel_resolve_frame(panel)
@@ -4611,10 +4397,7 @@ def _resolve_datoviz_partial_layout_snapshot(
                 LayoutDiagnostic(
                     code="guide_query_missing",
                     status=LayoutDiagnosticStatus.MISSING,
-                    message=(
-                        "Datoviz guide hit/readback is not yet wired into GSP "
-                        "query results."
-                    ),
+                    message=("Datoviz guide hit/readback is not yet wired into GSP query results."),
                 ),
                 LayoutDiagnostic(
                     code="all_rendered_guides_unsupported",
@@ -4644,23 +4427,34 @@ def _resolve_datoviz_partial_layout_snapshot(
         return ResolvedLayoutSnapshot(
             snapshot_id=snapshot_id,
             render_target=render_target,
-            panel_rect_px=_required_dvz_rect(info.panel_rect_px, "panel_rect_px"),
-            plot_rect_px=_required_dvz_rect(info.plot_rect_px, "plot_rect_px"),
-            view_id=view.id if view is not None else None,
-            data_to_screen_transform=transform,
-            guide_boxes=guide_boxes,
-            tick_label_boxes=tuple(
-                box for box in guide_boxes if box.kind == "tick_label"
+            panels=(
+                ResolvedPanelLayout(
+                    panel_id=panel_id,
+                    panel_rect_px=quantize_logical_rect(
+                        _required_dvz_rect(info.panel_rect_px, "panel_rect_px"),
+                        render_target,
+                    ),
+                    plot_rect_px=quantize_logical_rect(
+                        _required_dvz_rect(info.plot_rect_px, "plot_rect_px"),
+                        render_target,
+                    ),
+                    view_id=view_id,
+                    data_to_screen_transform=transform,
+                    guide_boxes=guide_boxes,
+                    tick_label_boxes=tuple(box for box in guide_boxes if box.kind == "tick_label"),
+                    axis_label_boxes=tuple(box for box in guide_boxes if box.kind == "axis_label"),
+                    title_boxes=tuple(box for box in guide_boxes if box.kind == "title"),
+                    legend_boxes=tuple(box for box in guide_boxes if box.kind == "legend"),
+                    colorbar_boxes=tuple(box for box in guide_boxes if box.kind == "colorbar"),
+                    grid_clip_rect_px=(
+                        quantize_logical_rect(grid_clip_rect, render_target)
+                        if grid_clip_rect is not None
+                        else None
+                    ),
+                    z_layers=z_layers,
+                    diagnostics=snapshot_diagnostics,
+                ),
             ),
-            axis_label_boxes=tuple(
-                box for box in guide_boxes if box.kind == "axis_label"
-            ),
-            title_boxes=tuple(box for box in guide_boxes if box.kind == "title"),
-            legend_boxes=tuple(box for box in guide_boxes if box.kind == "legend"),
-            colorbar_boxes=tuple(box for box in guide_boxes if box.kind == "colorbar"),
-            grid_clip_rect_px=grid_clip_rect,
-            z_layers=z_layers,
-            diagnostics=snapshot_diagnostics,
         )
     finally:
         frame_unref = getattr(dvz, "dvz_panel_frame_unref", None)
@@ -4701,9 +4495,7 @@ def _query_datoviz_panel_frame_guides(
             frame_snapshot_id = _native_uint_id(dvz.dvz_panel_frame_id(snapshot))
         native_layout_snapshot_id = f"layout:datoviz:{frame_snapshot_id:x}"
         layout_snapshot_id = request.layout_snapshot_id or native_layout_snapshot_id
-        if not _datoviz_layout_snapshot_id_matches(
-            layout_snapshot_id, frame_snapshot_id
-        ):
+        if not _datoviz_layout_snapshot_id_matches(layout_snapshot_id, frame_snapshot_id):
             return QueryResult(
                 request_id=request.id,
                 status=QueryStatus.STALE,
@@ -4738,9 +4530,10 @@ def _query_datoviz_panel_frame_guides(
                 diagnostic="Datoviz guide hit omitted guide_id",
                 layout_snapshot_id=layout_snapshot_id,
             )
-        if frame_snapshot_id and _native_uint_id(
-            getattr(hit_record, "snapshot_id", 0)
-        ) not in (0, frame_snapshot_id):
+        if frame_snapshot_id and _native_uint_id(getattr(hit_record, "snapshot_id", 0)) not in (
+            0,
+            frame_snapshot_id,
+        ):
             return QueryResult(
                 request_id=request.id,
                 status=QueryStatus.FAILED,
@@ -4753,9 +4546,7 @@ def _query_datoviz_panel_frame_guides(
         role = _datoviz_guide_role(dvz, int(getattr(hit_record, "role", 0)))
         label = _datoviz_label(getattr(hit_record, "label", b""))
         has_data_value = bool(getattr(hit_record, "has_data_value", False))
-        data_value = (
-            float(getattr(hit_record, "data_value")) if has_data_value else None
-        )
+        data_value = float(getattr(hit_record, "data_value")) if has_data_value else None
         item_id = (
             int(getattr(hit_record, "item_index"))
             if bool(getattr(hit_record, "has_item_index", False))
@@ -4768,9 +4559,7 @@ def _query_datoviz_panel_frame_guides(
             tick_value=data_value,
             text_value=label,
         )
-        diagnostic = (
-            "datoviz_all_rendered_guide_contribution_verified" if all_rendered else None
-        )
+        diagnostic = "datoviz_all_rendered_guide_contribution_verified" if all_rendered else None
         return QueryResult(
             request_id=request.id,
             status=QueryStatus.HIT,
@@ -4794,9 +4583,7 @@ def _datoviz_frame_device_scale(info: Any) -> float:
     scale_x = float(getattr(info, "device_scale_x", 1.0))
     scale_y = float(getattr(info, "device_scale_y", scale_x))
     if scale_x <= 0.0 or scale_y <= 0.0:
-        raise DatovizV04Unsupported(
-            "Datoviz panel frame reported non-positive device scale"
-        )
+        raise DatovizV04Unsupported("Datoviz panel frame reported non-positive device scale")
     if not np.isclose(scale_x, scale_y, rtol=1e-6, atol=1e-6):
         raise DatovizV04Unsupported(
             "Datoviz panel frame reported asymmetric device_scale_x/device_scale_y; "
@@ -4816,9 +4603,7 @@ def _validate_datoviz_frame_units(info: Any, render_target: RenderTarget) -> Non
         raise DatovizV04Unsupported(
             "Datoviz panel frame framebuffer width disagrees with logical width/device scale"
         )
-    if not np.isclose(
-        framebuffer_height, render_target.framebuffer_height_px, atol=1.0
-    ):
+    if not np.isclose(framebuffer_height, render_target.framebuffer_height_px, atol=1.0):
         raise DatovizV04Unsupported(
             "Datoviz panel frame framebuffer height disagrees with logical height/device scale"
         )
@@ -4832,9 +4617,7 @@ def _datoviz_frame_guide_boxes(
     count = int(dvz.dvz_panel_frame_guide_count(snapshot))
     for index in range(count):
         record = dvz.DvzGuideLayout()
-        if not dvz.dvz_panel_frame_guide_layout(
-            snapshot, index, _ctypes_pointer_arg(record)
-        ):
+        if not dvz.dvz_panel_frame_guide_layout(snapshot, index, _ctypes_pointer_arg(record)):
             diagnostics.append(
                 LayoutDiagnostic(
                     code="datoviz_guide_layout_copy_failed",
@@ -4843,9 +4626,7 @@ def _datoviz_frame_guide_boxes(
                 )
             )
             continue
-        if frame_snapshot_id and _native_uint_id(
-            getattr(record, "snapshot_id", 0)
-        ) not in (
+        if frame_snapshot_id and _native_uint_id(getattr(record, "snapshot_id", 0)) not in (
             0,
             frame_snapshot_id,
         ):
@@ -4879,9 +4660,7 @@ def _datoviz_frame_guide_boxes(
         if bool(getattr(record, "has_anchor", False)):
             anchor_values = getattr(record, "anchor_px", None)
             if anchor_values is not None:
-                anchor = LayoutAnchor(
-                    x=float(anchor_values[0]), y=float(anchor_values[1])
-                )
+                anchor = LayoutAnchor(x=float(anchor_values[0]), y=float(anchor_values[1]))
         role = _datoviz_guide_role(dvz, int(getattr(record, "role", 0)))
         boxes.append(
             ResolvedGuideBox(
@@ -4913,9 +4692,7 @@ def _datoviz_frame_contribution_layers(
     count = int(dvz.dvz_panel_frame_contribution_count(snapshot))
     for index in range(count):
         record = dvz.DvzRenderedContribution()
-        if not dvz.dvz_panel_frame_contribution(
-            snapshot, index, _ctypes_pointer_arg(record)
-        ):
+        if not dvz.dvz_panel_frame_contribution(snapshot, index, _ctypes_pointer_arg(record)):
             diagnostics.append(
                 LayoutDiagnostic(
                     code="datoviz_contribution_copy_failed",
@@ -4924,9 +4701,7 @@ def _datoviz_frame_contribution_layers(
                 )
             )
             continue
-        if frame_snapshot_id and _native_uint_id(
-            getattr(record, "snapshot_id", 0)
-        ) not in (
+        if frame_snapshot_id and _native_uint_id(getattr(record, "snapshot_id", 0)) not in (
             0,
             frame_snapshot_id,
         ):
@@ -5111,9 +4886,7 @@ def _datoviz_contribution_layer(dvz: Any, kind: int) -> str:
     return "datoviz"
 
 
-def _datoviz_enum_values(
-    dvz: Any, enum_type_name: str, values: Mapping[str, int]
-) -> set[int]:
+def _datoviz_enum_values(dvz: Any, enum_type_name: str, values: Mapping[str, int]) -> set[int]:
     return {
         _datoviz_enum_value(dvz, enum_type_name, name, fallback)
         for name, fallback in values.items()
@@ -5374,23 +5147,17 @@ def _rgba8_image(image: npt.NDArray[Any]) -> npt.NDArray[np.uint8]:
     if image.dtype != np.dtype(np.uint8):
         image = np.rint(np.asarray(image) * 255.0).clip(0, 255).astype(np.uint8)
     if image.ndim != 3 or image.shape[2] not in (3, 4):
-        raise DatovizV04Unsupported(
-            "Datoviz v0.4 slice only supports uint8 RGB/RGBA images"
-        )
+        raise DatovizV04Unsupported("Datoviz v0.4 slice only supports uint8 RGB/RGBA images")
     if image.shape[2] == 4:
         return np.ascontiguousarray(image)
     alpha = np.full((*image.shape[:2], 1), 255, dtype=np.uint8)
     return np.ascontiguousarray(np.concatenate([image, alpha], axis=2))
 
 
-def _rgba8_broadcast(
-    colors: npt.NDArray[Any], count: int
-) -> npt.NDArray[np.uint8]:
+def _rgba8_broadcast(colors: npt.NDArray[Any], count: int) -> npt.NDArray[np.uint8]:
     converted = _rgba8(colors)
     if converted.shape == (4,):
-        return np.ascontiguousarray(
-            np.broadcast_to(converted, (count, 4)), dtype=np.uint8
-        )
+        return np.ascontiguousarray(np.broadcast_to(converted, (count, 4)), dtype=np.uint8)
     return converted
 
 
@@ -5430,9 +5197,7 @@ def _marker_fill_colors(
     visual: MarkerVisual, *, color_scales: Mapping[str, ColorScale] | None
 ) -> npt.NDArray[np.uint8]:
     if visual.fill_color_encoding is not None:
-        scale = resolve_color_scale(
-            color_scales, visual.fill_color_encoding.color_scale_id
-        )
+        scale = resolve_color_scale(color_scales, visual.fill_color_encoding.color_scale_id)
         return _rgba8_scalar_values(
             visual.fill_color_encoding.values,
             scale,
@@ -5536,30 +5301,22 @@ def _require_datoviz_success(result: Any, message: str) -> None:
         raise DatovizV04Unsupported(message)
 
 
-def _set_visual_field(
-    dvz: Any, visual: Any, slot_name: str, sampled_field: Any
-) -> bool:
+def _set_visual_field(dvz: Any, visual: Any, slot_name: str, sampled_field: Any) -> bool:
     try:
-        return _datoviz_call_succeeded(
-            dvz.dvz_visual_set_field(visual, slot_name, sampled_field)
-        )
+        return _datoviz_call_succeeded(dvz.dvz_visual_set_field(visual, slot_name, sampled_field))
     except (ctypes.ArgumentError, TypeError):
         return _datoviz_call_succeeded(
             dvz.dvz_visual_set_field(visual, slot_name.encode("utf-8"), sampled_field)
         )
 
 
-def _set_visual_field_sampling(
-    dvz: Any, visual: Any, slot_name: str, sampling: Any
-) -> Any:
+def _set_visual_field_sampling(dvz: Any, visual: Any, slot_name: str, sampling: Any) -> Any:
     """Call the slot-sampling setter across direct and ctypes facades."""
     sampling_arg = _ctypes_pointer_arg(sampling)
     try:
         return dvz.dvz_visual_set_field_sampling(visual, slot_name, sampling_arg)
     except (ctypes.ArgumentError, TypeError):
-        return dvz.dvz_visual_set_field_sampling(
-            visual, slot_name.encode("utf-8"), sampling_arg
-        )
+        return dvz.dvz_visual_set_field_sampling(visual, slot_name.encode("utf-8"), sampling_arg)
 
 
 def _ctypes_pointer_arg(value: Any) -> Any:
@@ -5598,9 +5355,7 @@ def _colorbar_orientation_value(dvz: Any, orientation: ColorbarOrientation) -> i
             "DVZ_COLORBAR_ORIENTATION_HORIZONTAL",
             DVZ_COLORBAR_ORIENTATION_HORIZONTAL,
         )
-    raise DatovizV04Unsupported(
-        f"unsupported Datoviz colorbar orientation: {orientation.value}"
-    )
+    raise DatovizV04Unsupported(f"unsupported Datoviz colorbar orientation: {orientation.value}")
 
 
 def _colorbar_anchor_value(dvz: Any, placement: ColorbarPlacement | None) -> int:
@@ -5632,9 +5387,7 @@ def _colorbar_anchor_value(dvz: Any, placement: ColorbarPlacement | None) -> int
             "DVZ_SCENE_ANCHOR_PANEL_TOP",
             DVZ_SCENE_ANCHOR_PANEL_TOP,
         )
-    raise DatovizV04Unsupported(
-        f"unsupported Datoviz colorbar placement: {placement.value}"
-    )
+    raise DatovizV04Unsupported(f"unsupported Datoviz colorbar placement: {placement.value}")
 
 
 def _configure_colorbar_layout(
@@ -5697,15 +5450,11 @@ def _configure_colorbar_layout(
     if hasattr(placement, "width_px"):
         placement.width_px = ramp_width_px
     if hasattr(placement, "height_px"):
-        placement.height_px = max(
-            min_length_px, float(height) * guide.style.length_fraction
-        )
+        placement.height_px = max(min_length_px, float(height) * guide.style.length_fraction)
 
 
 def _configure_colorbar_format(dvz: Any, colorbar: Any) -> None:
-    if not hasattr(dvz, "dvz_format_desc") or not hasattr(
-        dvz, "dvz_colorbar_set_format"
-    ):
+    if not hasattr(dvz, "dvz_format_desc") or not hasattr(dvz, "dvz_colorbar_set_format"):
         return
     fmt = dvz.dvz_format_desc()
     if hasattr(fmt, "precision"):
@@ -5740,9 +5489,7 @@ def _image_sampling_value(dvz: Any, interpolation: ImageInterpolation) -> int:
         name = "DVZ_IMAGE_SAMPLING_LINEAR"
         fallback = DVZ_IMAGE_SAMPLING_LINEAR
     else:
-        raise DatovizV04Unsupported(
-            f"unsupported Datoviz image interpolation: {interpolation}"
-        )
+        raise DatovizV04Unsupported(f"unsupported Datoviz image interpolation: {interpolation}")
 
     value = getattr(dvz, name, None)
     if value is not None:
@@ -5753,9 +5500,7 @@ def _image_sampling_value(dvz: Any, interpolation: ImageInterpolation) -> int:
     return fallback
 
 
-def _set_image_sampling(
-    dvz: Any, visual: Any, interpolation: ImageInterpolation
-) -> None:
+def _set_image_sampling(dvz: Any, visual: Any, interpolation: ImageInterpolation) -> None:
     setter = getattr(dvz, "dvz_image_set_sampling", None)
     if setter is None:
         return
@@ -5772,9 +5517,7 @@ def _set_query_capabilities(dvz: Any, visual: Any, capabilities: int) -> None:
     setter(visual, capabilities)
 
 
-def _set_panel_background_color(
-    dvz: Any, panel: Any, rgba: tuple[int, int, int, int]
-) -> None:
+def _set_panel_background_color(dvz: Any, panel: Any, rgba: tuple[int, int, int, int]) -> None:
     setter = getattr(dvz, "dvz_panel_set_background_color", None)
     if setter is None:
         return
@@ -5782,9 +5525,7 @@ def _set_panel_background_color(
     setter(panel, color)
 
 
-def _create_panel(
-    dvz: Any, figure: Any, bounds: tuple[float, float, float, float] | None
-) -> Any:
+def _create_panel(dvz: Any, figure: Any, bounds: tuple[float, float, float, float] | None) -> Any:
     if bounds is None:
         return dvz.dvz_panel_full(figure)
     panel_factory = getattr(dvz, "dvz_panel", None)
@@ -5799,15 +5540,12 @@ def _create_panel(
             if value is None
         )
         raise DatovizV04Unavailable(
-            "Datoviz resolved-layout viewport placement requires public "
-            + " and ".join(missing)
+            "Datoviz resolved-layout viewport placement requires public " + " and ".join(missing)
         )
 
     x, y, width, height = bounds
     desc = cast(Any, desc_factory)()
-    if desc is None or not all(
-        hasattr(desc, name) for name in ("x", "y", "width", "height")
-    ):
+    if desc is None or not all(hasattr(desc, name) for name in ("x", "y", "width", "height")):
         raise DatovizV04Unavailable(
             "Datoviz resolved-layout viewport placement requires a usable "
             "public dvz_panel_desc() descriptor"
@@ -5836,13 +5574,10 @@ def _preflight_consumed_layout_panel_api(dvz: Any) -> None:
     )
     if missing:
         raise DatovizV04Unavailable(
-            "Datoviz resolved-layout viewport placement requires public "
-            + " and ".join(missing)
+            "Datoviz resolved-layout viewport placement requires public " + " and ".join(missing)
         )
     desc = cast(Any, desc_factory)()
-    if desc is None or not all(
-        hasattr(desc, name) for name in ("x", "y", "width", "height")
-    ):
+    if desc is None or not all(hasattr(desc, name) for name in ("x", "y", "width", "height")):
         raise DatovizV04Unavailable(
             "Datoviz resolved-layout viewport placement requires a usable "
             "public dvz_panel_desc() descriptor"
@@ -5856,9 +5591,9 @@ def _validate_renderer_consumed_layout_view(
     view3d: View3D | None,
 ) -> None:
     active_view = view if view is not None else view3d
-    if active_view is not None and snapshot.view_id != active_view.id:
+    if active_view is not None and snapshot.only_panel().view_id != active_view.id:
         raise ValueError("consumed layout view_id does not match the renderer view")
-    if active_view is None and snapshot.view_id is not None:
+    if active_view is None and snapshot.only_panel().view_id is not None:
         raise ValueError("viewless renderer cannot consume a view-bound layout snapshot")
 
 
@@ -5867,18 +5602,14 @@ def _validate_consumed_perspective_aspect(
     view3d: View3D | None,
 ) -> None:
     """Qualify Datoviz's aspect-less retained perspective camera."""
-    if view3d is None or not isinstance(
-        view3d.projection, PerspectiveProjection3D
-    ):
+    if view3d is None or not isinstance(view3d.projection, PerspectiveProjection3D):
         return
     authored_aspect = view3d.projection.aspect_ratio
     if authored_aspect is None:
         return
-    plot = snapshot.plot_rect_px
+    plot = snapshot.only_panel().plot_rect_px
     plot_aspect = plot.width / plot.height
-    if not math.isclose(
-        authored_aspect, plot_aspect, rel_tol=1.0e-12, abs_tol=1.0e-12
-    ):
+    if not math.isclose(authored_aspect, plot_aspect, rel_tol=1.0e-12, abs_tol=1.0e-12):
         raise DatovizV04Unsupported(
             "Datoviz consumed perspective layout requires omitted aspect_ratio "
             "or aspect_ratio equal to plot_rect_px width/height"
@@ -5889,7 +5620,7 @@ def _consumed_layout_native_panel_bounds(
     snapshot: ResolvedLayoutSnapshot,
 ) -> tuple[float, float, float, float]:
     target = snapshot.render_target
-    plot = snapshot.plot_rect_px
+    plot = snapshot.only_panel().plot_rect_px
     native_y = (
         plot.y / target.logical_height_px
         if target.pixel_origin is PixelOrigin.TOP_LEFT
@@ -5933,9 +5664,7 @@ def _dvz_color(dvz: Any, rgba: tuple[int, int, int, int]) -> Any:
         return color
 
 
-def _set_visual_data(
-    dvz: Any, visual: Any, attr_name: str, data: npt.NDArray[Any]
-) -> None:
+def _set_visual_data(dvz: Any, visual: Any, attr_name: str, data: npt.NDArray[Any]) -> None:
     result = dvz.dvz_visual_set_data(visual, attr_name, data)
     if _datoviz_call_succeeded(result):
         return
@@ -5946,9 +5675,7 @@ def _set_visual_data(
     raise DatovizV04Unsupported(f"Datoviz visual attribute {attr_name!r} upload failed")
 
 
-def _set_visual_index_data(
-    dvz: Any, visual: Any, indices: npt.NDArray[np.uint32]
-) -> None:
+def _set_visual_index_data(dvz: Any, visual: Any, indices: npt.NDArray[np.uint32]) -> None:
     _require_datoviz_success(
         dvz.dvz_visual_set_index_data(visual, indices, int(indices.shape[0])),
         "Datoviz visual index upload failed",
@@ -5972,16 +5699,12 @@ def _set_filled_point_style(dvz: Any, visual: Any) -> None:
     )
 
 
-def _set_alpha_mode_if_translucent(
-    dvz: Any, visual: Any, colors: npt.NDArray[np.uint8]
-) -> None:
+def _set_alpha_mode_if_translucent(dvz: Any, visual: Any, colors: npt.NDArray[np.uint8]) -> None:
     if not np.any(colors[:, 3] < 255):
         return
     setter = getattr(dvz, "dvz_visual_set_alpha_mode", None)
     if setter is None:
-        raise DatovizV04Unsupported(
-            "Datoviz translucent colors require dvz_visual_set_alpha_mode"
-        )
+        raise DatovizV04Unsupported("Datoviz translucent colors require dvz_visual_set_alpha_mode")
     _require_datoviz_success(
         setter(visual, _alpha_mode_value(dvz, "DVZ_ALPHA_BLENDED", DVZ_ALPHA_BLENDED)),
         "Datoviz alpha blending configuration failed",
@@ -6000,25 +5723,19 @@ def _alpha_mode_value(dvz: Any, name: str, fallback: int) -> int:
 
 def _datoviz_marker_diagnostics(dvz: Any) -> tuple[str, ...]:
     return tuple(
-        f"missing {name}"
-        for name in _REQUIRED_DVZ_MARKER_FUNCTIONS
-        if not hasattr(dvz, name)
+        f"missing {name}" for name in _REQUIRED_DVZ_MARKER_FUNCTIONS if not hasattr(dvz, name)
     )
 
 
 def _datoviz_segment_diagnostics(dvz: Any) -> tuple[str, ...]:
     return tuple(
-        f"missing {name}"
-        for name in _REQUIRED_DVZ_SEGMENT_FUNCTIONS
-        if not hasattr(dvz, name)
+        f"missing {name}" for name in _REQUIRED_DVZ_SEGMENT_FUNCTIONS if not hasattr(dvz, name)
     )
 
 
 def _datoviz_path_diagnostics(dvz: Any) -> tuple[str, ...]:
     return tuple(
-        f"missing {name}"
-        for name in _REQUIRED_DVZ_PATH_FUNCTIONS
-        if not hasattr(dvz, name)
+        f"missing {name}" for name in _REQUIRED_DVZ_PATH_FUNCTIONS if not hasattr(dvz, name)
     )
 
 
@@ -6039,9 +5756,7 @@ def _datoviz_colorbar_diagnostics(dvz: Any) -> tuple[str, ...]:
     return tuple(f"missing {name}" for name in required if not hasattr(dvz, name))
 
 
-def _set_path_subpaths(
-    dvz: Any, visual: Any, count: int, subpaths: npt.NDArray[np.uint32]
-) -> Any:
+def _set_path_subpaths(dvz: Any, visual: Any, count: int, subpaths: npt.NDArray[np.uint32]) -> Any:
     try:
         return dvz.dvz_path_set_subpaths(visual, count, subpaths)
     except (ctypes.ArgumentError, TypeError):
@@ -6060,13 +5775,9 @@ def _set_marker_style(
         style.stroke_width = float(stroke_width)
     if hasattr(style, "aspect"):
         if stroke_width > 0.0 and _rgba8_scalar(stroke_color)[3] > 0:
-            style.aspect = int(
-                getattr(dvz, "DVZ_SHAPE_ASPECT_OUTLINE", DVZ_SHAPE_ASPECT_OUTLINE)
-            )
+            style.aspect = int(getattr(dvz, "DVZ_SHAPE_ASPECT_OUTLINE", DVZ_SHAPE_ASPECT_OUTLINE))
         else:
-            style.aspect = int(
-                getattr(dvz, "DVZ_SHAPE_ASPECT_FILLED", DVZ_SHAPE_ASPECT_FILLED)
-            )
+            style.aspect = int(getattr(dvz, "DVZ_SHAPE_ASPECT_FILLED", DVZ_SHAPE_ASPECT_FILLED))
     _require_datoviz_success(
         dvz.dvz_marker_set_style(visual, style),
         "Datoviz marker style configuration failed",
@@ -6078,9 +5789,7 @@ def _rgba8_scalar(color: npt.NDArray[Any]) -> npt.NDArray[np.uint8]:
     return np.ascontiguousarray(rgba)
 
 
-def _assign_rgba_field(
-    target: Any, field_name: str, rgba: npt.NDArray[np.uint8]
-) -> None:
+def _assign_rgba_field(target: Any, field_name: str, rgba: npt.NDArray[np.uint8]) -> None:
     values = [int(value) for value in rgba]
     field = getattr(target, field_name, None)
     if field is not None:
@@ -6138,12 +5847,9 @@ def _preflight_datoviz_vector_api(dvz: Any) -> dict[VectorCap, int]:
     diagnostics = datoviz_vector_api_diagnostics(dvz)
     if diagnostics:
         raise DatovizV04Unsupported(
-            "Datoviz VectorVisual requires public vector ABI: "
-            + ", ".join(diagnostics)
+            "Datoviz VectorVisual requires public vector ABI: " + ", ".join(diagnostics)
         )
-    return {
-        cap: int(getattr(dvz, name)) for cap, name in _VECTOR_CAP_NAMES.items()
-    }
+    return {cap: int(getattr(dvz, name)) for cap, name in _VECTOR_CAP_NAMES.items()}
 
 
 def _stroke_join_value(dvz: Any, join: StrokeJoin) -> int:
@@ -6248,9 +5954,7 @@ def _datoviz_query_request_diagnostic(request: QueryRequest) -> str | None:
         return f"Datoviz v0.4 query slice supports frontmost hit policy only, got {request.hit_policy.value!r}"
     if SCALAR_COLOR_QUERY_PAYLOAD_KIND not in request.requested_extension_payload_kinds:
         unsupported_standard_payloads = tuple(
-            payload
-            for payload in request.requested_payload
-            if payload != QueryPayload.IDENTITY
+            payload for payload in request.requested_payload if payload != QueryPayload.IDENTITY
         )
         if unsupported_standard_payloads:
             return (
@@ -6275,9 +5979,7 @@ def _datoviz_query_request_diagnostic(request: QueryRequest) -> str | None:
     return None
 
 
-def _unsupported_query_result(
-    request: QueryRequest, diagnostic: str | None
-) -> QueryResult | None:
+def _unsupported_query_result(request: QueryRequest, diagnostic: str | None) -> QueryResult | None:
     if diagnostic is None:
         return None
     return QueryResult(

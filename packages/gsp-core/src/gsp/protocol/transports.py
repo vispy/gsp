@@ -109,7 +109,9 @@ class InProcessTransport:
         if self._session_id is None:
             raise RuntimeError("transport is not initialized")
         if batch.session_id != self._session_id:
-            raise ValueError(f"batch session {batch.session_id!r} does not match active session {self._session_id!r}")
+            raise ValueError(
+                f"batch session {batch.session_id!r} does not match active session {self._session_id!r}"
+            )
         if batch.sequence != self._next_sequence:
             raise ValueError(
                 f"batch sequence {batch.sequence} does not match next sequence {self._next_sequence}"

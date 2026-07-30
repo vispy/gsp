@@ -72,9 +72,7 @@ def test_matplotlib_primitive_uses_effective_index_stream_and_vertex_colors() ->
     visual = PrimitiveVisual(
         id="primitive:effective-stream",
         topology=PrimitiveTopology.LINE_STRIP,
-        positions=np.array(
-            [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0]], dtype=np.float32
-        ),
+        positions=np.array([[0.0, 0.0], [1.0, 0.0], [1.0, 1.0]], dtype=np.float32),
         colors=np.array(
             [
                 [255, 0, 0, 255],
@@ -110,9 +108,7 @@ def test_matplotlib_primitive_adapts_inline_2d_transform() -> None:
         positions=np.array([[0.0, 0.0]], dtype=np.float32),
         colors=np.array([255, 255, 255, 255], dtype=np.uint8),
         transform=VisualTransformBinding.inline_affine(
-            np.array(
-                [[1.0, 0.0, 0.25], [0.0, 1.0, -0.5], [0.0, 0.0, 1.0]]
-            )
+            np.array([[1.0, 0.0, 0.25], [0.0, 1.0, -0.5], [0.0, 0.0, 1.0]])
         ),
     )
     (artist,) = render_primitive_visual(
@@ -196,9 +192,7 @@ def test_matplotlib_primitive_view_and_transform_capability_rejection() -> None:
                 positions=visual3d.positions,
                 colors=visual3d.colors,
                 coordinate_space=CoordinateSpace.DATA,
-                transform=VisualTransformBinding.inline_affine(
-                    np.eye(3, dtype=np.float64)
-                ),
+                transform=VisualTransformBinding.inline_affine(np.eye(3, dtype=np.float64)),
             ),
             view3d=View3D(
                 id="view:transform-3d",

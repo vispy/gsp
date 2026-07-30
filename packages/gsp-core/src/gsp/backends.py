@@ -66,6 +66,10 @@ class SessionRequest:
     require: frozenset[str] = frozenset()
     adaptation: frozenset[str] = frozenset()
 
+    def __post_init__(self) -> None:
+        _validate_session_capability_ids(self.require)
+        _validate_session_capability_ids(self.adaptation)
+
 
 @runtime_checkable
 class BackendSession(Protocol):
@@ -88,9 +92,7 @@ class BackendSession(Protocol):
         layout_snapshot: ResolvedLayoutSnapshot | None = None,
         **kwargs: Any,
     ) -> Any: ...
-    def query(
-        self, request: QueryRequest, *, scene_id: str | None = None
-    ) -> QueryResult: ...
+    def query(self, request: QueryRequest, *, scene_id: str | None = None) -> QueryResult: ...
     def run(self) -> None: ...
     def close(self) -> None: ...
     def __enter__(self) -> "BackendSession": ...
@@ -173,6 +175,8 @@ def open_session(
     candidates = (backend,) if backend is not None else prefer
     entries = _entry_points_by_name()
     required = frozenset(require)
+    _validate_session_capability_ids(required)
+    _validate_session_capability_ids(adaptation)
     failures: list[str] = []
     for candidate in candidates:
         assert candidate is not None
@@ -185,9 +189,7 @@ def open_session(
         provider = _load_provider(entry_point)
         info = provider.probe()
         if not info.available:
-            failures.append(
-                f"backend {candidate!r} is unavailable: " + "; ".join(info.diagnostics)
-            )
+            failures.append(f"backend {candidate!r} is unavailable: " + "; ".join(info.diagnostics))
             if backend is not None:
                 break
             continue
@@ -203,3 +205,15 @@ def open_session(
             SessionRequest(require=required, adaptation=frozenset(adaptation))
         )
     raise BackendUnavailable("; ".join(failures))
+
+
+def _validate_session_capability_ids(capabilities: Collection[str]) -> None:
+    forbidden = sorted(
+        capability
+        for capability in capabilities
+        if capability.startswith("gsp_vispy2.producer.") or capability.startswith("vispy2.emit.")
+    )
+    if forbidden:
+        raise ValueError(
+            f"producer emission features are not GSP session capabilities: {forbidden!r}"
+        )

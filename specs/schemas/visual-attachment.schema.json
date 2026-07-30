@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gsp.dev/schema/0.2/visual-attachment.schema.json",
+  "title": "VisualAttachment",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "visual_id",
+    "panel_id",
+    "view_id",
+    "coordinate_space",
+    "z_order",
+    "clip_scope"
+  ],
+  "properties": {
+    "visual_id": {"type": "string", "minLength": 1},
+    "panel_id": {"type": "string", "minLength": 1},
+    "view_id": {"type": "string", "minLength": 1},
+    "coordinate_space": {"enum": ["data", "view", "panel"]},
+    "z_order": {"type": "integer"},
+    "clip_scope": {"enum": ["plot", "panel", "render_target"]}
+  }
+}

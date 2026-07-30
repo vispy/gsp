@@ -84,12 +84,8 @@ SCALAR_COLOR_QUERY_PAYLOAD_KIND = "gsp.scalar-color-query@0.1"
 TRANSFORM_QUERY_PAYLOAD_KIND = "gsp.transform-query@0.1"
 VIEW3D_QUERY_PAYLOAD_KIND = "gsp.view3d-query@0.1"
 VIEW3D_MESH_TRIANGLE_PICK_QUERY_KIND = "query.view3d.mesh_triangle_pick.v1"
-VIEW3D_MESH_TRIANGLE_PICK_GEOMETRY_QUERY_KIND = (
-    QUERY_VIEW3D_MESH_TRIANGLE_PICK_GEOMETRY_CAPABILITY
-)
-VIEW3D_MESH_TRIANGLE_PICK_FACING_QUERY_KIND = (
-    QUERY_VIEW3D_MESH_TRIANGLE_PICK_FACING_CAPABILITY
-)
+VIEW3D_MESH_TRIANGLE_PICK_GEOMETRY_QUERY_KIND = QUERY_VIEW3D_MESH_TRIANGLE_PICK_GEOMETRY_CAPABILITY
+VIEW3D_MESH_TRIANGLE_PICK_FACING_QUERY_KIND = QUERY_VIEW3D_MESH_TRIANGLE_PICK_FACING_CAPABILITY
 
 
 class QueryDiagnosticSeverity(str, Enum):
@@ -120,9 +116,7 @@ class View3DMeshPickDiagnosticCode(str, Enum):
     UNSUPPORTED_NO_PUBLIC_GEOMETRY_RECONSTRUCTION = (
         "pick.unsupported.no_public_geometry_reconstruction"
     )
-    UNSUPPORTED_NO_PUBLIC_PANEL_NDC_DEPTH = (
-        "pick.unsupported.no_public_panel_ndc_depth"
-    )
+    UNSUPPORTED_NO_PUBLIC_PANEL_NDC_DEPTH = "pick.unsupported.no_public_plot_ndc_depth"
     UNSUPPORTED_FACING_PAYLOAD = "pick.unsupported.facing_payload"
     QUERY_3D_MESH_CULLING_UNSUPPORTED = "query_3d_mesh_culling_unsupported"
     STALE_LAYOUT_SNAPSHOT = "pick.stale.layout_snapshot"
@@ -134,9 +128,7 @@ class View3DMeshPickDiagnosticCode(str, Enum):
     INVALID_PANEL_POINT = "pick.invalid.panel_point"
     INVALID_OUTSIDE_PANEL = "pick.invalid.outside_panel"
     ADAPTED_CPU_REFERENCE = "pick.adapted.cpu_reference"
-    ADAPTED_PUBLIC_GEOMETRY_RECONSTRUCTION = (
-        "pick.adapted.public_geometry_reconstruction"
-    )
+    ADAPTED_PUBLIC_GEOMETRY_RECONSTRUCTION = "pick.adapted.public_geometry_reconstruction"
     ADAPTED_RASTERIZATION_TOLERANCE = "pick.adapted.rasterization_tolerance"
     AMBIGUOUS_EDGE_OR_VERTEX = "pick.ambiguous.edge_or_vertex"
     AMBIGUOUS_DEPTH_TIE = "pick.ambiguous.depth_tie"
@@ -213,7 +205,7 @@ class View3DMeshTrianglePickPayload:
     panel_xy: tuple[float, float]
     kind: str = VIEW3D_MESH_TRIANGLE_PICK_QUERY_KIND
     panel_id: str | None = None
-    panel_ndc_xy: tuple[float, float] | None = None
+    plot_ndc_xy: tuple[float, float] | None = None
     layout_snapshot_id: str | None = None
     view_revision: int | str | None = None
     view_projection_snapshot_id: str | None = None
@@ -243,7 +235,7 @@ class View3DMeshTrianglePickPayload:
         _validate_finite_pair("panel_xy", self.panel_xy)
         if self.panel_id is not None:
             validate_id(self.panel_id)
-        _validate_optional_finite_pair("panel_ndc_xy", self.panel_ndc_xy)
+        _validate_optional_finite_pair("plot_ndc_xy", self.plot_ndc_xy)
         for field_name, value in (
             ("layout_snapshot_id", self.layout_snapshot_id),
             ("view_projection_snapshot_id", self.view_projection_snapshot_id),
@@ -259,16 +251,20 @@ class View3DMeshTrianglePickPayload:
         if status in (QueryStatus.HIT, QueryStatus.MISS):
             if self.panel_id is None:
                 raise ValueError("panel_id is required for hit/miss mesh pick payloads")
-            if self.panel_ndc_xy is None:
-                raise ValueError("panel_ndc_xy is required for hit/miss mesh pick payloads")
+            if self.plot_ndc_xy is None:
+                raise ValueError("plot_ndc_xy is required for hit/miss mesh pick payloads")
             if self.layout_snapshot_id is None:
                 raise ValueError("layout_snapshot_id is required for hit/miss mesh pick payloads")
             if self.view_revision is None:
                 raise ValueError("view_revision is required for hit/miss mesh pick payloads")
             if self.view_projection_snapshot_id is None:
-                raise ValueError("view_projection_snapshot_id is required for hit/miss mesh pick payloads")
+                raise ValueError(
+                    "view_projection_snapshot_id is required for hit/miss mesh pick payloads"
+                )
             if self.pick_scene_snapshot_id is None:
-                raise ValueError("pick_scene_snapshot_id is required for hit/miss mesh pick payloads")
+                raise ValueError(
+                    "pick_scene_snapshot_id is required for hit/miss mesh pick payloads"
+                )
             if self.depth_mode != "opaque_less":
                 raise ValueError("depth_mode must be opaque_less for hit/miss mesh pick payloads")
         if status is QueryStatus.HIT:
@@ -306,7 +302,7 @@ class View3DMeshTrianglePickGeometryPayload:
     panel_xy: tuple[float, float]
     kind: str = VIEW3D_MESH_TRIANGLE_PICK_GEOMETRY_QUERY_KIND
     panel_id: str | None = None
-    panel_ndc_xy: tuple[float, float] | None = None
+    plot_ndc_xy: tuple[float, float] | None = None
     layout_snapshot_id: str | None = None
     view_revision: int | str | None = None
     view_projection_snapshot_id: str | None = None
@@ -317,7 +313,7 @@ class View3DMeshTrianglePickGeometryPayload:
     primitive_kind: str | None = None
     primitive_index: int | None = None
     hit_barycentric: tuple[float, float, float] | None = None
-    hit_panel_ndc_z: float | None = None
+    hit_plot_ndc_z: float | None = None
     hit_data_xyz: tuple[float, float, float] | None = None
     front_facing: bool | None = None
     diagnostics: tuple[QueryDiagnostic, ...] = ()
@@ -332,7 +328,7 @@ class View3DMeshTrianglePickGeometryPayload:
             view_id=self.view_id,
             panel_xy=self.panel_xy,
             panel_id=self.panel_id,
-            panel_ndc_xy=self.panel_ndc_xy,
+            plot_ndc_xy=self.plot_ndc_xy,
             layout_snapshot_id=self.layout_snapshot_id,
             view_revision=self.view_revision,
             view_projection_snapshot_id=self.view_projection_snapshot_id,
@@ -347,13 +343,13 @@ class View3DMeshTrianglePickGeometryPayload:
         if status is QueryStatus.HIT:
             if self.hit_barycentric is None:
                 raise ValueError("hit_barycentric is required for geometry hits")
-            if self.hit_panel_ndc_z is None:
-                raise ValueError("hit_panel_ndc_z is required for geometry hits")
+            if self.hit_plot_ndc_z is None:
+                raise ValueError("hit_plot_ndc_z is required for geometry hits")
             if self.hit_data_xyz is None:
                 raise ValueError("hit_data_xyz is required for geometry hits")
             _validate_finite_triple("hit_barycentric", self.hit_barycentric)
-            if not np.isfinite(self.hit_panel_ndc_z):
-                raise ValueError("hit_panel_ndc_z must be finite")
+            if not np.isfinite(self.hit_plot_ndc_z):
+                raise ValueError("hit_plot_ndc_z must be finite")
             _validate_finite_triple("hit_data_xyz", self.hit_data_xyz)
             if self.front_facing is not None and not isinstance(self.front_facing, bool):
                 raise TypeError("front_facing must be a bool when provided")
@@ -361,7 +357,7 @@ class View3DMeshTrianglePickGeometryPayload:
             value is not None
             for value in (
                 self.hit_barycentric,
-                self.hit_panel_ndc_z,
+                self.hit_plot_ndc_z,
                 self.hit_data_xyz,
                 self.front_facing,
             )
@@ -376,7 +372,7 @@ def _validate_mesh_pick_payload_common(
     view_id: str,
     panel_xy: tuple[float, float],
     panel_id: str | None,
-    panel_ndc_xy: tuple[float, float] | None,
+    plot_ndc_xy: tuple[float, float] | None,
     layout_snapshot_id: str | None,
     view_revision: int | str | None,
     view_projection_snapshot_id: str | None,
@@ -402,7 +398,7 @@ def _validate_mesh_pick_payload_common(
     _validate_finite_pair("panel_xy", panel_xy)
     if panel_id is not None:
         validate_id(panel_id)
-    _validate_optional_finite_pair("panel_ndc_xy", panel_ndc_xy)
+    _validate_optional_finite_pair("plot_ndc_xy", plot_ndc_xy)
     for field_name, value in (
         ("layout_snapshot_id", layout_snapshot_id),
         ("view_projection_snapshot_id", view_projection_snapshot_id),
@@ -418,8 +414,8 @@ def _validate_mesh_pick_payload_common(
     if status in (QueryStatus.HIT, QueryStatus.MISS):
         if panel_id is None:
             raise ValueError("panel_id is required for hit/miss mesh pick payloads")
-        if panel_ndc_xy is None:
-            raise ValueError("panel_ndc_xy is required for hit/miss mesh pick payloads")
+        if plot_ndc_xy is None:
+            raise ValueError("plot_ndc_xy is required for hit/miss mesh pick payloads")
         if layout_snapshot_id is None:
             raise ValueError("layout_snapshot_id is required for hit/miss mesh pick payloads")
         if view_revision is None:
@@ -443,8 +439,7 @@ def _validate_mesh_pick_payload_common(
         if primitive_index is None or primitive_index < 0:
             raise ValueError("primitive_index must be non-negative for mesh pick hits")
     elif any(
-        value is not None
-        for value in (visual_id, visual_type, primitive_kind, primitive_index)
+        value is not None for value in (visual_id, visual_type, primitive_kind, primitive_index)
     ):
         raise ValueError("non-hit mesh pick payloads must not include hit identity fields")
     for diagnostic in diagnostics:
@@ -486,9 +481,7 @@ class MeshQueryPayload:
             raise ValueError("mesh query hit_kind must be 'face'")
         if self.face_index < 0:
             raise ValueError("face_index must be non-negative")
-        if len(self.vertex_indices) != 3 or any(
-            index < 0 for index in self.vertex_indices
-        ):
+        if len(self.vertex_indices) != 3 or any(index < 0 for index in self.vertex_indices):
             raise ValueError("vertex_indices must contain three non-negative indices")
 
 
@@ -558,7 +551,7 @@ class TransformQueryPayload:
 
     visual_id: str
     panel_xy: tuple[float, float]
-    panel_ndc: tuple[float, float]
+    plot_ndc: tuple[float, float]
     declared_coordinate_space: str
     declared_space_coord: tuple[float, float] | None
     source_coord: tuple[float, float] | None
@@ -573,7 +566,7 @@ class TransformQueryPayload:
     def __post_init__(self) -> None:
         validate_id(self.visual_id)
         _validate_finite_pair("panel_xy", self.panel_xy)
-        _validate_finite_pair("panel_ndc", self.panel_ndc)
+        _validate_finite_pair("plot_ndc", self.plot_ndc)
         if not self.declared_coordinate_space:
             raise ValueError("declared_coordinate_space must not be empty")
         _validate_optional_finite_pair("declared_space_coord", self.declared_space_coord)
@@ -608,7 +601,7 @@ class View3DQueryPayload:
     layout_snapshot_id: str
     view_projection_snapshot_id: str
     panel_xy: tuple[float, float]
-    panel_ndc: tuple[float, float]
+    plot_ndc: tuple[float, float]
     near_data_point: tuple[float, float, float]
     far_data_point: tuple[float, float, float]
     ray_direction: tuple[float, float, float]
@@ -620,7 +613,7 @@ class View3DQueryPayload:
         if self.view_revision < 0:
             raise ValueError("view_revision must be non-negative")
         _validate_finite_pair("panel_xy", self.panel_xy)
-        _validate_finite_pair("panel_ndc", self.panel_ndc)
+        _validate_finite_pair("plot_ndc", self.plot_ndc)
         _validate_finite_triple("near_data_point", self.near_data_point)
         _validate_finite_triple("far_data_point", self.far_data_point)
         _validate_finite_triple("ray_direction", self.ray_direction)
@@ -694,9 +687,7 @@ class QueryHit:
         if self.texel is not None and (self.texel[0] < 0 or self.texel[1] < 0):
             raise ValueError("texel coordinates must be non-negative")
         if (self.extension_payload is None) != (self.extension_payload_kind is None):
-            raise ValueError(
-                "extension payload kind and value must be provided together"
-            )
+            raise ValueError("extension payload kind and value must be provided together")
 
 
 @dataclass(frozen=True, slots=True)
@@ -747,18 +738,14 @@ class QueryResult:
             QueryStatus.FAILED,
         ):
             if not self.diagnostic:
-                raise ValueError(
-                    f"{self.status.value} query results require a diagnostic"
-                )
+                raise ValueError(f"{self.status.value} query results require a diagnostic")
         s044_mesh_pick_payload = (
             self.extension_payload_kind == VIEW3D_MESH_TRIANGLE_PICK_QUERY_KIND
             and isinstance(self.extension_payload, View3DMeshTrianglePickPayload)
         )
         s050_mesh_pick_geometry_payload = (
             self.extension_payload_kind == VIEW3D_MESH_TRIANGLE_PICK_GEOMETRY_QUERY_KIND
-            and isinstance(
-                self.extension_payload, View3DMeshTrianglePickGeometryPayload
-            )
+            and isinstance(self.extension_payload, View3DMeshTrianglePickGeometryPayload)
         )
         if self.status != QueryStatus.HIT and (
             self.hits
@@ -776,13 +763,9 @@ class QueryResult:
                 and not s050_mesh_pick_geometry_payload
             )
         ):
-            raise ValueError(
-                "non-hit query results must not include hit payload fields"
-            )
+            raise ValueError("non-hit query results must not include hit payload fields")
         if (self.extension_payload is None) != (self.extension_payload_kind is None):
-            raise ValueError(
-                "extension payload kind and value must be provided together"
-            )
+            raise ValueError("extension payload kind and value must be provided together")
 
     def _normalize_hit_payloads(self) -> None:
         if self.status != QueryStatus.HIT:
@@ -840,8 +823,6 @@ def _validate_finite_triple(name: str, value: tuple[float, float, float]) -> Non
         raise ValueError(f"{name} must contain three finite values")
 
 
-def _validate_optional_finite_pair(
-    name: str, value: tuple[float, float] | None
-) -> None:
+def _validate_optional_finite_pair(name: str, value: tuple[float, float] | None) -> None:
     if value is not None:
         _validate_finite_pair(name, value)

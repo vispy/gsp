@@ -285,9 +285,7 @@ def gsp_capability_snapshot_from_datoviz(
     The translation deliberately advertises only features implemented by the current GSP Datoviz
     adapter. Raw Datoviz capability fields are retained in metadata for later parity missions.
     """
-    raw_fields = (
-        _raw_capability_fields(raw_snapshot) if raw_snapshot is not None else {}
-    )
+    raw_fields = _raw_capability_fields(raw_snapshot) if raw_snapshot is not None else {}
     texture_formats = ["rgba8"]
     if raw_fields.get("texture_format_r32uint") is True:
         texture_formats.append("r32uint")
@@ -295,9 +293,7 @@ def gsp_capability_snapshot_from_datoviz(
         texture_formats.append("rg32uint")
 
     capture_diagnostics = (
-        datoviz_v04_capture_diagnostics(dvz)
-        if dvz is not None
-        else ("Datoviz is not importable",)
+        datoviz_v04_capture_diagnostics(dvz) if dvz is not None else ("Datoviz is not importable",)
     )
     grid_clip_diagnostics = datoviz_v04_grid_clip_to_plot_rect_diagnostics(dvz)
     grid_clip_supported = not grid_clip_diagnostics
@@ -323,11 +319,7 @@ def gsp_capability_snapshot_from_datoviz(
         (
             "layout_snapshot_partial",
             "guide_layout_snapshot_first_slice",
-            (
-                "guide_query_native_verified"
-                if guide_query_supported
-                else "guide_query_missing"
-            ),
+            ("guide_query_native_verified" if guide_query_supported else "guide_query_missing"),
             (
                 "all_rendered_guides_native_verified"
                 if guide_query_supported
@@ -492,9 +484,7 @@ def gsp_capability_snapshot_from_datoviz(
         metadata["datoviz_capture_diagnostics"] = capture_diagnostics
     else:
         output_formats = ("png",)
-        metadata["capture_support"] = (
-            "offscreen PNG screenshot/export; not scientific readback"
-        )
+        metadata["capture_support"] = "offscreen PNG screenshot/export; not scientific readback"
     query_diagnostics = (
         datoviz_v04_query_binding_diagnostics(dvz)
         if dvz is not None
@@ -514,9 +504,7 @@ def gsp_capability_snapshot_from_datoviz(
 
     view3d_diagnostics = _datoviz_v04_view3d_binding_diagnostics(dvz)
     retained_view3d_diagnostics = datoviz_v04_view3d_retained_data_diagnostics(dvz)
-    view3d_state_readback_diagnostics = (
-        datoviz_v04_view3d_state_readback_diagnostics(dvz)
-    )
+    view3d_state_readback_diagnostics = datoviz_v04_view3d_state_readback_diagnostics(dvz)
     live_input_diagnostics = datoviz_v04_live_input_diagnostics(dvz)
     texture2d_mesh_diagnostics = tuple(
         f"missing {name}"
@@ -545,12 +533,8 @@ def gsp_capability_snapshot_from_datoviz(
     text_billboard_ready = text_ready and not view3d_diagnostics
     vector_diagnostics = datoviz_vector_api_diagnostics(dvz)
     vector_ready = not vector_diagnostics
-    primitive_diagnostics = datoviz_primitive_api_diagnostics(
-        dvz, indexed=False
-    )
-    primitive_indexed_diagnostics = datoviz_primitive_api_diagnostics(
-        dvz, indexed=True
-    )
+    primitive_diagnostics = datoviz_primitive_api_diagnostics(dvz, indexed=False)
+    primitive_indexed_diagnostics = datoviz_primitive_api_diagnostics(dvz, indexed=True)
     primitive_ready = not primitive_diagnostics
     primitive_indexed_ready = not primitive_indexed_diagnostics
     general_visual_capabilities: list[str] = []
@@ -603,13 +587,9 @@ def gsp_capability_snapshot_from_datoviz(
             "dense position/color attributes"
         )
         if primitive_indexed_ready:
-            metadata["s065_primitivevisual_indexed"] = (
-                "public dvz_visual_set_index_data binding"
-            )
+            metadata["s065_primitivevisual_indexed"] = "public dvz_visual_set_index_data binding"
         else:
-            metadata["datoviz_primitivevisual_indexed_diagnostics"] = (
-                primitive_indexed_diagnostics
-            )
+            metadata["datoviz_primitivevisual_indexed_diagnostics"] = primitive_indexed_diagnostics
     else:
         metadata["datoviz_primitivevisual_diagnostics"] = primitive_diagnostics
     if text_ready:
@@ -700,9 +680,7 @@ def gsp_capability_snapshot_from_datoviz(
                 "invariance artifacts prove nearer-fragment-wins behavior"
             )
         else:
-            metadata["datoviz_view3d_retained_data_diagnostics"] = (
-                retained_view3d_diagnostics
-            )
+            metadata["datoviz_view3d_retained_data_diagnostics"] = retained_view3d_diagnostics
         if view3d_state_readback_diagnostics:
             metadata["datoviz_view3d_state_readback_diagnostics"] = (
                 view3d_state_readback_diagnostics
@@ -810,9 +788,7 @@ def gsp_capability_snapshot_from_datoviz(
         ),
         guide_layout_capability=GuideLayoutCapability(
             axis_native=True,
-            axis_explicit_ticks=hasattr(dvz, "dvz_axis_set_ticks")
-            if dvz is not None
-            else False,
+            axis_explicit_ticks=hasattr(dvz, "dvz_axis_set_ticks") if dvz is not None else False,
             axis_deterministic_gsp_ticks=False,
             axis_labels=True,
             axis_grid=True,
@@ -841,9 +817,7 @@ def gsp_capability_snapshot_from_datoviz(
             dpi_metadata=False,
             physical_framebuffer_scale=False,
             diagnostics=(
-                ()
-                if frame_snapshot_supported
-                else ("device_scale_reporting_unverified",)
+                () if frame_snapshot_supported else ("device_scale_reporting_unverified",)
             ),
         ),
         query_layout_capability=QueryLayoutCapability(
@@ -853,11 +827,7 @@ def gsp_capability_snapshot_from_datoviz(
             all_rendered_guides=guide_query_supported,
             reports_layout_snapshot_id=frame_snapshot_supported,
             diagnostics=(
-                (
-                    "guide_query_native_verified"
-                    if guide_query_supported
-                    else "guide_query_missing"
-                ),
+                ("guide_query_native_verified" if guide_query_supported else "guide_query_missing"),
                 (
                     "layout_snapshot_partial"
                     if frame_snapshot_supported
@@ -954,9 +924,7 @@ def datoviz_v04_live_input_diagnostics(
     if dvz is None:
         return ("Datoviz is not importable",)
     return tuple(
-        f"missing {name}"
-        for name in _REQUIRED_DVZ_LIVE_INPUT_FUNCTIONS
-        if not hasattr(dvz, name)
+        f"missing {name}" for name in _REQUIRED_DVZ_LIVE_INPUT_FUNCTIONS if not hasattr(dvz, name)
     )
 
 
@@ -991,9 +959,7 @@ def datoviz_v04_panel_frame_guide_query_diagnostics(
     return missing + _incomplete_ctypes_records(dvz, ("DvzGuideHit",))
 
 
-def _incomplete_ctypes_records(
-    dvz: ModuleType | Any, names: tuple[str, ...]
-) -> tuple[str, ...]:
+def _incomplete_ctypes_records(dvz: ModuleType | Any, names: tuple[str, ...]) -> tuple[str, ...]:
     """Report generated ctypes records that are only empty forward declarations."""
     diagnostics: list[str] = []
     for name in names:
@@ -1011,21 +977,13 @@ def _ctypes_record_layout_diagnostics(
     """Validate a generated ctypes record before it may back an output pointer."""
     record_type = getattr(dvz, name, None)
     if not isinstance(record_type, type):
-        return (
-            (f"{name} is not a ctypes.Structure subclass",)
-            if require_structure
-            else ()
-        )
+        return (f"{name} is not a ctypes.Structure subclass",) if require_structure else ()
     try:
         is_ctypes_record = issubclass(record_type, ctypes.Structure)
     except TypeError:
         is_ctypes_record = False
     if not is_ctypes_record:
-        return (
-            (f"{name} is not a ctypes.Structure subclass",)
-            if require_structure
-            else ()
-        )
+        return (f"{name} is not a ctypes.Structure subclass",) if require_structure else ()
     fields = getattr(record_type, "_fields_", ())
     if not fields or ctypes.sizeof(record_type) <= 0:
         return (f"incomplete ctypes layout for {name}",)
@@ -1034,10 +992,7 @@ def _ctypes_record_layout_diagnostics(
         field_name for field_name in required_fields if field_name not in field_names
     )
     if missing_fields:
-        return (
-            f"ctypes layout for {name} missing required fields: "
-            + ", ".join(missing_fields),
-        )
+        return (f"ctypes layout for {name} missing required fields: " + ", ".join(missing_fields),)
     return ()
 
 
@@ -1049,14 +1004,10 @@ def datoviz_v04_capture_ready(dvz: ModuleType | Any) -> bool:
 def datoviz_v04_capture_diagnostics(dvz: ModuleType | Any) -> tuple[str, ...]:
     """Return missing requirements for v0.4 offscreen PNG capture."""
     diagnostics = [
-        f"missing {name}"
-        for name in _REQUIRED_DVZ_CAPTURE_FUNCTIONS
-        if not hasattr(dvz, name)
+        f"missing {name}" for name in _REQUIRED_DVZ_CAPTURE_FUNCTIONS if not hasattr(dvz, name)
     ]
     if not any(hasattr(dvz, name) for name in _DVZ_CAPTURE_RENDER_FUNCTIONS):
-        diagnostics.append(
-            "missing one of dvz_view_render_once, dvz_app_render_once, dvz_app_run"
-        )
+        diagnostics.append("missing one of dvz_view_render_once, dvz_app_render_once, dvz_app_run")
     return tuple(diagnostics)
 
 
@@ -1079,9 +1030,7 @@ def datoviz_v04_grid_clip_to_plot_rect_diagnostics(
     if dvz is None:
         return ("grid_clip_not_enforced", "grid_clip_native_api_unverified")
     source = _datoviz_module_source_root(dvz)
-    if source is not None and datoviz_v04_grid_clip_to_plot_rect_ready_for_source(
-        source
-    ):
+    if source is not None and datoviz_v04_grid_clip_to_plot_rect_ready_for_source(source):
         return ()
     return ("grid_clip_not_enforced", "grid_clip_native_api_unverified")
 
@@ -1232,9 +1181,7 @@ def _datoviz_source_has_grid_clip_fix(source: Path) -> bool:
         return False
     try:
         axis_visual_source = axis_visual.read_text(encoding="utf-8")
-        axis_test_source = (
-            axis_tests.read_text(encoding="utf-8") if axis_tests.is_file() else ""
-        )
+        axis_test_source = axis_tests.read_text(encoding="utf-8") if axis_tests.is_file() else ""
     except OSError:
         return False
     return (

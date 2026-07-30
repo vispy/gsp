@@ -39,10 +39,8 @@ def inverse_transform_coordinate(
     return (float(result[0]), float(result[1]))
 
 
-def data_to_panel_ndc(
-    coordinate: tuple[float, float], view: View2D | None
-) -> tuple[float, float]:
-    """Map DATA coordinates through a linear View2D into panel NDC."""
+def data_to_plot_ndc(coordinate: tuple[float, float], view: View2D | None) -> tuple[float, float]:
+    """Map DATA coordinates through a linear View2D into plot NDC."""
     if view is None:
         return coordinate
     x0, x1 = view.xlim
@@ -54,26 +52,26 @@ def data_to_panel_ndc(
     )
 
 
-def declared_to_panel_ndc(
+def declared_to_plot_ndc(
     coordinate: tuple[float, float],
     coordinate_space: CoordinateSpace,
     view: View2D | None,
 ) -> tuple[float, float]:
-    """Map a declared-space coordinate to panel NDC."""
+    """Map a declared-space coordinate to plot NDC."""
     if coordinate_space is CoordinateSpace.DATA:
-        return data_to_panel_ndc(coordinate, view)
+        return data_to_plot_ndc(coordinate, view)
     return coordinate
 
 
-def panel_ndc_to_axes_fraction(
+def plot_ndc_to_axes_fraction(
     coordinates: npt.NDArray[np.float64],
 ) -> npt.NDArray[np.float64]:
-    """Map panel NDC coordinates to Matplotlib axes-fraction coordinates."""
+    """Map plot NDC coordinates to Matplotlib axes-fraction coordinates."""
     return (coordinates + 1.0) * 0.5
 
 
 def coordinate_to_axes_fraction(coordinate: tuple[float, float]) -> tuple[float, float]:
-    """Map one panel NDC coordinate to axes-fraction coordinates."""
+    """Map one plot NDC coordinate to axes-fraction coordinates."""
     return ((coordinate[0] + 1.0) * 0.5, (coordinate[1] + 1.0) * 0.5)
 
 

@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 
 from gsp import Scene
+from gsp.protocol import Panel, full_target_panel_layout
 from gsp.protocol import (
     Camera3D,
     CoordinateSpace,
@@ -65,12 +66,10 @@ def test_vector_visual_accepts_caps_widths_colors_and_dimensions() -> None:
         widths_px=np.array([2.0, 5.0], dtype=np.float32),
         start_cap=VectorCap.ROUND,
         end_cap=VectorCap.SQUARE,
-        colors=np.array(
-            [[255, 0, 0, 255], [0, 255, 0, 128]], dtype=np.uint8
-        ),
+        colors=np.array([[255, 0, 0, 255], [0, 255, 0, 128]], dtype=np.uint8),
     )
     np.testing.assert_array_equal(visual.width_values(), [2.0, 5.0])
-    Scene(
+    _scene(
         id="scene:2d",
         visuals=(visual,),
         view2d=View2D(id="view:2d", panel_id="panel:2d"),
@@ -81,11 +80,11 @@ def test_vector_visual_accepts_caps_widths_colors_and_dimensions() -> None:
         vectors=np.array([[0.0, 0.0, 1.0]], dtype=np.float64),
         colors=np.array([0.0, 0.5, 1.0, 1.0], dtype=np.float32),
     )
-    Scene(id="scene:3d", visuals=(visual3d,), view3d=_view3d())
+    _scene(id="scene:3d", visuals=(visual3d,), view3d=_view3d())
     with pytest.raises(ValueError, match="Scene.view3d"):
-        Scene(id="scene:missing-3d", visuals=(visual3d,))
+        _scene(id="scene:missing-3d", visuals=(visual3d,))
     with pytest.raises(ValueError, match="CoordinateSpace.DATA"):
-        Scene(
+        _scene(
             id="scene:ndc-3d",
             visuals=(
                 _vectors(
@@ -97,7 +96,7 @@ def test_vector_visual_accepts_caps_widths_colors_and_dimensions() -> None:
             view3d=_view3d(),
         )
     with pytest.raises(ValueError, match="Scene.view2d"):
-        Scene(id="scene:missing-2d", visuals=(visual,))
+        _scene(id="scene:missing-2d", visuals=(visual,))
 
 
 @pytest.mark.parametrize("cap", list(VectorCap))
@@ -158,8 +157,16 @@ def test_vector_visual_resolves_3d_endpoints_exactly(
         ("end_cap", "triangle_out", "VectorCap"),
     ],
 )
-def test_vector_visual_rejects_invalid_fields(
-    field: str, value: object, error: str
-) -> None:
+def test_vector_visual_rejects_invalid_fields(field: str, value: object, error: str) -> None:
     with pytest.raises((TypeError, ValueError), match=error):
         _vectors(**{field: value})
+
+
+def _scene(**kwargs: object) -> Scene:
+    view = kwargs.get("view2d") or kwargs.get("view3d")
+    panel_id = view.panel_id if isinstance(view, (View2D, View3D)) else "panel:main"
+    return Scene(
+        panels=(Panel(id=panel_id),),
+        panel_layout=full_target_panel_layout(panel_id),
+        **kwargs,  # type: ignore[arg-type]
+    )

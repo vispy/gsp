@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gsp.dev/schema/0.2/resolved-layout-snapshot.schema.json",
+  "title": "ResolvedLayoutSnapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["snapshot_id", "render_target", "panels"],
+  "properties": {
+    "snapshot_id": {"type": "string", "minLength": 1},
+    "render_target": {"type": "object"},
+    "panels": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["panel_id", "panel_rect_px", "plot_rect_px"],
+        "properties": {
+          "panel_id": {"type": "string", "minLength": 1},
+          "panel_rect_px": {"$ref": "#/$defs/logicalPixelRect"},
+          "plot_rect_px": {"$ref": "#/$defs/logicalPixelRect"}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "logicalPixelRect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y", "width", "height"],
+      "properties": {
+        "x": {"type": "number", "minimum": 0},
+        "y": {"type": "number", "minimum": 0},
+        "width": {"type": "number", "exclusiveMinimum": 0},
+        "height": {"type": "number", "exclusiveMinimum": 0}
+      }
+    }
+  }
+}

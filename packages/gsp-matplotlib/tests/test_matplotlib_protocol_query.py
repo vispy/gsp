@@ -3,6 +3,7 @@
 import numpy as np
 
 import pytest
+from conformance.p038_support import resolved_single_panel_fixture
 
 from gsp.protocol import (
     Camera3D,
@@ -35,7 +36,6 @@ from gsp.protocol import (
     QueryScope,
     QueryStatus,
     RenderTarget,
-    ResolvedLayoutSnapshot,
     ScalarColorEncoding,
     ScalarColorQueryPayload,
     ScalarColorSlot,
@@ -57,7 +57,7 @@ from gsp.protocol import (
     View3DQueryPayload,
     VisualFamily,
     VisualTransformBinding,
-    mesh_pick_panel_ndc_z,
+    mesh_pick_plot_ndc_z,
     project_view3d_data_point,
     resolve_view3d_projection_snapshot,
 )
@@ -262,7 +262,7 @@ def test_query_transformed_point_returns_inverse_payload():
     assert result.extension_payload.declared_space_coord == (3.0, 1.0)
     assert result.extension_payload.source_coord == (1.0, 2.0)
     assert result.extension_payload.data_coord == (3.0, 1.0)
-    assert result.extension_payload.panel_ndc == (0.0, 0.0)
+    assert result.extension_payload.plot_ndc == (0.0, 0.0)
     assert result.extension_payload.view_id == "view:main"
     assert result.extension_payload.inline_transform_digest is not None
 
@@ -281,9 +281,7 @@ def test_query_transformed_ndc_point_reports_no_data_coordinate():
     )
 
     result = query_visuals(
-        QueryRequest(
-            id="query:points", panel_id="panel:main", coordinate=(0.25, -0.5)
-        ),
+        QueryRequest(id="query:points", panel_id="panel:main", coordinate=(0.25, -0.5)),
         [QueryVisualEntry(points)],
         view=View2D(id="view:main", panel_id="panel:main", x_range=(10.0, 20.0)),
     )
@@ -291,7 +289,7 @@ def test_query_transformed_ndc_point_reports_no_data_coordinate():
     assert result.status == QueryStatus.HIT
     assert result.extension_payload_kind == TRANSFORM_QUERY_PAYLOAD_KIND
     assert isinstance(result.extension_payload, TransformQueryPayload)
-    assert result.extension_payload.panel_ndc == (0.25, -0.5)
+    assert result.extension_payload.plot_ndc == (0.25, -0.5)
     assert result.extension_payload.data_coord is None
 
 
@@ -426,9 +424,7 @@ def test_query_3d_mesh_visual_returns_deferred_picking_diagnostic():
 
 def test_query_view3d_mesh_triangle_pick_returns_frontmost_public_triangle():
     view = _canonical_query_view3d()
-    snapshot = resolve_view3d_projection_snapshot(
-        view, layout_snapshot_id="layout:main"
-    )
+    snapshot = resolve_view3d_projection_snapshot(view, layout_snapshot_id="layout:main")
     mesh = MeshVisual(
         id="visual:mesh3d",
         positions=np.array(
@@ -471,16 +467,14 @@ def test_query_view3d_mesh_triangle_pick_returns_frontmost_public_triangle():
     assert isinstance(payload, View3DMeshTrianglePickPayload)
     assert payload.visual_id == "visual:mesh3d"
     assert payload.primitive_index == 1
-    assert payload.panel_ndc_xy == pytest.approx((0.0, 0.0))
+    assert payload.plot_ndc_xy == pytest.approx((0.0, 0.0))
     assert payload.pick_scene_snapshot_id == "pick-scene:fixture"
     assert payload.diagnostics[0].code == View3DMeshPickDiagnosticCode.ADAPTED_CPU_REFERENCE
 
 
 def test_query_view3d_mesh_triangle_pick_geometry_returns_required_hit_fields():
     view = _canonical_query_view3d()
-    snapshot = resolve_view3d_projection_snapshot(
-        view, layout_snapshot_id="layout:main"
-    )
+    snapshot = resolve_view3d_projection_snapshot(view, layout_snapshot_id="layout:main")
     positions = np.array(
         [[-1.0, -1.0, 0.0], [1.0, -1.0, 0.5], [-1.0, 1.0, 0.0]],
         dtype=np.float32,
@@ -512,21 +506,18 @@ def test_query_view3d_mesh_triangle_pick_geometry_returns_required_hit_fields():
     assert payload.hit_barycentric == pytest.approx((0.5, 0.25, 0.25))
     assert payload.hit_data_xyz == pytest.approx((-0.5, -0.5, 0.125))
     projected = tuple(project_view3d_data_point(view, tuple(row)) for row in positions)
-    assert payload.hit_panel_ndc_z == pytest.approx(
-        mesh_pick_panel_ndc_z(payload.hit_barycentric, *projected)
+    assert payload.hit_plot_ndc_z == pytest.approx(
+        mesh_pick_plot_ndc_z(payload.hit_barycentric, *projected)
     )
     assert payload.front_facing is None
-    assert (
-        View3DMeshPickDiagnosticCode.ADAPTED_PUBLIC_GEOMETRY_RECONSTRUCTION
-        in tuple(diagnostic.code for diagnostic in payload.diagnostics)
+    assert View3DMeshPickDiagnosticCode.ADAPTED_PUBLIC_GEOMETRY_RECONSTRUCTION in tuple(
+        diagnostic.code for diagnostic in payload.diagnostics
     )
 
 
 def test_query_view3d_mesh_triangle_pick_geometry_gates_projected_facing():
     view = _canonical_query_view3d()
-    snapshot = resolve_view3d_projection_snapshot(
-        view, layout_snapshot_id="layout:main"
-    )
+    snapshot = resolve_view3d_projection_snapshot(view, layout_snapshot_id="layout:main")
     mesh = MeshVisual(
         id="visual:mesh3d",
         positions=np.array(
@@ -555,9 +546,7 @@ def test_query_view3d_mesh_triangle_pick_geometry_gates_projected_facing():
     )
 
     assert without_facing.status == QueryStatus.HIT
-    assert isinstance(
-        without_facing.extension_payload, View3DMeshTrianglePickGeometryPayload
-    )
+    assert isinstance(without_facing.extension_payload, View3DMeshTrianglePickGeometryPayload)
     assert without_facing.extension_payload.front_facing is None
     assert with_facing.status == QueryStatus.HIT
     assert isinstance(with_facing.extension_payload, View3DMeshTrianglePickGeometryPayload)
@@ -566,9 +555,7 @@ def test_query_view3d_mesh_triangle_pick_geometry_gates_projected_facing():
 
 def test_query_view3d_mesh_triangle_pick_geometry_omits_fields_on_miss():
     view = _canonical_query_view3d()
-    snapshot = resolve_view3d_projection_snapshot(
-        view, layout_snapshot_id="layout:main"
-    )
+    snapshot = resolve_view3d_projection_snapshot(view, layout_snapshot_id="layout:main")
     mesh = MeshVisual(
         id="visual:mesh3d",
         positions=np.array(
@@ -594,7 +581,7 @@ def test_query_view3d_mesh_triangle_pick_geometry_omits_fields_on_miss():
     assert isinstance(payload, View3DMeshTrianglePickGeometryPayload)
     assert payload.visual_id is None
     assert payload.hit_barycentric is None
-    assert payload.hit_panel_ndc_z is None
+    assert payload.hit_plot_ndc_z is None
     assert payload.hit_data_xyz is None
     assert payload.front_facing is None
 
@@ -613,9 +600,7 @@ def test_query_view3d_mesh_triangle_pick_geometry_rejects_perspective_scope():
             near_far=(0.1, 10.0),
         ),
     )
-    snapshot = resolve_view3d_projection_snapshot(
-        view, layout_snapshot_id="layout:main"
-    )
+    snapshot = resolve_view3d_projection_snapshot(view, layout_snapshot_id="layout:main")
     mesh = MeshVisual(
         id="visual:mesh3d",
         positions=np.array(
@@ -643,9 +628,7 @@ def test_query_view3d_mesh_triangle_pick_geometry_rejects_perspective_scope():
 
 def test_query_view3d_mesh_triangle_pick_reports_miss_and_invalid_outside_panel():
     view = _canonical_query_view3d()
-    snapshot = resolve_view3d_projection_snapshot(
-        view, layout_snapshot_id="layout:main"
-    )
+    snapshot = resolve_view3d_projection_snapshot(view, layout_snapshot_id="layout:main")
     mesh = MeshVisual(
         id="visual:mesh3d",
         positions=np.array(
@@ -681,7 +664,7 @@ def test_query_view3d_mesh_triangle_pick_reports_miss_and_invalid_outside_panel(
 
 def test_mesh_pick_consumed_layout_distinguishes_guide_lane_from_outside_panel():
     view = _canonical_query_view3d()
-    layout = ResolvedLayoutSnapshot(
+    layout = resolved_single_panel_fixture(
         snapshot_id="layout:mesh-guide-lane",
         render_target=RenderTarget(200, 200, pixel_origin=PixelOrigin.TOP_LEFT),
         panel_rect_px=LogicalPixelRect(0, 0, 200, 200),
@@ -725,22 +708,14 @@ def test_mesh_pick_consumed_layout_distinguishes_guide_lane_from_outside_panel()
     assert guide_lane.extension_payload is None
     assert guide_lane.diagnostic == "query coordinate is outside the consumed data viewport"
     assert guide_lane.layout_snapshot_id == layout.snapshot_id
-    assert (
-        guide_lane.view_snapshot_id
-        == snapshot.view_projection_snapshot_id
-    )
+    assert guide_lane.view_snapshot_id == snapshot.view_projection_snapshot_id
     assert outside_panel.status is QueryStatus.INVALID
-    assert (
-        outside_panel.diagnostic
-        == View3DMeshPickDiagnosticCode.INVALID_OUTSIDE_PANEL.value
-    )
+    assert outside_panel.diagnostic == View3DMeshPickDiagnosticCode.INVALID_OUTSIDE_PANEL.value
 
 
 def test_query_view3d_mesh_triangle_pick_reports_stale_pick_scene_snapshot():
     view = _canonical_query_view3d()
-    snapshot = resolve_view3d_projection_snapshot(
-        view, layout_snapshot_id="layout:main"
-    )
+    snapshot = resolve_view3d_projection_snapshot(view, layout_snapshot_id="layout:main")
     mesh = MeshVisual(
         id="visual:mesh3d",
         positions=np.array(
@@ -771,9 +746,7 @@ def test_query_view3d_mesh_triangle_pick_reports_stale_pick_scene_snapshot():
 
 def test_query_view3d_mesh_triangle_pick_rejects_ndc3_mesh_scope():
     view = _canonical_query_view3d()
-    snapshot = resolve_view3d_projection_snapshot(
-        view, layout_snapshot_id="layout:main"
-    )
+    snapshot = resolve_view3d_projection_snapshot(view, layout_snapshot_id="layout:main")
     mesh = MeshVisual(
         id="visual:mesh3d",
         positions=np.array(
@@ -805,9 +778,7 @@ def test_query_view3d_mesh_triangle_pick_applies_projected_ndc_culling_before_de
     face_culling: FaceCulling, expected_primitive_index: int
 ):
     view = _canonical_query_view3d()
-    snapshot = resolve_view3d_projection_snapshot(
-        view, layout_snapshot_id="layout:main"
-    )
+    snapshot = resolve_view3d_projection_snapshot(view, layout_snapshot_id="layout:main")
     mesh = MeshVisual(
         id="visual:mesh3d",
         positions=np.array(
@@ -844,9 +815,7 @@ def test_query_view3d_mesh_triangle_pick_applies_projected_ndc_culling_before_de
 
 def test_query_view3d_mesh_triangle_pick_reports_projected_degenerate_miss():
     view = _canonical_query_view3d()
-    snapshot = resolve_view3d_projection_snapshot(
-        view, layout_snapshot_id="layout:main"
-    )
+    snapshot = resolve_view3d_projection_snapshot(view, layout_snapshot_id="layout:main")
     mesh = MeshVisual(
         id="visual:mesh3d",
         positions=np.array(
@@ -869,17 +838,14 @@ def test_query_view3d_mesh_triangle_pick_reports_projected_degenerate_miss():
     assert result.status == QueryStatus.MISS
     payload = result.extension_payload
     assert isinstance(payload, View3DMeshTrianglePickPayload)
-    assert (
-        View3DMeshPickDiagnosticCode.UNSUPPORTED_PROJECTED_DEGENERATE
-        in tuple(diagnostic.code for diagnostic in payload.diagnostics)
+    assert View3DMeshPickDiagnosticCode.UNSUPPORTED_PROJECTED_DEGENERATE in tuple(
+        diagnostic.code for diagnostic in payload.diagnostics
     )
 
 
 def test_query_view3d_mesh_triangle_pick_rejects_nonopaque_alpha():
     view = _canonical_query_view3d()
-    snapshot = resolve_view3d_projection_snapshot(
-        view, layout_snapshot_id="layout:main"
-    )
+    snapshot = resolve_view3d_projection_snapshot(view, layout_snapshot_id="layout:main")
     mesh = MeshVisual(
         id="visual:mesh3d",
         positions=np.array(
@@ -905,9 +871,7 @@ def test_query_view3d_mesh_triangle_pick_rejects_nonopaque_alpha():
 
 def test_query_view3d_ray_context_returns_center_ray_payload():
     view = _canonical_query_view3d()
-    snapshot = resolve_view3d_projection_snapshot(
-        view, layout_snapshot_id="layout:main"
-    )
+    snapshot = resolve_view3d_projection_snapshot(view, layout_snapshot_id="layout:main")
     request = QueryRequest(
         id="query:ray",
         panel_id="panel:main",
@@ -934,7 +898,7 @@ def test_query_view3d_ray_context_returns_center_ray_payload():
         layout_snapshot_id=snapshot.layout_snapshot_id,
         view_projection_snapshot_id=snapshot.view_projection_snapshot_id,
         panel_xy=(50.0, 50.0),
-        panel_ndc=(0.0, 0.0),
+        plot_ndc=(0.0, 0.0),
         near_data_point=(0.0, 0.0, 1.0),
         far_data_point=(0.0, 0.0, -1.0),
         ray_direction=(0.0, 0.0, -1.0),
@@ -943,9 +907,7 @@ def test_query_view3d_ray_context_returns_center_ray_payload():
 
 def test_query_view3d_ray_context_returns_corner_ray_payload():
     view = _canonical_query_view3d()
-    snapshot = resolve_view3d_projection_snapshot(
-        view, layout_snapshot_id="layout:main"
-    )
+    snapshot = resolve_view3d_projection_snapshot(view, layout_snapshot_id="layout:main")
     request = QueryRequest(
         id="query:ray",
         panel_id="panel:main",
@@ -963,7 +925,7 @@ def test_query_view3d_ray_context_returns_corner_ray_payload():
     assert result.status == QueryStatus.HIT
     payload = result.extension_payload
     assert isinstance(payload, View3DQueryPayload)
-    assert payload.panel_ndc == pytest.approx((1.0, 1.0))
+    assert payload.plot_ndc == pytest.approx((1.0, 1.0))
     assert payload.near_data_point == pytest.approx((1.0, 1.0, 1.0))
     assert payload.far_data_point == pytest.approx((1.0, 1.0, -1.0))
     assert payload.ray_direction == pytest.approx((0.0, 0.0, -1.0))
@@ -980,7 +942,7 @@ def test_query_view3d_ray_context_uses_snapshot_origin_and_rejects_title_lane(
     origin: PixelOrigin, expected_y_ndc: float
 ):
     view = _canonical_query_view3d()
-    layout = ResolvedLayoutSnapshot(
+    layout = resolved_single_panel_fixture(
         snapshot_id=f"layout:ray-origin:{origin.value}",
         render_target=RenderTarget(200, 150, pixel_origin=origin),
         panel_rect_px=LogicalPixelRect(20, 10, 160, 130),
@@ -1024,9 +986,7 @@ def test_query_view3d_ray_context_uses_snapshot_origin_and_rejects_title_lane(
 
 def test_query_view3d_ray_context_reports_stale_snapshot_mismatch():
     view = _canonical_query_view3d()
-    snapshot = resolve_view3d_projection_snapshot(
-        view, layout_snapshot_id="layout:main"
-    )
+    snapshot = resolve_view3d_projection_snapshot(view, layout_snapshot_id="layout:main")
     request = QueryRequest(
         id="query:ray",
         panel_id="panel:main",
@@ -1088,16 +1048,12 @@ def test_query_defers_vertex_colored_mesh_readback():
         positions=np.array([[-1.0, -1.0], [1.0, -1.0], [0.0, 1.0]], dtype=np.float32),
         faces=np.array([[0, 1, 2]], dtype=np.uint32),
         coordinate_space=CoordinateSpace.DATA,
-        color=np.array(
-            [[255, 0, 0, 255], [0, 255, 0, 255], [0, 0, 255, 255]], dtype=np.uint8
-        ),
+        color=np.array([[255, 0, 0, 255], [0, 255, 0, 255], [0, 0, 255, 255]], dtype=np.uint8),
         color_mode=MeshColorMode.VERTEX,
     )
 
     result = query_visuals(
-        QueryRequest(
-            id="query:mesh-vertex", panel_id="panel:main", coordinate=(0.0, 0.0)
-        ),
+        QueryRequest(id="query:mesh-vertex", panel_id="panel:main", coordinate=(0.0, 0.0)),
         [QueryVisualEntry(mesh)],
     )
 
@@ -1121,9 +1077,7 @@ def test_query_returns_frontmost_text_over_point():
     )
 
     result = query_visuals(
-        QueryRequest(
-            id="query:front-text", panel_id="panel:main", coordinate=(0.0, 0.0)
-        ),
+        QueryRequest(id="query:front-text", panel_id="panel:main", coordinate=(0.0, 0.0)),
         [QueryVisualEntry(points, z_order=0), QueryVisualEntry(text, z_order=2)],
     )
 
@@ -1142,9 +1096,7 @@ def test_query_text_misses_outside_anchor_neighborhood():
     )
 
     result = query_visuals(
-        QueryRequest(
-            id="query:text-miss", panel_id="panel:main", coordinate=(20.0, 0.0)
-        ),
+        QueryRequest(id="query:text-miss", panel_id="panel:main", coordinate=(20.0, 0.0)),
         [QueryVisualEntry(text)],
     )
 
@@ -1152,9 +1104,7 @@ def test_query_text_misses_outside_anchor_neighborhood():
 
 
 def test_query_request_defaults_to_data_scope():
-    request = QueryRequest(
-        id="query:default-scope", panel_id="panel:main", coordinate=(0.0, 0.0)
-    )
+    request = QueryRequest(id="query:default-scope", panel_id="panel:main", coordinate=(0.0, 0.0))
 
     assert request.scope == QueryScope.DATA
     assert request.requested_extension_payload_kinds == ()
@@ -1255,9 +1205,7 @@ def test_query_returns_outside_panel_before_testing_visuals():
     )
 
     result = query_visuals(
-        QueryRequest(
-            id="query:outside", panel_id="panel:main", coordinate=(10.0, 10.0)
-        ),
+        QueryRequest(id="query:outside", panel_id="panel:main", coordinate=(10.0, 10.0)),
         [QueryVisualEntry(points)],
         panel_bounds=(-1.0, 1.0, -1.0, 1.0),
     )
@@ -1269,13 +1217,9 @@ def test_query_returns_outside_panel_before_testing_visuals():
 
 def test_query_helper_results_use_diagnostics_for_terminal_failures():
     """Unsupported and failed are distinct non-hit terminal statuses."""
-    request = QueryRequest(
-        id="query:unsupported", panel_id="panel:main", coordinate=(0.0, 0.0)
-    )
+    request = QueryRequest(id="query:unsupported", panel_id="panel:main", coordinate=(0.0, 0.0))
 
-    unsupported = unsupported_query_result(
-        request, "backend does not advertise point-item queries"
-    )
+    unsupported = unsupported_query_result(request, "backend does not advertise point-item queries")
     failed = failed_query_result(request, "readback buffer allocation failed")
 
     assert unsupported.status == QueryStatus.UNSUPPORTED

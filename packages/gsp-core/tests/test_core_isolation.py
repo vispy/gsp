@@ -25,4 +25,3 @@ def test_canonical_colormaps_are_packaged_and_read_only() -> None:
         assert lut.dtype == np.dtype(np.uint8)
         assert not lut.flags.writeable
         assert np.all(lut[:, 3] == 255)
-

@@ -12,7 +12,11 @@ from gsp.protocol import (
     TickSpecKind,
     View2D,
 )
-from gsp_matplotlib.guide_query import QueryGuideEntry, query_axis_guides, unsupported_guide_query_result
+from gsp_matplotlib.guide_query import (
+    QueryGuideEntry,
+    query_axis_guides,
+    unsupported_guide_query_result,
+)
 
 
 def test_query_axis_guides_hits_explicit_x_tick():
@@ -71,7 +75,9 @@ def test_query_axis_guides_hits_auto_y_tick():
 
 def test_query_axis_guides_hits_reversed_auto_x_tick_from_same_view_snapshot():
     view = View2D(id="view:main", panel_id="panel:main", x_range=(1.0, -1.0), y_range=(1.0, -1.0))
-    guide = AxisGuide(id="guide:x", view_id=view.id, dimension=AxisDimension.X, side=AxisSide.BOTTOM)
+    guide = AxisGuide(
+        id="guide:x", view_id=view.id, dimension=AxisDimension.X, side=AxisSide.BOTTOM
+    )
 
     result = query_axis_guides(
         QueryRequest(id="query:reversed-x-guide", panel_id="panel:main", coordinate=(0.5, 1.0)),
@@ -141,7 +147,9 @@ def test_query_axis_guides_hits_spine_inside_reversed_view_bounds():
 
 def test_query_axis_guides_miss_when_coordinate_is_not_on_guide():
     view = View2D(id="view:main", panel_id="panel:main")
-    guide = AxisGuide(id="guide:x", view_id=view.id, dimension=AxisDimension.X, side=AxisSide.BOTTOM)
+    guide = AxisGuide(
+        id="guide:x", view_id=view.id, dimension=AxisDimension.X, side=AxisSide.BOTTOM
+    )
 
     result = query_axis_guides(
         QueryRequest(id="query:miss", panel_id="panel:main", coordinate=(0.0, 0.0)),
@@ -155,7 +163,13 @@ def test_query_axis_guides_miss_when_coordinate_is_not_on_guide():
 
 def test_query_axis_guides_ignores_hidden_guides():
     view = View2D(id="view:main", panel_id="panel:main")
-    guide = AxisGuide(id="guide:x", view_id=view.id, dimension=AxisDimension.X, side=AxisSide.BOTTOM, visible=False)
+    guide = AxisGuide(
+        id="guide:x",
+        view_id=view.id,
+        dimension=AxisDimension.X,
+        side=AxisSide.BOTTOM,
+        visible=False,
+    )
 
     result = query_axis_guides(
         QueryRequest(id="query:hidden", panel_id="panel:main", coordinate=(0.0, -1.0)),

@@ -6,7 +6,11 @@ from io import BytesIO
 
 import numpy as np
 
-from gsp.protocol import S022NpyDecoderPolicy, SecurityDiagnosticCode, validate_s022_npy_decoder_payload
+from gsp.protocol import (
+    S022NpyDecoderPolicy,
+    SecurityDiagnosticCode,
+    validate_s022_npy_decoder_payload,
+)
 
 
 def _npy_bytes(array: np.ndarray) -> bytes:
@@ -51,7 +55,9 @@ def test_s022_npy_decoder_rejects_invalid_magic_and_version():
 def test_s022_npy_decoder_rejects_object_dtype_pickle_payload():
     payload = _npy_bytes(np.array([{"forbidden": "object"}], dtype=object))
 
-    result = validate_s022_npy_decoder_payload(payload, _policy(expected_shape=(1,), expected_dtype="object"))
+    result = validate_s022_npy_decoder_payload(
+        payload, _policy(expected_shape=(1,), expected_dtype="object")
+    )
 
     assert not result.accepted
     assert SecurityDiagnosticCode.CHUNK_METADATA_INVALID in result.codes
@@ -61,8 +67,12 @@ def test_s022_npy_decoder_rejects_structured_and_string_dtypes():
     structured = _npy_bytes(np.array([(1, 2)], dtype=[("x", "<i4"), ("y", "<i4")]))
     string = _npy_bytes(np.array(["bad"], dtype="<U3"))
 
-    structured_result = validate_s022_npy_decoder_payload(structured, _policy(expected_shape=(1,), expected_dtype="void64"))
-    string_result = validate_s022_npy_decoder_payload(string, _policy(expected_shape=(1,), expected_dtype="str96"))
+    structured_result = validate_s022_npy_decoder_payload(
+        structured, _policy(expected_shape=(1,), expected_dtype="void64")
+    )
+    string_result = validate_s022_npy_decoder_payload(
+        string, _policy(expected_shape=(1,), expected_dtype="str96")
+    )
 
     assert not structured_result.accepted
     assert not string_result.accepted
@@ -105,7 +115,9 @@ def test_s022_npy_decoder_rejects_header_element_and_decoded_byte_limits():
     large = _npy_bytes(np.zeros((4, 4), dtype=np.float32))
 
     header_result = validate_s022_npy_decoder_payload(payload, _policy(max_header_bytes=4))
-    element_result = validate_s022_npy_decoder_payload(large, _policy(expected_shape=(4, 4), max_elements=4))
+    element_result = validate_s022_npy_decoder_payload(
+        large, _policy(expected_shape=(4, 4), max_elements=4)
+    )
     decoded_result = validate_s022_npy_decoder_payload(payload, _policy(max_decoded_bytes=4))
 
     assert not header_result.accepted

@@ -209,25 +209,13 @@ TEXTURE2D_RGBA8_CAPABILITY = "texture2d.rgba8.v1"
 MESH_UV_VERTEX2D_CAPABILITY = "meshvisual.uv.vertex2d.v1"
 MESH_MATERIAL_TEXTURE2D_UNLIT_CAPABILITY = "meshvisual.material.texture2d_unlit.v1"
 MESH_TEXTURE_FILTER_LINEAR_CAPABILITY = "meshvisual.texture_filter.linear.v1"
-GSP_VISPY2_PRODUCER_MESH_TEXTURE2D_UNLIT_CAPABILITY = (
-    "gsp_vispy2.producer.mesh.texture2d_unlit.v1"
-)
-GSP_VISPY2_PRODUCER_MESH_TEXTURE_FILTER_LINEAR_CAPABILITY = (
-    "gsp_vispy2.producer.mesh.texture_filter.linear.v1"
-)
 PIXEL_VISUAL_CAPABILITY = "pixelvisual.v1"
-PIXEL_VISUAL_POSITIONS3D_DATA_VIEW3D_CAPABILITY = (
-    "pixelvisual.positions3d.data.view3d.v1"
-)
+PIXEL_VISUAL_POSITIONS3D_DATA_VIEW3D_CAPABILITY = "pixelvisual.positions3d.data.view3d.v1"
 PIXEL_VISUAL_EXACT_LOGICAL_SIZE_CAPABILITY = "pixelvisual.exact_logical_size.v1"
 SPHERE_VISUAL_CAPABILITY = "spherevisual.v1"
-SPHERE_VISUAL_ANALYTIC_SURFACE_DEPTH_CAPABILITY = (
-    "spherevisual.analytic_surface_depth.v1"
-)
+SPHERE_VISUAL_ANALYTIC_SURFACE_DEPTH_CAPABILITY = "spherevisual.analytic_surface_depth.v1"
 VECTOR_VISUAL_STRAIGHT_CAPABILITY = "vectorvisual.straight.v1"
-VECTOR_VISUAL_POSITIONS3D_DATA_VIEW3D_CAPABILITY = (
-    "vectorvisual.positions3d.data.view3d.v1"
-)
+VECTOR_VISUAL_POSITIONS3D_DATA_VIEW3D_CAPABILITY = "vectorvisual.positions3d.data.view3d.v1"
 VECTOR_VISUAL_TRIANGLE_HEAD_CAPABILITY = "vectorvisual.triangle_head.v1"
 PRIMITIVE_VISUAL_CAPABILITY = "primitivevisual.v1"
 PRIMITIVE_VISUAL_INDEXED_CAPABILITY = "primitivevisual.indexed.v1"
@@ -237,9 +225,7 @@ PRIMITIVE_VISUAL_LINE_STRIP_CAPABILITY = "primitivevisual.line_strip"
 PRIMITIVE_VISUAL_TRIANGLE_LIST_CAPABILITY = "primitivevisual.triangle_list"
 PRIMITIVE_VISUAL_TRIANGLE_STRIP_CAPABILITY = "primitivevisual.triangle_strip"
 TEXT_VISUAL_BILLBOARD3D_CAPABILITY = "textvisual.billboard3d.v1"
-TEXT_VISUAL_BILLBOARD3D_DEPTH_OCCLUSION_CAPABILITY = (
-    "textvisual.billboard3d.depth_occlusion.v1"
-)
+TEXT_VISUAL_BILLBOARD3D_DEPTH_OCCLUSION_CAPABILITY = "textvisual.billboard3d.depth_occlusion.v1"
 PRIMITIVE_VISUAL_TOPOLOGY_CAPABILITIES: Mapping[PrimitiveTopology, str] = {
     PrimitiveTopology.POINT_LIST: PRIMITIVE_VISUAL_POINT_LIST_CAPABILITY,
     PrimitiveTopology.LINE_LIST: PRIMITIVE_VISUAL_LINE_LIST_CAPABILITY,
@@ -248,9 +234,7 @@ PRIMITIVE_VISUAL_TOPOLOGY_CAPABILITIES: Mapping[PrimitiveTopology, str] = {
     PrimitiveTopology.TRIANGLE_STRIP: PRIMITIVE_VISUAL_TRIANGLE_STRIP_CAPABILITY,
 }
 MESH_NORMALS_FACE3D_CAPABILITY = "meshvisual.normals.face3d.v1"
-MESH_NORMAL_GENERATION_FACE_FLAT_CAPABILITY = (
-    "meshvisual.normal_generation.face_flat.v1"
-)
+MESH_NORMAL_GENERATION_FACE_FLAT_CAPABILITY = "meshvisual.normal_generation.face_flat.v1"
 
 
 @dataclass(frozen=True, slots=True)
@@ -323,9 +307,7 @@ class PixelVisual:
         _validate_visual_transform(self.transform)
         item_count = _validate_positions(self.positions)
         _validate_rgba_values(self.colors, item_count, field_name="colors")
-        _validate_positive_values(
-            self.pixel_size_px, item_count, field_name="pixel_size_px"
-        )
+        _validate_positive_values(self.pixel_size_px, item_count, field_name="pixel_size_px")
 
     def pixel_size_values(self) -> npt.NDArray[np.float32]:
         """Return one logical-pixel width per item."""
@@ -363,9 +345,7 @@ class SphereVisual:
     def radius_values(self) -> npt.NDArray[np.float32]:
         """Return one DATA-space radius per sphere."""
         if isinstance(self.radii, np.ndarray):
-            return np.ascontiguousarray(
-                np.asarray(self.radii, dtype=np.float32).reshape(-1)
-            )
+            return np.ascontiguousarray(np.asarray(self.radii, dtype=np.float32).reshape(-1))
         return np.full((self.positions.shape[0],), float(self.radii), dtype=np.float32)
 
 
@@ -416,12 +396,8 @@ class VectorVisual:
     def width_values(self) -> npt.NDArray[np.float32]:
         """Return one logical-pixel stroke width per vector item."""
         if isinstance(self.widths_px, np.ndarray):
-            return np.ascontiguousarray(
-                np.asarray(self.widths_px, dtype=np.float32).reshape(-1)
-            )
-        return np.full(
-            (self.positions.shape[0],), float(self.widths_px), dtype=np.float32
-        )
+            return np.ascontiguousarray(np.asarray(self.widths_px, dtype=np.float32).reshape(-1))
+        return np.full((self.positions.shape[0],), float(self.widths_px), dtype=np.float32)
 
     def endpoint_values(
         self,
@@ -468,25 +444,17 @@ class PrimitiveVisual:
         element_count = vertex_count
         if self.indices is not None:
             if self.indices.ndim != 1:
-                raise ValueError(
-                    "primitivevisual_invalid_indices_shape: indices must be flat"
-                )
+                raise ValueError("primitivevisual_invalid_indices_shape: indices must be flat")
             if np.issubdtype(self.indices.dtype, np.floating) and not np.all(
                 np.isfinite(self.indices)
             ):
-                raise ValueError(
-                    "primitivevisual_nonfinite_index: indices must be finite"
-                )
+                raise ValueError("primitivevisual_nonfinite_index: indices must be finite")
             if not np.issubdtype(self.indices.dtype, np.integer) or np.issubdtype(
                 self.indices.dtype, np.bool_
             ):
-                raise TypeError(
-                    "primitivevisual_noninteger_index: indices must have integer dtype"
-                )
+                raise TypeError("primitivevisual_noninteger_index: indices must have integer dtype")
             if np.any(self.indices < 0):
-                raise ValueError(
-                    "primitivevisual_negative_index: indices must be non-negative"
-                )
+                raise ValueError("primitivevisual_negative_index: indices must be non-negative")
             if np.any(self.indices >= vertex_count):
                 raise ValueError(
                     "primitivevisual_index_out_of_range: indices must reference positions"
@@ -573,9 +541,7 @@ class MarkerVisual:
     def angle_values(self) -> npt.NDArray[np.float32]:
         """Return one angle in radians per marker."""
         if isinstance(self.angle, np.ndarray):
-            return np.ascontiguousarray(
-                np.asarray(self.angle, dtype=np.float32).reshape(-1)
-            )
+            return np.ascontiguousarray(np.asarray(self.angle, dtype=np.float32).reshape(-1))
         return np.full((self.positions.shape[0],), float(self.angle), dtype=np.float32)
 
 
@@ -609,12 +575,8 @@ class SegmentVisual:
     def width_values(self) -> npt.NDArray[np.float32]:
         """Return one pixel stroke width per segment."""
         if isinstance(self.widths, np.ndarray):
-            return np.ascontiguousarray(
-                np.asarray(self.widths, dtype=np.float32).reshape(-1)
-            )
-        return np.full(
-            (self.start_positions.shape[0],), float(self.widths), dtype=np.float32
-        )
+            return np.ascontiguousarray(np.asarray(self.widths, dtype=np.float32).reshape(-1))
+        return np.full((self.start_positions.shape[0],), float(self.widths), dtype=np.float32)
 
 
 @dataclass(frozen=True, slots=True)
@@ -657,9 +619,7 @@ class PathVisual:
     def width_values(self) -> npt.NDArray[np.float32]:
         """Return one pixel stroke width per subpath."""
         if isinstance(self.widths, np.ndarray):
-            return np.ascontiguousarray(
-                np.asarray(self.widths, dtype=np.float32).reshape(-1)
-            )
+            return np.ascontiguousarray(np.asarray(self.widths, dtype=np.float32).reshape(-1))
         return np.full((len(self.path_lengths),), float(self.widths), dtype=np.float32)
 
 
@@ -702,12 +662,8 @@ class MeshVisual:
 
         if self.face_color_encoding is None:
             if self.color is None:
-                raise ValueError(
-                    "color is required when face_color_encoding is omitted"
-                )
-            mode = _resolve_mesh_color_mode(
-                self.color, self.color_mode, vertex_count, face_count
-            )
+                raise ValueError("color is required when face_color_encoding is omitted")
+            mode = _resolve_mesh_color_mode(self.color, self.color_mode, vertex_count, face_count)
             _validate_mesh_color(self.color, mode, vertex_count, face_count)
         else:
             if self.color is not None:
@@ -730,10 +686,7 @@ class MeshVisual:
             face_count,
             self.normal_generation,
         )
-        if (
-            self.normal_generation is not MeshNormalGeneration.NONE
-            and self.normals is not None
-        ):
+        if self.normal_generation is not MeshNormalGeneration.NONE and self.normals is not None:
             raise ValueError(
                 "normal_source_conflict: normal_generation requires normals to be omitted"
             )
@@ -743,9 +696,7 @@ class MeshVisual:
         ):
             raise ValueError("face_flat normal generation requires 3D positions")
         if self.normals is not None:
-            _validate_mesh_normals(
-                self.normals, resolved_normal_mode, vertex_count, face_count
-            )
+            _validate_mesh_normals(self.normals, resolved_normal_mode, vertex_count, face_count)
 
         if not isinstance(self.shading, MeshShading):
             raise TypeError("shading must be a MeshShading")
@@ -835,20 +786,14 @@ class ImageVisual:
             raise ValueError("image channel dimension must be 3 or 4")
         if self.image.shape[0] <= 0 or self.image.shape[1] <= 0:
             raise ValueError("image dimensions must be positive")
-        if len(self.extent) != 4 or not all(
-            np.isfinite(value) for value in self.extent
-        ):
+        if len(self.extent) != 4 or not all(np.isfinite(value) for value in self.extent):
             raise ValueError("extent must contain four finite values")
         if self.extent[0] == self.extent[1] or self.extent[2] == self.extent[3]:
             raise ValueError("extent width and height must be non-zero")
         if self.image.ndim != 2 and (
-            self.colormap is not None
-            or self.clim is not None
-            or self.color_scale_id is not None
+            self.colormap is not None or self.clim is not None or self.color_scale_id is not None
         ):
-            raise ValueError(
-                "colormap, clim, and color_scale_id apply to scalar images only"
-            )
+            raise ValueError("colormap, clim, and color_scale_id apply to scalar images only")
         if self.color_scale_id is not None:
             validate_id(self.color_scale_id)
         if self.clim is not None:
@@ -880,9 +825,7 @@ class TextVisual:
     texts: Sequence[str]
     positions: FloatArray
     coordinate_space: CoordinateSpace
-    rgba: ColorArray = field(
-        default_factory=lambda: np.array([0, 0, 0, 255], dtype=np.uint8)
-    )
+    rgba: ColorArray = field(default_factory=lambda: np.array([0, 0, 0, 255], dtype=np.uint8))
     font_size_px: FloatArray | float = 13.0
     font_role: FontRole = FontRole.DEFAULT
     anchor_x: TextAnchorX | TextAnchorXTuple = TextAnchorX.LEFT
@@ -900,17 +843,11 @@ class TextVisual:
         if not isinstance(self.coordinate_space, CoordinateSpace):
             raise TypeError("coordinate_space must be a CoordinateSpace")
         _validate_rgba_values(self.rgba, text_count, field_name="rgba")
-        _validate_positive_values(
-            self.font_size_px, text_count, field_name="font_size_px"
-        )
+        _validate_positive_values(self.font_size_px, text_count, field_name="font_size_px")
         if not isinstance(self.font_role, FontRole):
             raise TypeError("font_role must be a FontRole")
-        _validate_enum_values(
-            self.anchor_x, TextAnchorX, text_count, field_name="anchor_x"
-        )
-        _validate_enum_values(
-            self.anchor_y, TextAnchorY, text_count, field_name="anchor_y"
-        )
+        _validate_enum_values(self.anchor_x, TextAnchorX, text_count, field_name="anchor_x")
+        _validate_enum_values(self.anchor_y, TextAnchorY, text_count, field_name="anchor_y")
         _validate_angles(self.rotation_rad, text_count, field_name="rotation_rad")
         if isinstance(self.z_order, bool) or not isinstance(self.z_order, int):
             raise TypeError("z_order must be an integer")
@@ -920,18 +857,14 @@ class TextVisual:
         if self.rgba.shape == (4,):
             return cast(
                 ColorArray,
-                np.ascontiguousarray(
-                    np.repeat(self.rgba[np.newaxis, :], len(self.texts), axis=0)
-                ),
+                np.ascontiguousarray(np.repeat(self.rgba[np.newaxis, :], len(self.texts), axis=0)),
             )
         return cast(ColorArray, np.ascontiguousarray(self.rgba))
 
     def font_size_values(self) -> npt.NDArray[np.float32]:
         """Return one font size in logical pixels per text item."""
         if isinstance(self.font_size_px, np.ndarray):
-            return np.ascontiguousarray(
-                np.asarray(self.font_size_px, dtype=np.float32).reshape(-1)
-            )
+            return np.ascontiguousarray(np.asarray(self.font_size_px, dtype=np.float32).reshape(-1))
         return np.full((len(self.texts),), float(self.font_size_px), dtype=np.float32)
 
     def anchor_x_values(self) -> TextAnchorXTuple:
@@ -949,9 +882,7 @@ class TextVisual:
     def rotation_values(self) -> npt.NDArray[np.float32]:
         """Return one rotation in radians per text item."""
         if isinstance(self.rotation_rad, np.ndarray):
-            return np.ascontiguousarray(
-                np.asarray(self.rotation_rad, dtype=np.float32).reshape(-1)
-            )
+            return np.ascontiguousarray(np.asarray(self.rotation_rad, dtype=np.float32).reshape(-1))
         return np.full((len(self.texts),), float(self.rotation_rad), dtype=np.float32)
 
 
@@ -1099,8 +1030,7 @@ def _validate_mesh_flat_lambert_intrinsic(
         )
     if normal_mode is not MeshNormalMode.FACE:
         raise ValueError(
-            "flat_lambert_requires_face_normals: flat_lambert requires "
-            'normal_mode="face"'
+            'flat_lambert_requires_face_normals: flat_lambert requires normal_mode="face"'
         )
     if resolved_normal_mode is not MeshNormalMode.FACE:
         raise ValueError("flat_lambert_requires_face_normals")
@@ -1148,8 +1078,7 @@ def _validate_mesh_texture2d_fields(
             )
         if uv_mode is not MeshUVMode.NONE or uvs is not None:
             raise ValueError(
-                "meshvisual_uv_topology_unsupported: UV fields require "
-                'shading="texture2d_unlit"'
+                'meshvisual_uv_topology_unsupported: UV fields require shading="texture2d_unlit"'
             )
         return
 
@@ -1160,10 +1089,7 @@ def _validate_mesh_texture2d_fields(
         raise ValueError(
             'meshvisual_uv_required: texture2d_unlit requires uv_mode="vertex" and uvs'
         )
-    if (
-        normal_mode is not MeshNormalMode.NONE
-        or normal_generation is not MeshNormalGeneration.NONE
-    ):
+    if normal_mode is not MeshNormalMode.NONE or normal_generation is not MeshNormalGeneration.NONE:
         raise ValueError(
             "meshvisual_texture_lighting_conflict: texture2d_unlit does not accept "
             "normal or lighting material fields"
@@ -1180,9 +1106,7 @@ def _validate_mesh_uvs(uvs: FloatArray, vertex_count: int) -> None:
     if uvs.dtype not in (np.dtype(np.float32), np.dtype(np.float64)):
         raise TypeError("meshvisual_uv_shape_mismatch: uvs must be float32 or float64")
     if uvs.shape != (vertex_count, 2):
-        raise ValueError(
-            f"meshvisual_uv_shape_mismatch: uvs must have shape ({vertex_count}, 2)"
-        )
+        raise ValueError(f"meshvisual_uv_shape_mismatch: uvs must have shape ({vertex_count}, 2)")
     if not np.all(np.isfinite(uvs)):
         raise ValueError("meshvisual_uv_nonfinite: uvs must be finite")
 
@@ -1205,9 +1129,7 @@ def _generate_flat_face_normals(positions: FloatArray, faces: IndexArray) -> Flo
     edge_b = triangles[:, 2, :] - triangles[:, 0, :]
     raw = np.cross(edge_a, edge_b)
     if not np.all(np.isfinite(raw)):
-        raise ValueError(
-            "face_normal_generation_degenerate: generated normals must be finite"
-        )
+        raise ValueError("face_normal_generation_degenerate: generated normals must be finite")
     lengths = np.linalg.norm(raw, axis=1)
     if not np.all(np.isfinite(lengths)) or np.any(lengths == 0.0):
         raise ValueError(
@@ -1218,18 +1140,14 @@ def _generate_flat_face_normals(positions: FloatArray, faces: IndexArray) -> Flo
     return cast(FloatArray, np.ascontiguousarray(normalized, dtype=positions.dtype))
 
 
-def validate_mesh_visual_flat_lambert(
-    visual: MeshVisual, *, view3d: object | None
-) -> None:
+def validate_mesh_visual_flat_lambert(visual: MeshVisual, *, view3d: object | None) -> None:
     """Validate one mesh/view pair against the accepted S039 Lambert boundary."""
     from .view3d import View3D
 
     if not isinstance(visual, MeshVisual):
         raise TypeError("visual must be a MeshVisual")
     if visual.canonical_shading() is not MeshShading.FLAT_LAMBERT:
-        raise ValueError(
-            "validate_mesh_visual_flat_lambert requires flat_lambert shading"
-        )
+        raise ValueError("validate_mesh_visual_flat_lambert requires flat_lambert shading")
     if not isinstance(view3d, View3D):
         raise ValueError("flat_lambert_requires_view3d: flat_lambert requires a View3D")
     visual.normalized_face_normals()
@@ -1244,16 +1162,12 @@ def validate_mesh_visual_texture2d_unlit(
     if not isinstance(visual, MeshVisual):
         raise TypeError("visual must be a MeshVisual")
     if visual.canonical_shading() is not MeshShading.TEXTURE2D_UNLIT:
-        raise ValueError(
-            "validate_mesh_visual_texture2d_unlit requires texture2d_unlit shading"
-        )
+        raise ValueError("validate_mesh_visual_texture2d_unlit requires texture2d_unlit shading")
     if visual.texture2d_id is None:
         raise ValueError("meshvisual_texture_required: texture2d_id is required")
     texture = texture_resources.get(visual.texture2d_id)
     if texture is None:
-        raise ValueError(
-            f"texture2d_unknown_id: unknown Texture2D id {visual.texture2d_id!r}"
-        )
+        raise ValueError(f"texture2d_unknown_id: unknown Texture2D id {visual.texture2d_id!r}")
     if not isinstance(texture, Texture2D):
         raise TypeError("texture2d_invalid_resource: expected Texture2D")
 
@@ -1269,9 +1183,7 @@ def _validate_shapes(shape: MarkerShape | MarkerShapeTuple, count: int) -> None:
         raise TypeError("shape entries must be MarkerShape values")
 
 
-def _validate_sizes(
-    sizes: FloatArray | float, count: int, *, field_name: str = "sizes"
-) -> None:
+def _validate_sizes(sizes: FloatArray | float, count: int, *, field_name: str = "sizes") -> None:
     if isinstance(sizes, np.ndarray):
         if sizes.dtype not in (np.dtype(np.float32), np.dtype(np.float64)):
             raise TypeError(f"{field_name} must be float32 or float64")
@@ -1290,9 +1202,7 @@ def _validate_sizes(
         raise ValueError(f"{field_name} must be non-negative")
 
 
-def _validate_angles(
-    angle: FloatArray | float, count: int, *, field_name: str = "angle"
-) -> None:
+def _validate_angles(angle: FloatArray | float, count: int, *, field_name: str = "angle") -> None:
     if isinstance(angle, np.ndarray):
         if angle.dtype not in (np.dtype(np.float32), np.dtype(np.float64)):
             raise TypeError(f"{field_name} must be float32 or float64")
@@ -1325,9 +1235,7 @@ def _validate_texts(texts: Sequence[str]) -> int:
     return len(texts)
 
 
-def _validate_positive_values(
-    values: FloatArray | float, count: int, *, field_name: str
-) -> None:
+def _validate_positive_values(values: FloatArray | float, count: int, *, field_name: str) -> None:
     _validate_sizes(values, count, field_name=field_name)
     if isinstance(values, np.ndarray):
         if np.any(values <= 0):
@@ -1356,9 +1264,7 @@ def _validate_color_or_scalar_encoding(
 ) -> None:
     if encoding is None:
         if colors is None:
-            raise ValueError(
-                f"{field_name} is required when scalar encoding is omitted"
-            )
+            raise ValueError(f"{field_name} is required when scalar encoding is omitted")
         if (
             field_name == "colors"
             and len(color_shape) == 2
@@ -1371,9 +1277,7 @@ def _validate_color_or_scalar_encoding(
         return
     if colors is not None:
         raise ValueError(f"{field_name} and scalar encoding are mutually exclusive")
-    validate_scalar_encoding_shape(
-        encoding, slot=slot, shape=scalar_shape, domain=domain
-    )
+    validate_scalar_encoding_shape(encoding, slot=slot, shape=scalar_shape, domain=domain)
 
 
 def _validate_enum_values(
@@ -1389,9 +1293,7 @@ def _validate_enum_values(
         raise TypeError(f"{field_name} entries must be {enum_type.__name__} values")
 
 
-def _validate_rgba_array(
-    colors: ColorArray, *, shape: tuple[int, ...], field_name: str
-) -> None:
+def _validate_rgba_array(colors: ColorArray, *, shape: tuple[int, ...], field_name: str) -> None:
     if colors.shape != shape:
         raise ValueError(f"{field_name} must have shape {shape}")
     if colors.dtype == np.dtype(np.uint8):

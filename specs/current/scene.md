@@ -34,24 +34,21 @@ revision.
 
 ## Panels
 
-A panel is a rectangular presentation and query region. It associates views, visuals, and guides with resolved layout geometry. Panel coordinates are the common boundary for rendering, navigation, and queries.
+A panel is a scene-scoped identity node that associates views, attachments, and guides. It does not own producer topology, allocation geometry, clipping, styling, hierarchy, or generic metadata. Outer allocation belongs to the scene layout intent; concrete geometry belongs to the resolved layout snapshot.
 
 ### Panel record
 
 | Field | Type | Required | Default | Meaning |
 |---|---|---:|---|---|
-| `id` | identifier | yes | — | Panel identity. |
-| `parent_id` | panel identifier or null | no | null | Optional layout parent; cycles are invalid. |
-| `clip` | boolean | no | true | Clip data contributions to the resolved plot rectangle. |
-| `background_rgba` | RGBA8 or null | no | null | Semantic background; null inherits presentation policy. |
-| `metadata` | string-keyed map | no | empty | Non-semantic application metadata. |
+| `id` | identifier | yes | — | Identity unique within the owning scene. |
 
-`GSP-SCENE-007`: panel geometry is not stored as an unqualified backend rectangle. Requested layout
-intent and resolved logical-pixel geometry are distinct records.
+The record is closed. Unknown fields are invalid. In particular, producer figure identity, allocation rectangles, clipping, hierarchy, background styling, and metadata are not panel fields.
+
+`GSP-SCENE-007`: every scene contains one required `panel_layout`. Every panel is placed exactly once; missing, duplicate, and unknown panel references fail validation. Panel geometry is never stored as an unqualified backend rectangle.
 
 ## Views
 
-`View2D` maps two-dimensional data domains into a panel. `View3D` combines a camera and projection with a panel. A visual in data coordinates requires the appropriate view; a visual already expressed in panel NDC does not acquire data meaning implicitly.
+`View2D` maps two-dimensional data domains into a panel. `View3D` combines a camera and projection with a panel. A visual in data coordinates requires the appropriate view; a visual already expressed in plot NDC does not acquire data meaning implicitly.
 
 `GSP-SCENE-008`: a panel may have at most one active primary data view per view role in core GSP
 0.2. Multiple overlay views require explicit attachments and capability support; association is

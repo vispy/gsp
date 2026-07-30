@@ -65,7 +65,10 @@ def test_axis_provider_selection_policies():
 
     assert caps.select_axis_provider(AxisProviderRequest(policy="require_strict_gsp")) == generated
     assert caps.select_axis_provider(AxisProviderRequest(policy="prefer_native")) == native
-    assert caps.select_axis_provider(AxisProviderRequest(policy="generated_primitives_only")) == generated
+    assert (
+        caps.select_axis_provider(AxisProviderRequest(policy="generated_primitives_only"))
+        == generated
+    )
     assert caps.select_axis_provider(AxisProviderRequest(policy="disabled")) is None
 
 
@@ -84,7 +87,9 @@ def test_semantic_axis_guide_intent_is_not_a_data_visual():
         label_text="time",
         tick_spec=ticks,
     )
-    title = PanelTextGuide(id="guide:title", panel_id="panel:main", role=PanelTextRole.TITLE, text="Demo")
+    title = PanelTextGuide(
+        id="guide:title", panel_id="panel:main", role=PanelTextRole.TITLE, text="Demo"
+    )
 
     assert guide.tick_spec.explicit_values == (0.0, 0.5, 1.0)
     assert guide.label_text == "time"

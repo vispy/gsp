@@ -19,8 +19,8 @@ from gsp.protocol import (
     View3DQueryPayload,
     VisualFamily,
     classify_logical_coordinate,
-    plot_logical_px_to_panel_ndc,
-    unproject_view3d_panel_ndc_point,
+    plot_logical_px_to_plot_ndc,
+    unproject_view3d_plot_ndc_point,
 )
 
 
@@ -182,21 +182,22 @@ def datoviz_query_view3d_ray_context(
             view_snapshot_id=snapshot.view_projection_snapshot_id,
         )
 
-    panel_ndc = (
-        plot_logical_px_to_panel_ndc(layout_snapshot, request.coordinate)
+    plot_ndc = (
+        plot_logical_px_to_plot_ndc(layout_snapshot, request.coordinate)
         if layout_snapshot is not None
         else _panel_coordinate_to_ndc(request.coordinate, panel_bounds)
     )
     aspect_ratio = (
-        layout_snapshot.plot_rect_px.width / layout_snapshot.plot_rect_px.height
+        layout_snapshot.only_panel().plot_rect_px.width
+        / layout_snapshot.only_panel().plot_rect_px.height
         if layout_snapshot is not None
         else _panel_bounds_aspect_ratio(panel_bounds)
     )
-    near = unproject_view3d_panel_ndc_point(
-        view, (panel_ndc[0], panel_ndc[1], -1.0), aspect_ratio=aspect_ratio
+    near = unproject_view3d_plot_ndc_point(
+        view, (plot_ndc[0], plot_ndc[1], -1.0), aspect_ratio=aspect_ratio
     )
-    far = unproject_view3d_panel_ndc_point(
-        view, (panel_ndc[0], panel_ndc[1], 1.0), aspect_ratio=aspect_ratio
+    far = unproject_view3d_plot_ndc_point(
+        view, (plot_ndc[0], plot_ndc[1], 1.0), aspect_ratio=aspect_ratio
     )
     ray_direction = _normalized3(_sub3(far, near))
     payload = View3DQueryPayload(
@@ -205,7 +206,7 @@ def datoviz_query_view3d_ray_context(
         layout_snapshot_id=snapshot.layout_snapshot_id,
         view_projection_snapshot_id=snapshot.view_projection_snapshot_id,
         panel_xy=request.coordinate,
-        panel_ndc=panel_ndc,
+        plot_ndc=plot_ndc,
         near_data_point=near,
         far_data_point=far,
         ray_direction=ray_direction,
@@ -215,7 +216,7 @@ def datoviz_query_view3d_ray_context(
         status=QueryStatus.HIT,
         hit=True,
         panel_coordinate=request.coordinate,
-        visual_coordinate=panel_ndc,
+        visual_coordinate=plot_ndc,
         data_coordinate=(near[0], near[1]),
         value={
             "kind": "view3d-ray",
@@ -315,7 +316,10 @@ def _panel_coordinate(raw: Any) -> tuple[float, float]:
     framebuffer = _field(raw, "framebuffer_position")
     framebuffer_sequence = _sequence(framebuffer)
     if framebuffer_sequence is not None and len(framebuffer_sequence) >= 2:
-        return (float(cast(Any, framebuffer_sequence[0])), float(cast(Any, framebuffer_sequence[1])))
+        return (
+            float(cast(Any, framebuffer_sequence[0])),
+            float(cast(Any, framebuffer_sequence[1])),
+        )
     return (0.0, 0.0)
 
 

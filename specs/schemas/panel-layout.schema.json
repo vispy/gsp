@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gsp.dev/schema/0.2/panel-layout.schema.json",
+  "title": "ExplicitPanelLayoutV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "placements"],
+  "properties": {
+    "kind": {"const": "layout.panel.explicit_rects.v1"},
+    "placements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["panel_id", "allocation_rect"],
+        "properties": {
+          "panel_id": {"type": "string", "minLength": 1},
+          "allocation_rect": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["left", "top", "width", "height"],
+            "properties": {
+              "left": {"type": "number", "minimum": 0, "maximum": 1},
+              "top": {"type": "number", "minimum": 0, "maximum": 1},
+              "width": {"type": "number", "exclusiveMinimum": 0, "maximum": 1},
+              "height": {"type": "number", "exclusiveMinimum": 0, "maximum": 1}
+            }
+          }
+        }
+      }
+    }
+  }
+}

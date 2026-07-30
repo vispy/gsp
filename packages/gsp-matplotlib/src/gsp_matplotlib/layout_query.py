@@ -58,11 +58,11 @@ def _queryable_boxes(
     snapshot: ResolvedLayoutSnapshot,
 ) -> tuple[ResolvedGuideBox, ...]:
     return (
-        snapshot.title_boxes
-        + snapshot.axis_label_boxes
-        + snapshot.tick_label_boxes
-        + snapshot.legend_boxes
-        + snapshot.colorbar_boxes
+        snapshot.only_panel().title_boxes
+        + snapshot.only_panel().axis_label_boxes
+        + snapshot.only_panel().tick_label_boxes
+        + snapshot.only_panel().legend_boxes
+        + snapshot.only_panel().colorbar_boxes
     )
 
 

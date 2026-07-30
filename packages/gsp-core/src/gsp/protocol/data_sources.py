@@ -10,7 +10,12 @@ from typing import Any
 import numpy as np
 import numpy.typing as npt
 
-from .extensions import ExtensionKind, ExtensionManifest, TILED_IMAGE_EXTENSION_ID, TILED_IMAGE_EXTENSION_VERSION
+from .extensions import (
+    ExtensionKind,
+    ExtensionManifest,
+    TILED_IMAGE_EXTENSION_ID,
+    TILED_IMAGE_EXTENSION_VERSION,
+)
 from .ids import validate_id
 
 
@@ -181,7 +186,9 @@ class TiledImageSource:
         if self.credential_policy != CredentialPolicy.NONE:
             raise ValueError("executable v0.1 tiled image proof requires credential_policy=none")
         if self.locality not in (DataLocality.SYNTHETIC, DataLocality.IN_MEMORY):
-            raise ValueError("executable v0.1 tiled image proof supports only synthetic/in-memory locality")
+            raise ValueError(
+                "executable v0.1 tiled image proof supports only synthetic/in-memory locality"
+            )
         if self.origin not in ("upper", "lower"):
             raise ValueError("origin must be upper or lower")
 
@@ -266,7 +273,9 @@ class ViewportTileRequest:
             raise ValueError("source_rect must be x, y, width, height with positive size")
         if self.level < 0:
             raise ValueError("level must be non-negative")
-        if self.output_shape is not None and (self.output_shape[0] <= 0 or self.output_shape[1] <= 0):
+        if self.output_shape is not None and (
+            self.output_shape[0] <= 0 or self.output_shape[1] <= 0
+        ):
             raise ValueError("output_shape dimensions must be positive")
 
 
@@ -349,7 +358,9 @@ class FakeTiledImageProvider:
     def get_viewport_mosaic(self, request: ViewportTileRequest) -> ViewportMosaicResult:
         """Materialize a deterministic source-rectangle mosaic."""
         if request.source_id != self.source.id:
-            raise ValueError(f"provider source {self.source.id!r} cannot serve {request.source_id!r}")
+            raise ValueError(
+                f"provider source {self.source.id!r} cannot serve {request.source_id!r}"
+            )
         height, width = self.source.shape_for_level(request.level)
         x0, y0, out_w, out_h = _clip_rect(request.source_rect, width, height)
         if out_w <= 0 or out_h <= 0:
@@ -384,7 +395,9 @@ class FakeTiledImageProvider:
             255,
         )
 
-    def _pixels(self, level: int, x0: int, y0: int, width: int, height: int) -> npt.NDArray[np.uint8]:
+    def _pixels(
+        self, level: int, x0: int, y0: int, width: int, height: int
+    ) -> npt.NDArray[np.uint8]:
         xs = (np.arange(x0, x0 + width, dtype=np.uint16) % 256).astype(np.uint8)
         ys = (np.arange(y0, y0 + height, dtype=np.uint16) % 256).astype(np.uint8)
         data = np.zeros((height, width, 4), dtype=np.uint8)
@@ -408,9 +421,13 @@ class PreconfiguredSourceResolution:
     def __post_init__(self) -> None:
         if self.accepted:
             if self.source is None or self.provider is None:
-                raise ValueError("accepted preconfigured source resolutions require source and provider")
+                raise ValueError(
+                    "accepted preconfigured source resolutions require source and provider"
+                )
             if self.diagnostic is not None:
-                raise ValueError("accepted preconfigured source resolutions must not carry diagnostics")
+                raise ValueError(
+                    "accepted preconfigured source resolutions must not carry diagnostics"
+                )
         elif not self.diagnostic:
             raise ValueError("rejected preconfigured source resolutions require a diagnostic")
 
@@ -440,7 +457,10 @@ class NoNetworkPreconfiguredSourceResolver:
     @property
     def source_refs(self) -> tuple[dict[str, str], ...]:
         """Return opaque source refs advertised by this resolver."""
-        return tuple({"resolver_id": self.resolver_id, "source_id": source_id} for source_id in sorted(self._sources))
+        return tuple(
+            {"resolver_id": self.resolver_id, "source_id": source_id}
+            for source_id in sorted(self._sources)
+        )
 
     def capability_record(self) -> dict[str, object]:
         """Return the public capability record for this resolver."""
@@ -452,7 +472,9 @@ class NoNetworkPreconfiguredSourceResolver:
             "source_ids": tuple(sorted(self._sources)),
         }
 
-    def descriptor_for(self, source_id: str, descriptor_id: str | None = None) -> DataSourceDescriptor:
+    def descriptor_for(
+        self, source_id: str, descriptor_id: str | None = None
+    ) -> DataSourceDescriptor:
         """Return a preconfigured-source descriptor for an advertised source id."""
         if source_id not in self._sources:
             raise ValueError("source_id is not advertised by this resolver")
@@ -471,7 +493,11 @@ class NoNetworkPreconfiguredSourceResolver:
             credential_policy=CredentialPolicy.NONE,
             source_ref={"resolver_id": self.resolver_id, "source_id": source_id},
             materialization_policy=source.materialization_policy,
-            metadata={"tile_shape": source.tile_shape, "levels": source.levels, "network_io": False},
+            metadata={
+                "tile_shape": source.tile_shape,
+                "levels": source.levels,
+                "network_io": False,
+            },
         )
 
     def resolve(self, descriptor: DataSourceDescriptor) -> PreconfiguredSourceResolution:
@@ -492,7 +518,9 @@ class NoNetworkPreconfiguredSourceResolver:
     def _descriptor_diagnostic(self, descriptor: DataSourceDescriptor) -> str | None:
         from .security import validate_no_network_source_descriptor
 
-        validation = validate_no_network_source_descriptor(descriptor, allowed_source_refs=self.source_refs)
+        validation = validate_no_network_source_descriptor(
+            descriptor, allowed_source_refs=self.source_refs
+        )
         if not validation.accepted:
             diagnostic = validation.diagnostics[0]
             return f"{diagnostic.code.value}: {diagnostic.message}"
@@ -525,7 +553,9 @@ def demo_no_network_preconfigured_source_resolver() -> NoNetworkPreconfiguredSou
     )
 
 
-def _clip_rect(rect: tuple[int, int, int, int], width: int, height: int) -> tuple[int, int, int, int]:
+def _clip_rect(
+    rect: tuple[int, int, int, int], width: int, height: int
+) -> tuple[int, int, int, int]:
     x, y, rect_w, rect_h = rect
     x0 = max(0, x)
     y0 = max(0, y)
@@ -534,7 +564,9 @@ def _clip_rect(rect: tuple[int, int, int, int], width: int, height: int) -> tupl
     return x0, y0, max(0, x1 - x0), max(0, y1 - y0)
 
 
-def validate_tiled_image_source_manifest_link(source: TiledImageSource, manifest: ExtensionManifest) -> None:
+def validate_tiled_image_source_manifest_link(
+    source: TiledImageSource, manifest: ExtensionManifest
+) -> None:
     """Validate static manifest linkage for the built-in tiled-image source proof."""
     if manifest.kind != ExtensionKind.DATA_SOURCE:
         raise ValueError("tiled image source requires a data-source extension manifest")

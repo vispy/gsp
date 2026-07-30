@@ -58,13 +58,17 @@ def test_no_network_descriptor_accepts_preconfigured_handle_without_fetch_detail
 
 
 def test_no_network_descriptor_rejects_missing_or_unknown_preconfigured_handle():
-    missing = validate_no_network_source_descriptor(_descriptor(locality=DataLocality.PRECONFIGURED_SOURCE))
+    missing = validate_no_network_source_descriptor(
+        _descriptor(locality=DataLocality.PRECONFIGURED_SOURCE)
+    )
     unknown = validate_no_network_source_descriptor(
         _descriptor(
             locality=DataLocality.PRECONFIGURED_SOURCE,
             source_ref={"resolver_id": "gsp.test.synthetic-resolver", "source_id": "unknown"},
         ),
-        allowed_source_refs=({"resolver_id": "gsp.test.synthetic-resolver", "source_id": "public-demo-pyramid"},),
+        allowed_source_refs=(
+            {"resolver_id": "gsp.test.synthetic-resolver", "source_id": "public-demo-pyramid"},
+        ),
     )
 
     assert not missing.accepted
@@ -82,7 +86,9 @@ def test_no_network_descriptor_rejects_missing_or_unknown_preconfigured_handle()
         (DataLocality.SERVER_FETCH, SecurityDiagnosticCode.SOURCE_LOCALITY_UNSUPPORTED),
     ),
 )
-def test_no_network_descriptor_rejects_unsafe_localities(locality: DataLocality, code: SecurityDiagnosticCode):
+def test_no_network_descriptor_rejects_unsafe_localities(
+    locality: DataLocality, code: SecurityDiagnosticCode
+):
     result = validate_no_network_source_descriptor(_descriptor(locality=locality))
 
     assert not result.accepted
@@ -92,7 +98,10 @@ def test_no_network_descriptor_rejects_unsafe_localities(locality: DataLocality,
 def test_no_network_descriptor_rejects_fetch_descriptor_and_private_urls():
     result = validate_no_network_source_descriptor(
         _descriptor(
-            fetch_descriptor={"url": "http://169.254.169.254/latest/meta-data", "headers": {"Authorization": "token"}},
+            fetch_descriptor={
+                "url": "http://169.254.169.254/latest/meta-data",
+                "headers": {"Authorization": "token"},
+            },
             metadata={"redirect_policy": "follow"},
         )
     )

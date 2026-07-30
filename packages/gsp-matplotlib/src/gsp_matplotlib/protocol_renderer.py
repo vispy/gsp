@@ -30,17 +30,23 @@ from gsp.protocol import (
     CanvasSize,
     ColorScale,
     ColorbarGuide,
+    ExplicitPanelLayoutV1,
     LogicalPixelRect,
+    NormalizedRenderTargetRect,
+    PanelLayoutIntent,
+    PanelPlacement,
     PanelTextGuide,
     PixelOrigin,
     ResolvedCanvas,
     ResolvedLayoutSnapshot,
+    RenderTarget,
     View2D,
     View3D,
     View3DDiagnosticCode,
     View3DProjectionSnapshot,
     project_view3d_data_point,
     resolve_view3d_projection_snapshot,
+    resolve_panel_layout_intent,
     validate_mesh_visual_flat_lambert,
 )
 from gsp_matplotlib.guides import render_axis_guides, render_panel_text_guides
@@ -77,7 +83,7 @@ from gsp_matplotlib.color_mapping import (
     resolve_color_scale,
 )
 from gsp_matplotlib.transforms import (
-    panel_ndc_to_axes_fraction,
+    plot_ndc_to_axes_fraction,
     transformed_positions,
 )
 
@@ -90,9 +96,7 @@ _MARKER_SHAPES_MPL = {
 }
 
 _DIAMOND_PATH = matplotlib.path.Path(
-    np.array(
-        [[0.0, 0.5], [0.5, 0.0], [0.0, -0.5], [-0.5, 0.0], [0.0, 0.5]], dtype=np.float32
-    )
+    np.array([[0.0, 0.5], [0.5, 0.0], [0.0, -0.5], [-0.5, 0.0], [0.0, 0.5]], dtype=np.float32)
 )
 
 _STROKE_CAPS_MPL = {
@@ -179,7 +183,8 @@ def render_protocol_scene_with_layout(
     device_scale: float = 1.0,
     view_snapshot_id: str | None = None,
     layout_snapshot: ResolvedLayoutSnapshot | None = None,
-    panel_viewport_rect: tuple[float, float, float, float] | None = None,
+    panel_id: str = "panel:default",
+    panel_layout: PanelLayoutIntent | None = None,
 ) -> MatplotlibProtocolRenderResult:
     """Render a protocol scene and report the resolved layout snapshot used."""
     axis_guide_tuple = tuple(axis_guides)
@@ -190,7 +195,6 @@ def render_protocol_scene_with_layout(
         _validate_consumed_layout_inputs(
             layout_snapshot,
             canvas_size=canvas_size,
-            panel_viewport_rect=panel_viewport_rect,
             axis_guides=axis_guide_tuple,
             panel_text_guides=panel_text_guide_tuple,
             colorbar_guides=colorbar_guide_tuple,
@@ -235,8 +239,31 @@ def render_protocol_scene_with_layout(
 
     if layout_snapshot is not None:
         _place_axes_at_consumed_plot_rect(figure, axes, layout_snapshot)
-    elif panel_viewport_rect is not None:
-        _place_native_axes_inside_panel(axes, panel_viewport_rect)
+        resolved_panel_rect = layout_snapshot.only_panel().panel_rect_px
+    else:
+        target = RenderTarget(
+            logical_width_px=resolved_canvas.canvas_width_px,
+            logical_height_px=resolved_canvas.canvas_height_px,
+            device_scale=resolved_canvas.framebuffer_per_canvas_px,
+            dpi=resolved_canvas.output_dpi,
+            pixel_origin=PixelOrigin.TOP_LEFT,
+            query_coordinate_space="plot",
+        )
+        if panel_layout is None:
+            panel_layout = ExplicitPanelLayoutV1(
+                placements=(
+                    PanelPlacement(
+                        panel_id=panel_id,
+                        allocation_rect=NormalizedRenderTargetRect(0.0, 0.0, 1.0, 1.0),
+                    ),
+                )
+            )
+        resolved_panels = resolve_panel_layout_intent(panel_layout, target)
+        matching_panels = tuple(panel for panel in resolved_panels if panel.panel_id == panel_id)
+        if len(matching_panels) != 1:
+            raise ValueError("panel_layout must resolve the rendered panel exactly once")
+        resolved_panel_rect = matching_panels[0].panel_rect_px
+        _place_native_axes_inside_resolved_panel(axes, resolved_panel_rect, target)
 
     color_scale_map = color_scales if color_scales is not None else {}
     for visual in visuals:
@@ -260,9 +287,7 @@ def render_protocol_scene_with_layout(
         axes.set_axis_off()
     render_panel_text_guides(axes, panel_text_guide_tuple)
     if layout_snapshot is not None:
-        _place_consumed_title_artists(
-            figure, axes, panel_text_guide_tuple, layout_snapshot
-        )
+        _place_consumed_title_artists(figure, axes, panel_text_guide_tuple, layout_snapshot)
     for guide in colorbar_guide_tuple:
         render_colorbar_guide(axes, guide, color_scales=color_scale_map)
 
@@ -271,14 +296,13 @@ def render_protocol_scene_with_layout(
             figure,
             axes,
             snapshot_id=snapshot_id,
+            panel_id=panel_id,
             view=view,
             view3d=view3d,
             axis_guides=axis_guide_tuple,
             panel_text_guides=panel_text_guide_tuple,
             device_scale=device_scale,
-            panel_rect_px=_normalized_panel_rect(
-                figure, panel_viewport_rect
-            ),
+            panel_rect_px=resolved_panel_rect,
         )
     else:
         # Draw after the final artist placement, but retain the consumed snapshot
@@ -315,10 +339,7 @@ def _validate_consumed_layout_view(
     if not isinstance(snapshot, ResolvedLayoutSnapshot):
         raise TypeError("layout_snapshot must be a ResolvedLayoutSnapshot")
     active_view = view if view is not None else view3d
-    if (
-        active_view is not None
-        and snapshot.view_id != active_view.id
-    ):
+    if active_view is not None and snapshot.only_panel().view_id != active_view.id:
         raise ValueError("layout_snapshot view_id does not match the rendered view")
 
 
@@ -339,7 +360,6 @@ def _validate_consumed_layout_inputs(
     snapshot: ResolvedLayoutSnapshot,
     *,
     canvas_size: CanvasSize | None,
-    panel_viewport_rect: tuple[float, float, float, float] | None,
     axis_guides: tuple[AxisGuide, ...],
     panel_text_guides: tuple[PanelTextGuide, ...],
     colorbar_guides: tuple[ColorbarGuide, ...],
@@ -356,41 +376,19 @@ def _validate_consumed_layout_inputs(
             or resolved.framebuffer_width != target.framebuffer_width_px
             or resolved.framebuffer_height != target.framebuffer_height_px
         ):
-            raise ValueError(
-                "canvas_size does not resolve to the consumed layout render target"
-            )
-    if panel_viewport_rect is not None:
-        x, y, width, height = panel_viewport_rect
-        expected = LogicalPixelRect(
-            x * target.logical_width_px,
-            y * target.logical_height_px,
-            width * target.logical_width_px,
-            height * target.logical_height_px,
-        )
-        if expected != snapshot.panel_rect_px:
-            raise ValueError(
-                "panel_viewport_rect conflicts with the consumed layout panel rectangle"
-            )
+            raise ValueError("canvas_size does not resolve to the consumed layout render target")
     if colorbar_guides:
         raise ValueError(
             "consumed Matplotlib layout does not support native ColorbarGuide rendering"
         )
-    if any(guide.view_id != snapshot.view_id for guide in axis_guides):
-        raise ValueError(
-            "supplied AxisGuide view_id must match the consumed layout view_id"
-        )
-    title_guides = tuple(
-        guide for guide in panel_text_guides if guide.role.value == "title"
-    )
+    if any(guide.view_id != snapshot.only_panel().view_id for guide in axis_guides):
+        raise ValueError("supplied AxisGuide view_id must match the consumed layout view_id")
+    title_guides = tuple(guide for guide in panel_text_guides if guide.role.value == "title")
     if len(title_guides) != len(panel_text_guides) or len(title_guides) > 1:
-        raise ValueError(
-            "consumed Matplotlib layout supports at most one title PanelTextGuide"
-        )
-    title_box_ids = {box.guide_id for box in snapshot.title_boxes}
+        raise ValueError("consumed Matplotlib layout supports at most one title PanelTextGuide")
+    title_box_ids = {box.guide_id for box in snapshot.only_panel().title_boxes}
     if title_guides and title_guides[0].id not in title_box_ids:
-        raise ValueError(
-            "supplied title guide requires matching resolved title geometry"
-        )
+        raise ValueError("supplied title guide requires matching resolved title geometry")
 
 
 def _place_axes_at_consumed_plot_rect(
@@ -399,7 +397,7 @@ def _place_axes_at_consumed_plot_rect(
     snapshot: ResolvedLayoutSnapshot,
 ) -> None:
     target = snapshot.render_target
-    plot = snapshot.plot_rect_px
+    plot = snapshot.only_panel().plot_rect_px
     left = plot.x / target.logical_width_px
     bottom = (
         1.0 - (plot.y + plot.height) / target.logical_height_px
@@ -423,7 +421,7 @@ def _assert_consumed_plot_rect_unchanged(
 ) -> None:
     """Fail closed if a native artist reclaims consumed plot geometry."""
     target = snapshot.render_target
-    plot = snapshot.plot_rect_px
+    plot = snapshot.only_panel().plot_rect_px
     expected_left = plot.x / target.logical_width_px
     expected_bottom = (
         1.0 - (plot.y + plot.height) / target.logical_height_px
@@ -441,43 +439,27 @@ def _assert_consumed_plot_rect_unchanged(
         math.isclose(actual, wanted, rel_tol=0.0, abs_tol=1.0e-9)
         for actual, wanted in zip(observed, expected, strict=True)
     ):
-        raise ValueError(
-            "native Matplotlib artists changed the consumed plot rectangle"
-        )
+        raise ValueError("native Matplotlib artists changed the consumed plot rectangle")
 
 
-def _place_native_axes_inside_panel(
+def _place_native_axes_inside_resolved_panel(
     axes: matplotlib.axes.Axes,
-    viewport_rect: tuple[float, float, float, float],
+    panel_rect: LogicalPixelRect,
+    target: RenderTarget,
 ) -> None:
-    panel_x, panel_y, panel_width, panel_height = viewport_rect
+    panel_x = panel_rect.x / target.logical_width_px
+    panel_y = panel_rect.y / target.logical_height_px
+    panel_width = panel_rect.width / target.logical_width_px
+    panel_height = panel_rect.height / target.logical_height_px
     native = axes.get_position(original=True)
     axes.set_position(
         (
             panel_x + float(native.x0) * panel_width,
-            1.0
-            - (panel_y + panel_height)
-            + float(native.y0) * panel_height,
+            1.0 - (panel_y + panel_height) + float(native.y0) * panel_height,
             float(native.width) * panel_width,
             float(native.height) * panel_height,
         ),
         which="both",
-    )
-
-
-def _normalized_panel_rect(
-    figure: matplotlib.figure.Figure,
-    viewport_rect: tuple[float, float, float, float] | None,
-) -> LogicalPixelRect | None:
-    if viewport_rect is None:
-        return None
-    width, height = _figure_canvas_size_px(figure)
-    x, y, panel_width, panel_height = viewport_rect
-    return LogicalPixelRect(
-        x=x * width,
-        y=y * height,
-        width=panel_width * width,
-        height=panel_height * height,
     )
 
 
@@ -487,12 +469,10 @@ def _place_consumed_title_artists(
     guides: tuple[PanelTextGuide, ...],
     snapshot: ResolvedLayoutSnapshot,
 ) -> None:
-    title_guides = tuple(
-        guide for guide in guides if guide.role.value == "title"
-    )
+    title_guides = tuple(guide for guide in guides if guide.role.value == "title")
     if not title_guides:
         return
-    boxes = {box.guide_id: box for box in snapshot.title_boxes}
+    boxes = {box.guide_id: box for box in snapshot.only_panel().title_boxes}
     target_box = boxes.get(title_guides[0].id)
     if target_box is None:
         return
@@ -542,9 +522,7 @@ def _render_protocol_visual(
             axes, visual, view=view, transform_resources=transform_resources
         )
     if isinstance(visual, PathVisual):
-        return render_path_visual(
-            axes, visual, view=view, transform_resources=transform_resources
-        )
+        return render_path_visual(axes, visual, view=view, transform_resources=transform_resources)
     if isinstance(visual, MeshVisual):
         return render_mesh_visual(
             axes,
@@ -702,14 +680,12 @@ def render_pixel_visual(
         aspect_ratio = _axes_pixel_aspect_ratio(axes)
         projected = np.asarray(
             [
-                project_view3d_data_point(
-                    view3d, tuple(point), aspect_ratio=aspect_ratio
-                )
+                project_view3d_data_point(view3d, tuple(point), aspect_ratio=aspect_ratio)
                 for point in visual.positions
             ],
             dtype=np.float64,
         )
-        offsets = panel_ndc_to_axes_fraction(projected[:, :2])
+        offsets = plot_ndc_to_axes_fraction(projected[:, :2])
         transform = axes.transAxes
     else:
         offsets, transform = _render_positions(
@@ -744,9 +720,7 @@ def render_sphere_visual(
     analytic per-fragment sphere depth.
     """
     if view3d is None:
-        raise NotImplementedError(
-            "Matplotlib SphereVisual DATA positions3d require View3D"
-        )
+        raise NotImplementedError("Matplotlib SphereVisual DATA positions3d require View3D")
     aspect_ratio = _axes_pixel_aspect_ratio(axes)
     basis = view3d.camera.basis()
     projected = np.asarray(
@@ -774,11 +748,11 @@ def render_sphere_visual(
     axes_box = axes.get_position()
     canvas_width_px, _ = _figure_canvas_size_px(axes.figure)
     axes_width_px = max(float(axes_box.width) * canvas_width_px, 1.0)
-    diameters_px = (
-        np.abs(projected_edges[:, 0] - projected[:, 0]) * axes_width_px
-    ).astype(np.float32)
+    diameters_px = (np.abs(projected_edges[:, 0] - projected[:, 0]) * axes_width_px).astype(
+        np.float32
+    )
     order = np.argsort(projected[:, 2], kind="stable")[::-1]
-    offsets = panel_ndc_to_axes_fraction(projected[order, :2])
+    offsets = plot_ndc_to_axes_fraction(projected[order, :2])
     colors = _rgba_for_matplotlib(visual.colors)
     if colors.ndim == 1:
         colors = np.broadcast_to(colors, (visual.positions.shape[0], 4))
@@ -835,20 +809,14 @@ def render_vector_visual(
             ],
             dtype=np.float64,
         )
-        tail_offsets = panel_ndc_to_axes_fraction(tails3[:, :2])
-        head_offsets = panel_ndc_to_axes_fraction(heads3[:, :2])
+        tail_offsets = plot_ndc_to_axes_fraction(tails3[:, :2])
+        head_offsets = plot_ndc_to_axes_fraction(heads3[:, :2])
         transform = axes.transAxes
     else:
         if visual.coordinate_space is CoordinateSpace.DATA and view is None:
-            raise NotImplementedError(
-                "Matplotlib VectorVisual DATA positions2d require View2D"
-            )
-        tail_offsets, transform = _render_positions(
-            axes, visual, tails, view, transform_resources
-        )
-        head_offsets, _ = _render_positions(
-            axes, visual, heads, view, transform_resources
-        )
+            raise NotImplementedError("Matplotlib VectorVisual DATA positions2d require View2D")
+        tail_offsets, transform = _render_positions(axes, visual, tails, view, transform_resources)
+        head_offsets, _ = _render_positions(axes, visual, heads, view, transform_resources)
 
     colors = _rgba_for_matplotlib(visual.colors)
     if colors.ndim == 1:
@@ -922,7 +890,7 @@ def render_primitive_visual(
             ],
             dtype=np.float64,
         )
-        offsets = panel_ndc_to_axes_fraction(projected[:, :2])
+        offsets = plot_ndc_to_axes_fraction(projected[:, :2])
         depths = projected[:, 2]
         transform = axes.transAxes
     else:
@@ -1075,9 +1043,7 @@ def render_marker_visual(
         collection = matplotlib.collections.PathCollection(
             [_marker_path(shape, float(angle))],
             sizes=[areas[index]],
-            offsets=np.array(
-                [[offsets[index, 0], offsets[index, 1]]], dtype=np.float32
-            ),
+            offsets=np.array([[offsets[index, 0], offsets[index, 1]]], dtype=np.float32),
             offset_transform=transform,
             facecolors=[fill_colors[index]],
             edgecolors=[stroke_color],
@@ -1105,9 +1071,7 @@ def render_segment_visual(
         axes, visual, visual.end_positions, view, transform_resources
     )
     segments = np.stack([start_positions, end_positions], axis=1)
-    segment_list = [
-        np.ascontiguousarray(segment, dtype=np.float32) for segment in segments
-    ]
+    segment_list = [np.ascontiguousarray(segment, dtype=np.float32) for segment in segments]
     collection = matplotlib.collections.LineCollection(
         segment_list,
         colors=_rgba_for_matplotlib(visual.colors),
@@ -1142,9 +1106,7 @@ def render_path_visual(
 
     patches: list[matplotlib.patches.PathPatch] = []
     for index, vertices in enumerate(subpaths):
-        codes = np.full(
-            (vertices.shape[0],), matplotlib.path.Path.LINETO, dtype=np.uint8
-        )
+        codes = np.full((vertices.shape[0],), matplotlib.path.Path.LINETO, dtype=np.uint8)
         codes[0] = matplotlib.path.Path.MOVETO
         path = matplotlib.path.Path(vertices, codes)
         patch = matplotlib.patches.PathPatch(
@@ -1178,23 +1140,17 @@ def render_mesh_visual(
             "PolyCollection mesh rendering does not support Texture2D sampling"
         )
     if visual.face_color_encoding is not None:
-        raise NotImplementedError(
-            "Matplotlib MeshVisual scalar face colors are capability-gated"
-        )
+        raise NotImplementedError("Matplotlib MeshVisual scalar face colors are capability-gated")
     color_mode = visual.resolved_color_mode()
     if color_mode is MeshColorMode.VERTEX:
-        raise NotImplementedError(
-            "Matplotlib MeshVisual vertex colors are capability-gated"
-        )
+        raise NotImplementedError("Matplotlib MeshVisual vertex colors are capability-gated")
     if visual.color is None:
         raise ValueError("MeshVisual color is required for Matplotlib rendering")
     mesh_color = visual.color
 
     vertex_depth: npt.NDArray[np.float64] | None = None
     if visual.positions.shape[1] == 3:
-        positions, transform, vertex_depth = _render_mesh3d_positions(
-            axes, visual, view3d=view3d
-        )
+        positions, transform, vertex_depth = _render_mesh3d_positions(axes, visual, view3d=view3d)
     else:
         positions, transform = _render_positions(
             axes, visual, visual.positions, view, transform_resources
@@ -1225,14 +1181,9 @@ def render_mesh_visual(
                 vertex_depth=vertex_depth,
             )
         else:
-            polygons = [
-                np.ascontiguousarray(triangle, dtype=np.float32)
-                for triangle in triangles
-            ]
+            polygons = [np.ascontiguousarray(triangle, dtype=np.float32) for triangle in triangles]
     else:
-        polygons = [
-            np.ascontiguousarray(triangle, dtype=np.float32) for triangle in triangles
-        ]
+        polygons = [np.ascontiguousarray(triangle, dtype=np.float32) for triangle in triangles]
 
     collection = matplotlib.collections.PolyCollection(
         polygons,
@@ -1269,14 +1220,12 @@ def render_text_visual(
         aspect_ratio = _axes_pixel_aspect_ratio(axes)
         projected = np.asarray(
             [
-                project_view3d_data_point(
-                    view3d, tuple(point), aspect_ratio=aspect_ratio
-                )
+                project_view3d_data_point(view3d, tuple(point), aspect_ratio=aspect_ratio)
                 for point in visual.positions
             ],
             dtype=np.float64,
         )
-        positions = panel_ndc_to_axes_fraction(projected[:, :2])
+        positions = plot_ndc_to_axes_fraction(projected[:, :2])
         transform = axes.transAxes
     else:
         positions, transform = _render_positions(
@@ -1318,9 +1267,7 @@ def render_image_visual(
     color_scales: Mapping[str, ColorScale] | None = None,
 ) -> matplotlib.image.AxesImage:
     """Render a protocol image visual into a Matplotlib axes."""
-    interpolation = (
-        "nearest" if visual.interpolation == ImageInterpolation.NEAREST else "bilinear"
-    )
+    interpolation = "nearest" if visual.interpolation == ImageInterpolation.NEAREST else "bilinear"
     image_data = visual.image
     cmap = None
     if visual.color_scale_id is not None:
@@ -1448,13 +1395,11 @@ def _render_positions(
     view: View2D | None,
     transform_resources: Mapping[str, AffineTransform2DResource] | None,
 ) -> tuple[npt.NDArray[np.float64], matplotlib.transforms.Transform]:
-    transformed = transformed_positions(
-        positions, visual.transform, transform_resources
-    )
+    transformed = transformed_positions(positions, visual.transform, transform_resources)
     if visual.coordinate_space == CoordinateSpace.DATA:
         return transformed, axes.transData
     if visual.coordinate_space == CoordinateSpace.NDC:
-        return panel_ndc_to_axes_fraction(transformed), axes.transAxes
+        return plot_ndc_to_axes_fraction(transformed), axes.transAxes
     raise ValueError(f"unsupported coordinate_space: {visual.coordinate_space!r}")
 
 
@@ -1477,23 +1422,21 @@ def _render_mesh3d_positions(
                 "Matplotlib MeshVisual DATA positions3d require View3D"
             )
         aspect_ratio = _axes_pixel_aspect_ratio(axes)
-        panel_ndc3 = np.asarray(
+        plot_ndc3 = np.asarray(
             [
-                project_view3d_data_point(
-                    view3d, tuple(point), aspect_ratio=aspect_ratio
-                )
+                project_view3d_data_point(view3d, tuple(point), aspect_ratio=aspect_ratio)
                 for point in source
             ],
             dtype=np.float64,
         )
     elif visual.coordinate_space == CoordinateSpace.NDC:
-        panel_ndc3 = source
+        plot_ndc3 = source
     else:
         raise NotImplementedError(
             f"{View3DDiagnosticCode.MESH3D_COORDINATE_SPACE_UNSUPPORTED.value}: "
             f"unsupported MeshVisual 3D coordinate_space {visual.coordinate_space!r}"
         )
-    return panel_ndc_to_axes_fraction(panel_ndc3[:, :2]), axes.transAxes, panel_ndc3[:, 2]
+    return plot_ndc_to_axes_fraction(plot_ndc3[:, :2]), axes.transAxes, plot_ndc3[:, 2]
 
 
 def _axes_pixel_aspect_ratio(axes: matplotlib.axes.Axes) -> float:
@@ -1607,9 +1550,7 @@ def _mesh3d_coplanar_quad_partner(
     for candidate in candidates:
         if not _mesh3d_facecolors_match(facecolors[face_index], facecolors[candidate]):
             continue
-        if _mesh3d_faces_form_coplanar_quad(
-            source_positions, face, faces[candidate]
-        ):
+        if _mesh3d_faces_form_coplanar_quad(source_positions, face, faces[candidate]):
             return int(candidate)
     return None
 
@@ -1660,7 +1601,11 @@ def _mesh3d_projected_quad_indices(
     second_face: npt.NDArray[np.integer],
 ) -> npt.NDArray[np.int64]:
     unique_indices = np.asarray(
-        tuple(dict.fromkeys((*[int(index) for index in first_face], *[int(index) for index in second_face]))),
+        tuple(
+            dict.fromkeys(
+                (*[int(index) for index in first_face], *[int(index) for index in second_face])
+            )
+        ),
         dtype=np.int64,
     )
     points = projected_positions[unique_indices]
@@ -1692,9 +1637,7 @@ def _resolve_flat_lambert_facecolors(
         )
         light_direction = light_direction / np.linalg.norm(light_direction)
         lambert = np.maximum(0.0, normals @ light_direction)
-        light_factor = light_factor + (
-            float(view3d.directional_light.intensity) * lambert
-        )
+        light_factor = light_factor + (float(view3d.directional_light.intensity) * lambert)
     light_factor = np.clip(light_factor, 0.0, 1.0)
     resolved = base.copy()
     resolved[:, :3] = np.clip(base[:, :3] * light_factor[:, np.newaxis], 0.0, 1.0)
@@ -1730,9 +1673,7 @@ def _marker_fill_colors(
     visual: MarkerVisual, *, color_scales: Mapping[str, ColorScale] | None
 ) -> npt.NDArray[np.float64] | npt.NDArray[np.float32]:
     if visual.fill_color_encoding is not None:
-        scale = resolve_color_scale(
-            color_scales, visual.fill_color_encoding.color_scale_id
-        )
+        scale = resolve_color_scale(color_scales, visual.fill_color_encoding.color_scale_id)
         return map_scalar_values(
             visual.fill_color_encoding.values,
             scale,

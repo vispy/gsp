@@ -41,9 +41,7 @@ def test_affine_transform_resource_accepts_identity_translate_scale_rotate_and_s
     )
 
     for index, matrix in enumerate(matrices):
-        transform = AffineTransform2DResource(
-            id=f"transform:affine_{index}", matrix=matrix
-        )
+        transform = AffineTransform2DResource(id=f"transform:affine_{index}", matrix=matrix)
         assert transform.kind == TransformKind.AFFINE_2D
         assert np.allclose(transform.inverse_matrix @ matrix, IDENTITY)
 
@@ -56,9 +54,7 @@ def test_affine_transform_resource_accepts_identity_translate_scale_rotate_and_s
             TransformDiagnosticCode.TRANSFORM_BAD_SHAPE,
         ),
         (
-            np.array(
-                [[1.0, 0.0, 0.0], [0.0, np.inf, 0.0], [0.0, 0.0, 1.0]]
-            ),
+            np.array([[1.0, 0.0, 0.0], [0.0, np.inf, 0.0], [0.0, 0.0, 1.0]]),
             TransformDiagnosticCode.TRANSFORM_NONFINITE,
         ),
         (
@@ -78,9 +74,7 @@ def test_affine_transform_validation_rejects_invalid_matrices(matrix, diagnostic
 
 def test_affine_transform_rejects_deferred_3d_kind():
     with pytest.raises(ValueError, match="GSP_TRANSFORM_UNSUPPORTED_KIND"):
-        AffineTransform2DResource(
-            id="transform:bad", matrix=IDENTITY, kind=TransformKind.AFFINE_3D
-        )
+        AffineTransform2DResource(id="transform:bad", matrix=IDENTITY, kind=TransformKind.AFFINE_3D)
 
 
 def test_inline_and_ref_visual_transform_bindings_are_validated():
@@ -132,7 +126,7 @@ def test_view2d_accepts_reversed_limits_and_rejects_degenerate_or_equal_aspect()
 
     assert view.xlim == (10.0, -10.0)
     assert view.ylim == (-1.0, 1.0)
-    assert view.clip is True
+    assert not hasattr(view, "clip")
 
     with pytest.raises(ValueError, match="GSP_VIEW2D_DEGENERATE"):
         View2D(id="view:bad", panel_id="panel:main", x_range=(1.0, 1.0))
@@ -152,7 +146,7 @@ def test_transform_query_payload_validates_coordinate_chain_and_status():
     payload = TransformQueryPayload(
         visual_id="visual:points",
         panel_xy=(10.0, 20.0),
-        panel_ndc=(-0.5, 0.25),
+        plot_ndc=(-0.5, 0.25),
         declared_coordinate_space=CoordinateSpace.DATA.value,
         declared_space_coord=(1.0, 2.0),
         source_coord=(-1.0, -2.0),
@@ -184,7 +178,7 @@ def test_transform_query_payload_validates_coordinate_chain_and_status():
         TransformQueryPayload(
             visual_id="visual:points",
             panel_xy=(0.0, 0.0),
-            panel_ndc=(0.0, 0.0),
+            plot_ndc=(0.0, 0.0),
             declared_coordinate_space=CoordinateSpace.NDC.value,
             declared_space_coord=(0.0, 0.0),
             source_coord=(0.0, 0.0),

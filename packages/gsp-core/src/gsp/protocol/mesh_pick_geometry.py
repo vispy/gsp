@@ -14,12 +14,8 @@ from .mesh_culling import (
 Float2Like = Sequence[float]
 Float3Like = Sequence[float]
 
-QUERY_VIEW3D_MESH_TRIANGLE_PICK_GEOMETRY_CAPABILITY = (
-    "query.view3d.mesh_triangle_pick.geometry.v1"
-)
-QUERY_VIEW3D_MESH_TRIANGLE_PICK_FACING_CAPABILITY = (
-    "query.view3d.mesh_triangle_pick.facing.v1"
-)
+QUERY_VIEW3D_MESH_TRIANGLE_PICK_GEOMETRY_CAPABILITY = "query.view3d.mesh_triangle_pick.geometry.v1"
+QUERY_VIEW3D_MESH_TRIANGLE_PICK_FACING_CAPABILITY = "query.view3d.mesh_triangle_pick.facing.v1"
 
 
 def mesh_pick_barycentric_2d(
@@ -30,7 +26,7 @@ def mesh_pick_barycentric_2d(
     *,
     epsilon: float = 1.0e-12,
 ) -> tuple[float, float, float] | None:
-    """Return barycentric coordinates in projected panel NDC x/y.
+    """Return barycentric coordinates in projected plot NDC x/y.
 
     Coordinates are ordered in the public source face order ``(q0, q1, q2)``.
     ``None`` means the point is outside the projected triangle or the triangle is
@@ -62,7 +58,7 @@ def mesh_pick_barycentric_2d(
     return (w, v, u)
 
 
-def mesh_pick_panel_ndc_z(
+def mesh_pick_plot_ndc_z(
     barycentric: Float3Like,
     q0: Float3Like,
     q1: Float3Like,
@@ -73,11 +69,7 @@ def mesh_pick_panel_ndc_z(
     _validate_float3("q0", q0)
     _validate_float3("q1", q1)
     _validate_float3("q2", q2)
-    return (
-        lambdas[0] * float(q0[2])
-        + lambdas[1] * float(q1[2])
-        + lambdas[2] * float(q2[2])
-    )
+    return lambdas[0] * float(q0[2]) + lambdas[1] * float(q1[2]) + lambdas[2] * float(q2[2])
 
 
 def mesh_pick_data_xyz(
@@ -92,21 +84,13 @@ def mesh_pick_data_xyz(
     _validate_float3("p1", p1)
     _validate_float3("p2", p2)
     return (
-        lambdas[0] * float(p0[0])
-        + lambdas[1] * float(p1[0])
-        + lambdas[2] * float(p2[0]),
-        lambdas[0] * float(p0[1])
-        + lambdas[1] * float(p1[1])
-        + lambdas[2] * float(p2[1]),
-        lambdas[0] * float(p0[2])
-        + lambdas[1] * float(p1[2])
-        + lambdas[2] * float(p2[2]),
+        lambdas[0] * float(p0[0]) + lambdas[1] * float(p1[0]) + lambdas[2] * float(p2[0]),
+        lambdas[0] * float(p0[1]) + lambdas[1] * float(p1[1]) + lambdas[2] * float(p2[1]),
+        lambdas[0] * float(p0[2]) + lambdas[1] * float(p1[2]) + lambdas[2] * float(p2[2]),
     )
 
 
-def mesh_pick_projected_front_facing(
-    q0: Float3Like, q1: Float3Like, q2: Float3Like
-) -> bool:
+def mesh_pick_projected_front_facing(q0: Float3Like, q1: Float3Like, q2: Float3Like) -> bool:
     """Return projected panel-NDC facing for a non-degenerate triangle."""
     area2 = projected_triangle_area2(q0, q1, q2)
     classification = classify_projected_triangle(area2)

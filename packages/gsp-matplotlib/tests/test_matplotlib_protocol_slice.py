@@ -7,6 +7,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
+from conformance.p038_support import resolved_single_panel_fixture
 
 from gsp.protocol import (
     AxisDimension,
@@ -22,6 +23,7 @@ from gsp.protocol import (
     CoordinateSpace,
     DepthMode,
     DirectionalLight3D,
+    ExplicitPanelLayoutV1,
     FontRole,
     ImageColormap,
     ImageOrigin,
@@ -37,6 +39,8 @@ from gsp.protocol import (
     MarkerVisual,
     LinearNormalize,
     OrthographicProjection3D,
+    NormalizedRenderTargetRect,
+    PanelPlacement,
     PanByAction,
     PanelTextGuide,
     PanelTextRole,
@@ -53,7 +57,6 @@ from gsp.protocol import (
     ScalarColorSlot,
     SegmentVisual,
     RenderTarget,
-    ResolvedLayoutSnapshot,
     StrokeCap,
     StrokeJoin,
     TextAnchorX,
@@ -101,16 +104,12 @@ def test_render_point_visual_creates_path_collection():
 
         artist = render_point_visual(ax, visual)
 
-        np.testing.assert_allclose(
-            artist.get_offsets(), [[0.25, 0.625], [0.75, 0.375]]
-        )
+        np.testing.assert_allclose(artist.get_offsets(), [[0.25, 0.625], [0.75, 0.375]])
         assert artist.get_offset_transform() == ax.transAxes
         np.testing.assert_allclose(
             artist.get_sizes(), _marker_areas_from_pixel_diameters(ax, visual.sizes)
         )
-        np.testing.assert_allclose(
-            artist.get_facecolors()[0], np.array([1.0, 0.0, 0.0, 1.0])
-        )
+        np.testing.assert_allclose(artist.get_facecolors()[0], np.array([1.0, 0.0, 0.0, 1.0]))
         assert artist.get_gid() == "visual:points"
     finally:
         plt.close(fig)
@@ -163,11 +162,11 @@ def test_render_protocol_scene_with_layout_reports_snapshot_id():
     try:
         assert result.layout_snapshot_id == "layout:scene"
         assert result.layout_snapshot.render_target.device_scale == 2.0
-        assert result.layout_snapshot.view_id == view.id
-        assert result.layout_snapshot.plot_rect_px.width > 0.0
-        assert result.layout_snapshot.title_boxes[0].guide_id == title.id
+        assert result.layout_snapshot.only_panel().view_id == view.id
+        assert result.layout_snapshot.only_panel().plot_rect_px.width > 0.0
+        assert result.layout_snapshot.only_panel().title_boxes[0].guide_id == title.id
 
-        title_rect = result.layout_snapshot.title_boxes[0].rect_px
+        title_rect = result.layout_snapshot.only_panel().title_boxes[0].rect_px
         query = query_resolved_layout_guides(
             QueryRequest(
                 id="query:title",
@@ -243,9 +242,11 @@ def test_matplotlib_produced_layout_round_trip_preserves_plot_and_title_geometry
             axis_guides=guides,
             panel_text_guides=(title,),
         )
-        assert resolved.plot_rect_px == pytest.approx(produced.layout_snapshot.plot_rect_px)
-        assert resolved.title_boxes[0].rect_px == pytest.approx(
-            produced.layout_snapshot.title_boxes[0].rect_px, abs=0.75
+        assert resolved.only_panel().plot_rect_px == pytest.approx(
+            produced.layout_snapshot.only_panel().plot_rect_px
+        )
+        assert resolved.only_panel().title_boxes[0].rect_px == pytest.approx(
+            produced.layout_snapshot.only_panel().title_boxes[0].rect_px, abs=0.75
         )
         np.testing.assert_allclose(
             consumed.axes.collections[0].get_sizes(),
@@ -270,7 +271,7 @@ def test_matplotlib_consumed_inset_plot_overrides_native_subplot_margins():
             near_far=(0.1, 10.0),
         ),
     )
-    layout = ResolvedLayoutSnapshot(
+    layout = resolved_single_panel_fixture(
         snapshot_id="layout:inset",
         render_target=RenderTarget(
             logical_width_px=800,
@@ -309,19 +310,15 @@ def test_matplotlib_consumed_inset_plot_overrides_native_subplot_margins():
 
 def test_matplotlib_consumed_scale_two_preserves_logical_and_physical_geometry():
     view = View2D(id="view:scale-two", panel_id="panel:scale-two")
-    layout = ResolvedLayoutSnapshot(
+    layout = resolved_single_panel_fixture(
         snapshot_id="layout:scale-two",
-        render_target=RenderTarget(
-            800, 600, device_scale=2.0, pixel_origin=PixelOrigin.TOP_LEFT
-        ),
+        render_target=RenderTarget(800, 600, device_scale=2.0, pixel_origin=PixelOrigin.TOP_LEFT),
         panel_rect_px=LogicalPixelRect(0, 0, 800, 600),
         plot_rect_px=LogicalPixelRect(100, 50, 400, 200),
         view_id=view.id,
     )
 
-    result = render_protocol_scene_with_layout(
-        visuals=(), view=view, layout_snapshot=layout
-    )
+    result = render_protocol_scene_with_layout(visuals=(), view=view, layout_snapshot=layout)
     try:
         canvas = result.resolved_canvas
         assert (canvas.canvas_width_px, canvas.canvas_height_px) == (800, 600)
@@ -340,7 +337,7 @@ def test_matplotlib_consumed_scale_two_preserves_logical_and_physical_geometry()
 
 def test_matplotlib_consumed_axis_guide_cannot_shrink_plot():
     view = View2D(id="view:consumed-axis", panel_id="panel:consumed-axis")
-    layout = ResolvedLayoutSnapshot(
+    layout = resolved_single_panel_fixture(
         snapshot_id="layout:consumed-axis",
         render_target=RenderTarget(800, 600),
         panel_rect_px=LogicalPixelRect(40, 30, 720, 540),
@@ -369,7 +366,7 @@ def test_matplotlib_consumed_axis_guide_cannot_shrink_plot():
 
 def test_matplotlib_consumed_colorbar_rejects_before_artist_mutation():
     view = View2D(id="view:consumed-colorbar", panel_id="panel:consumed-colorbar")
-    layout = ResolvedLayoutSnapshot(
+    layout = resolved_single_panel_fixture(
         snapshot_id="layout:consumed-colorbar",
         render_target=RenderTarget(800, 600),
         panel_rect_px=LogicalPixelRect(0, 0, 800, 600),
@@ -393,7 +390,7 @@ def test_matplotlib_consumed_colorbar_rejects_before_artist_mutation():
 
 def test_matplotlib_consumed_title_requires_resolved_title_box():
     view = View2D(id="view:consumed-title", panel_id="panel:consumed-title")
-    layout = ResolvedLayoutSnapshot(
+    layout = resolved_single_panel_fixture(
         snapshot_id="layout:consumed-title",
         render_target=RenderTarget(800, 600),
         panel_rect_px=LogicalPixelRect(0, 0, 800, 600),
@@ -427,7 +424,7 @@ def test_matplotlib_consumed_plot_placement_honors_pixel_origin(
     origin: PixelOrigin, expected_display_bottom: float
 ):
     view = View2D(id=f"view:origin:{origin.value}", panel_id="panel:origin")
-    layout = ResolvedLayoutSnapshot(
+    layout = resolved_single_panel_fixture(
         snapshot_id=f"layout:origin:{origin.value}",
         render_target=RenderTarget(800, 600, pixel_origin=origin),
         panel_rect_px=LogicalPixelRect(0, 0, 800, 600),
@@ -454,15 +451,23 @@ def test_matplotlib_producer_honors_inset_outer_panel_allocation():
         visuals=(),
         view=view,
         canvas_size=CanvasSize.pixel_exact(800, 600),
-        panel_viewport_rect=(0.1, 0.2, 0.5, 0.6),
+        panel_id=view.panel_id,
+        panel_layout=ExplicitPanelLayoutV1(
+            (
+                PanelPlacement(
+                    view.panel_id,
+                    NormalizedRenderTargetRect(0.1, 0.2, 0.5, 0.6),
+                ),
+            )
+        ),
         snapshot_id="layout:producer-inset",
     )
     try:
-        assert result.layout_snapshot.panel_rect_px == LogicalPixelRect(
+        assert result.layout_snapshot.only_panel().panel_rect_px == LogicalPixelRect(
             80.0, 120.0, 400.0, 360.0
         )
-        plot = result.layout_snapshot.plot_rect_px
-        panel = result.layout_snapshot.panel_rect_px
+        plot = result.layout_snapshot.only_panel().plot_rect_px
+        panel = result.layout_snapshot.only_panel().panel_rect_px
         assert panel.x <= plot.x <= plot.x + plot.width <= panel.x + panel.width
         assert panel.y <= plot.y <= plot.y + plot.height <= panel.y + panel.height
     finally:
@@ -475,13 +480,20 @@ def test_matplotlib_scaled_display_keeps_inset_plot_inside_logical_panel():
     result = render_protocol_scene_with_layout(
         visuals=(),
         figure=fig,
-        panel_viewport_rect=(0.1, 0.1, 0.8, 0.8),
+        panel_layout=ExplicitPanelLayoutV1(
+            (
+                PanelPlacement(
+                    "panel:default",
+                    NormalizedRenderTargetRect(0.1, 0.1, 0.8, 0.8),
+                ),
+            )
+        ),
         device_scale=2.0,
     )
     try:
         snapshot = result.layout_snapshot
-        panel = snapshot.panel_rect_px
-        plot = snapshot.plot_rect_px
+        panel = snapshot.only_panel().panel_rect_px
+        plot = snapshot.only_panel().plot_rect_px
 
         assert snapshot.render_target.logical_width_px == 640
         assert snapshot.render_target.logical_height_px == 480
@@ -539,14 +551,14 @@ def test_consumed_plot_size_does_not_scale_screen_space_visual_sizes():
     )
     target = RenderTarget(800, 600)
     layouts = (
-        ResolvedLayoutSnapshot(
+        resolved_single_panel_fixture(
             snapshot_id="layout:size-full",
             render_target=target,
             panel_rect_px=LogicalPixelRect(0, 0, 800, 600),
             plot_rect_px=LogicalPixelRect(0, 0, 800, 600),
             view_id=view.id,
         ),
-        ResolvedLayoutSnapshot(
+        resolved_single_panel_fixture(
             snapshot_id="layout:size-inset",
             render_target=target,
             panel_rect_px=LogicalPixelRect(40, 30, 720, 540),
@@ -679,9 +691,7 @@ def test_view2d_semantic_guides_keep_native_frame_visible():
         ),
     )
 
-    result = render_protocol_scene_with_layout(
-        visuals=(), view=view, axis_guides=guides
-    )
+    result = render_protocol_scene_with_layout(visuals=(), view=view, axis_guides=guides)
     try:
         assert result.axes.axison is True
         assert result.axes.spines["bottom"].get_visible()
@@ -719,13 +729,9 @@ def test_render_protocol_scene_with_reference_canvas_resolves_matplotlib_size():
         assert result.layout_snapshot.render_target.logical_height_px == 540
         assert result.layout_snapshot.render_target.dpi == 144
         assert result.layout_snapshot.render_target.device_scale == 1
-        np.testing.assert_allclose(
-            result.figure.get_size_inches(), np.array([10.0, 5.625])
-        )
+        np.testing.assert_allclose(result.figure.get_size_inches(), np.array([10.0, 5.625]))
         collection = result.axes.collections[0]
-        np.testing.assert_allclose(
-            collection.get_sizes(), np.array([225.0], dtype=np.float32)
-        )
+        np.testing.assert_allclose(collection.get_sizes(), np.array([225.0], dtype=np.float32))
     finally:
         plt.close(result.figure)
 
@@ -733,17 +739,13 @@ def test_render_protocol_scene_with_reference_canvas_resolves_matplotlib_size():
 def test_requested_device_scale_sets_native_matplotlib_raster_dpi():
     result = render_protocol_scene_with_layout(
         visuals=(),
-        canvas_size=CanvasSize.host_logical_px(
-            800, 600
-        ).with_requested_device_scale(2.0),
+        canvas_size=CanvasSize.host_logical_px(800, 600).with_requested_device_scale(2.0),
     )
     try:
         assert result.resolved_canvas.output_dpi == 192
         assert result.figure.dpi == 192
         assert result.figure.canvas.get_width_height() == (1600, 1200)
-        np.testing.assert_allclose(
-            result.figure.get_size_inches(), np.array([800 / 96, 600 / 96])
-        )
+        np.testing.assert_allclose(result.figure.get_size_inches(), np.array([800 / 96, 600 / 96]))
     finally:
         plt.close(result.figure)
 
@@ -801,7 +803,7 @@ def test_programmatic_navigation_render_and_query_share_view_snapshot():
     try:
         assert render.layout_snapshot_id == navigation.layout_snapshot_id
         assert render.view_snapshot_id == navigation.view_snapshot_id
-        assert render.layout_snapshot.view_id == navigation.view.id
+        assert render.layout_snapshot.only_panel().view_id == navigation.view.id
         assert render.axes.get_xlim() == pytest.approx(navigation.view.x_range)
 
         query = query_visuals(
@@ -863,9 +865,7 @@ def test_render_point_visual_converts_pixel_diameters_using_figure_dpi():
 
         artist = render_point_visual(ax, visual)
 
-        np.testing.assert_allclose(
-            artist.get_sizes(), np.array([100.0], dtype=np.float32)
-        )
+        np.testing.assert_allclose(artist.get_sizes(), np.array([100.0], dtype=np.float32))
     finally:
         plt.close(fig)
 
@@ -884,9 +884,7 @@ def test_render_point_visual_uses_logical_dpi_when_backend_device_scales():
 
         artist = render_point_visual(ax, visual)
 
-        np.testing.assert_allclose(
-            artist.get_sizes(), np.array([207.36], dtype=np.float32)
-        )
+        np.testing.assert_allclose(artist.get_sizes(), np.array([207.36], dtype=np.float32))
     finally:
         plt.close(fig)
 
@@ -1152,12 +1150,8 @@ def test_render_marker_visual_creates_marker_collections():
             artists[1].get_sizes(),
             np.array([_marker_areas_from_pixel_diameters(ax, visual.sizes)[1]]),
         )
-        np.testing.assert_allclose(
-            artists[0].get_facecolors()[0], np.array([1.0, 0.0, 0.0, 1.0])
-        )
-        np.testing.assert_allclose(
-            artists[0].get_edgecolors()[0], np.array([0.0, 0.0, 0.0, 1.0])
-        )
+        np.testing.assert_allclose(artists[0].get_facecolors()[0], np.array([1.0, 0.0, 0.0, 1.0]))
+        np.testing.assert_allclose(artists[0].get_edgecolors()[0], np.array([0.0, 0.0, 0.0, 1.0]))
         np.testing.assert_allclose(artists[0].get_linewidths(), np.array([1.08]))
     finally:
         plt.close(fig)
@@ -1182,9 +1176,7 @@ def test_render_segment_visual_creates_line_collection_with_pixel_widths():
         np.testing.assert_allclose(artist.get_segments()[0], [[0.25, 0.625], [0.5, 0.75]])
         assert artist.get_transform() == ax.transAxes
         np.testing.assert_allclose(artist.get_linewidths(), np.array([5.0, 10.0]))
-        np.testing.assert_allclose(
-            artist.get_colors()[0], np.array([1.0, 0.0, 0.0, 1.0])
-        )
+        np.testing.assert_allclose(artist.get_colors()[0], np.array([1.0, 0.0, 0.0, 1.0]))
         assert artist.get_capstyle() == "round"
     finally:
         plt.close(fig)
@@ -1242,9 +1234,7 @@ def test_render_path_visual_applies_inline_transform_to_vertices():
 
         (artist,) = render_path_visual(ax, visual)
 
-        np.testing.assert_allclose(
-            artist.get_path().vertices, np.array([[1.0, -1.0], [3.0, -1.0]])
-        )
+        np.testing.assert_allclose(artist.get_path().vertices, np.array([[1.0, -1.0], [3.0, -1.0]]))
         np.testing.assert_allclose(artist.get_linewidth(), 1.44)
     finally:
         plt.close(fig)
@@ -1279,9 +1269,7 @@ def test_marker_diamond_path_uses_bbox_diameter_semantics():
     path = _marker_path(MarkerShape.DIAMOND, 0.0)
     bbox = path.get_extents()
 
-    np.testing.assert_allclose(
-        [bbox.x0, bbox.x1, bbox.y0, bbox.y1], [-0.5, 0.5, -0.5, 0.5]
-    )
+    np.testing.assert_allclose([bbox.x0, bbox.x1, bbox.y0, bbox.y1], [-0.5, 0.5, -0.5, 0.5])
 
 
 def test_render_mesh_visual_creates_poly_collection_for_uniform_color():
@@ -1290,9 +1278,7 @@ def test_render_mesh_visual_creates_poly_collection_for_uniform_color():
     try:
         visual = MeshVisual(
             id="visual:mesh",
-            positions=np.array(
-                [[-0.5, -0.5], [0.5, -0.5], [0.0, 0.5]], dtype=np.float32
-            ),
+            positions=np.array([[-0.5, -0.5], [0.5, -0.5], [0.0, 0.5]], dtype=np.float32),
             faces=np.array([[0, 1, 2]], dtype=np.uint32),
             coordinate_space=CoordinateSpace.NDC,
             color=np.array([255, 0, 0, 255], dtype=np.uint8),
@@ -1302,9 +1288,7 @@ def test_render_mesh_visual_creates_poly_collection_for_uniform_color():
 
         assert artist.get_gid() == "visual:mesh"
         assert len(artist.get_paths()) == 1
-        np.testing.assert_allclose(
-            artist.get_facecolors()[0], np.array([1.0, 0.0, 0.0, 1.0])
-        )
+        np.testing.assert_allclose(artist.get_facecolors()[0], np.array([1.0, 0.0, 0.0, 1.0]))
     finally:
         plt.close(fig)
 
@@ -1315,9 +1299,7 @@ def test_render_mesh_visual_rejects_texture2d_unlit_without_dropping_texture_fie
     try:
         visual = MeshVisual(
             id="visual:textured-mesh",
-            positions=np.array(
-                [[-0.5, -0.5], [0.5, -0.5], [0.0, 0.5]], dtype=np.float32
-            ),
+            positions=np.array([[-0.5, -0.5], [0.5, -0.5], [0.0, 0.5]], dtype=np.float32),
             faces=np.array([[0, 1, 2]], dtype=np.uint32),
             coordinate_space=CoordinateSpace.NDC,
             color=np.array([255, 255, 255, 255], dtype=np.uint8),
@@ -1642,7 +1624,7 @@ def test_render_mesh_visual_s039_flat_lambert_alpha_remains_non_strict():
 
 
 def test_render_mesh_visual_3d_ndc_uses_panel_xy_directly():
-    """NDC MeshVisual positions3d use panel NDC x/y directly."""
+    """NDC MeshVisual positions3d use plot NDC x/y directly."""
     fig, ax = plt.subplots()
     try:
         visual = MeshVisual(
@@ -1962,9 +1944,7 @@ def test_protocol_visual_validation_rejects_shape_mismatch():
     colors = np.array([[255, 255, 255, 255]], dtype=np.uint8)
 
     try:
-        PointVisual(
-            "visual:bad", positions, colors, np.array([1.0, 2.0], dtype=np.float32)
-        )
+        PointVisual("visual:bad", positions, colors, np.array([1.0, 2.0], dtype=np.float32))
     except ValueError as exc:
         assert "colors length" in str(exc)
     else:
@@ -1986,9 +1966,7 @@ def test_marker_visual_validation_covers_shapes_angles_and_stroke():
     )
 
     assert visual.shape_values() == (MarkerShape.DISC, MarkerShape.DISC)
-    np.testing.assert_allclose(
-        visual.angle_values(), np.array([0.0, 0.5], dtype=np.float32)
-    )
+    np.testing.assert_allclose(visual.angle_values(), np.array([0.0, 0.5], dtype=np.float32))
 
     with pytest.raises(ValueError, match="shape length"):
         MarkerVisual("visual:bad-shape", positions, (MarkerShape.DISC,), colors, 4.0)
@@ -2039,9 +2017,7 @@ def test_segment_visual_validation_covers_positions_widths_and_colors():
         cap=StrokeCap.SQUARE,
     )
 
-    np.testing.assert_allclose(
-        visual.width_values(), np.array([2.0, 4.0], dtype=np.float32)
-    )
+    np.testing.assert_allclose(visual.width_values(), np.array([2.0, 4.0], dtype=np.float32))
 
     with pytest.raises(ValueError, match="end_positions length"):
         SegmentVisual("visual:bad-end-count", starts, ends[:1], colors, 2.0)
@@ -2055,9 +2031,7 @@ def test_segment_visual_validation_covers_positions_widths_and_colors():
 
 def test_path_visual_validation_covers_path_lengths_widths_and_colors():
     """PathVisual validates open subpath partitioning and per-path attributes."""
-    positions = np.array(
-        [[0.0, 0.0], [0.5, 0.5], [1.0, 0.0], [1.5, 0.5]], dtype=np.float32
-    )
+    positions = np.array([[0.0, 0.0], [0.5, 0.5], [1.0, 0.0], [1.5, 0.5]], dtype=np.float32)
     colors = np.array([[255, 255, 255, 255], [0, 0, 0, 255]], dtype=np.uint8)
 
     visual = PathVisual(
@@ -2069,9 +2043,7 @@ def test_path_visual_validation_covers_path_lengths_widths_and_colors():
         join=StrokeJoin.ROUND,
     )
 
-    np.testing.assert_allclose(
-        visual.width_values(), np.array([2.0, 4.0], dtype=np.float32)
-    )
+    np.testing.assert_allclose(visual.width_values(), np.array([2.0, 4.0], dtype=np.float32))
 
     with pytest.raises(ValueError, match="path_lengths sum"):
         PathVisual("visual:bad-length-sum", positions, (3,), colors[:1], 2.0)
@@ -2111,14 +2083,10 @@ def test_text_visual_validation_and_value_expansion():
         visual.rgba_values(),
         np.array([[1.0, 0.5, 0.0, 1.0], [1.0, 0.5, 0.0, 1.0]], dtype=np.float32),
     )
-    np.testing.assert_allclose(
-        visual.font_size_values(), np.array([12.0, 18.0], dtype=np.float32)
-    )
+    np.testing.assert_allclose(visual.font_size_values(), np.array([12.0, 18.0], dtype=np.float32))
     assert visual.anchor_x_values() == (TextAnchorX.LEFT, TextAnchorX.RIGHT)
     assert visual.anchor_y_values() == (TextAnchorY.CENTER, TextAnchorY.CENTER)
-    np.testing.assert_allclose(
-        visual.rotation_values(), np.array([0.0, 0.5], dtype=np.float32)
-    )
+    np.testing.assert_allclose(visual.rotation_values(), np.array([0.0, 0.5], dtype=np.float32))
 
 
 def test_text_visual_validation_rejects_invalid_inputs():
@@ -2131,9 +2099,7 @@ def test_text_visual_validation_rejects_invalid_inputs():
         TextVisual("visual:bad-positions", ("one",), positions, CoordinateSpace.NDC)
 
     with pytest.raises(ValueError, match="control characters"):
-        TextVisual(
-            "visual:bad-text", ("bad\ttext",), positions[:1], CoordinateSpace.NDC
-        )
+        TextVisual("visual:bad-text", ("bad\ttext",), positions[:1], CoordinateSpace.NDC)
 
     with pytest.raises(ValueError, match="rgba"):
         TextVisual(

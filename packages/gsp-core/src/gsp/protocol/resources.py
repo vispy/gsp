@@ -104,13 +104,9 @@ class Texture2D:
         if self.image.dtype != np.dtype(np.uint8):
             raise TypeError("texture2d_invalid_resource: image must have dtype uint8")
         if self.image.ndim != 3 or self.image.shape[2] != 4:
-            raise ValueError(
-                "texture2d_invalid_resource: image must have shape (H, W, 4)"
-            )
+            raise ValueError("texture2d_invalid_resource: image must have shape (H, W, 4)")
         if self.image.shape[0] <= 0 or self.image.shape[1] <= 0:
-            raise ValueError(
-                "texture2d_invalid_resource: image dimensions must be positive"
-            )
+            raise ValueError("texture2d_invalid_resource: image dimensions must be positive")
         if not self.image.flags.c_contiguous:
             raise ValueError("texture2d_invalid_resource: image must be contiguous")
 

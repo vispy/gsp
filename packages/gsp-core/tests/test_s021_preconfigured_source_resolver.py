@@ -20,7 +20,9 @@ def test_demo_resolver_advertises_only_opaque_no_network_handles():
     resolver = demo_no_network_preconfigured_source_resolver()
 
     assert resolver.resolver_id == "gsp.test.synthetic-resolver"
-    assert resolver.source_refs == ({"resolver_id": "gsp.test.synthetic-resolver", "source_id": "public-demo-pyramid"},)
+    assert resolver.source_refs == (
+        {"resolver_id": "gsp.test.synthetic-resolver", "source_id": "public-demo-pyramid"},
+    )
     assert resolver.capability_record() == {
         "resolver_id": "gsp.test.synthetic-resolver",
         "source_kinds": ("tiled-image",),
@@ -34,13 +36,18 @@ def test_demo_resolver_descriptor_validates_against_s020_security_surface():
     resolver = demo_no_network_preconfigured_source_resolver()
     descriptor = resolver.descriptor_for("public-demo-pyramid")
 
-    result = validate_no_network_source_descriptor(descriptor, allowed_source_refs=resolver.source_refs)
+    result = validate_no_network_source_descriptor(
+        descriptor, allowed_source_refs=resolver.source_refs
+    )
 
     assert result.accepted
     assert descriptor.locality == DataLocality.PRECONFIGURED_SOURCE
     assert descriptor.credential_policy == CredentialPolicy.NONE
     assert descriptor.fetch_descriptor is None
-    assert descriptor.source_ref == {"resolver_id": "gsp.test.synthetic-resolver", "source_id": "public-demo-pyramid"}
+    assert descriptor.source_ref == {
+        "resolver_id": "gsp.test.synthetic-resolver",
+        "source_id": "public-demo-pyramid",
+    }
 
 
 def test_demo_resolver_materializes_deterministic_tile_without_network_io():
@@ -50,7 +57,9 @@ def test_demo_resolver_materializes_deterministic_tile_without_network_io():
     assert resolved.accepted
     assert resolved.source is not None
     assert resolved.provider is not None
-    tile = resolved.provider.get_tile(TileRequest(source_id=resolved.source.id, tile=TileIndex(level=0, x=1, y=1)))
+    tile = resolved.provider.get_tile(
+        TileRequest(source_id=resolved.source.id, tile=TileIndex(level=0, x=1, y=1))
+    )
 
     assert tile.data is not None
     assert tile.data.shape == (4, 4, 4)
@@ -68,7 +77,9 @@ def test_demo_resolver_rejects_unknown_handle_with_stable_diagnostic():
         source_ref={"resolver_id": resolver.resolver_id, "source_id": "unknown"},
     )
 
-    security = validate_no_network_source_descriptor(descriptor, allowed_source_refs=resolver.source_refs)
+    security = validate_no_network_source_descriptor(
+        descriptor, allowed_source_refs=resolver.source_refs
+    )
     resolved = resolver.resolve(descriptor)
 
     assert not security.accepted
@@ -94,12 +105,17 @@ def test_demo_resolver_rejects_fetch_descriptor_even_for_known_handle():
     resolved = resolver.resolve(descriptor)
 
     assert not resolved.accepted
-    assert resolved.diagnostic == "GSP_FETCH_DESCRIPTOR_REJECTED: fetch_descriptor is reserved and rejected in S020 no-network mode"
+    assert (
+        resolved.diagnostic
+        == "GSP_FETCH_DESCRIPTOR_REJECTED: fetch_descriptor is reserved and rejected in S020 no-network mode"
+    )
 
 
 def test_security_capability_metadata_includes_preconfigured_resolver_record():
     resolver = demo_no_network_preconfigured_source_resolver()
-    metadata = s020_security_capability_metadata(preconfigured_resolvers=(resolver.capability_record(),))
+    metadata = s020_security_capability_metadata(
+        preconfigured_resolvers=(resolver.capability_record(),)
+    )
 
     assert metadata["data_sources"]["remote_fetch_descriptors"] == {"accepted": False}
     assert metadata["data_sources"]["supports_server_side_fetch"] == {"accepted": False}
@@ -131,7 +147,10 @@ def test_no_network_resolver_rejects_credentialed_registered_sources():
     resolved = resolver.resolve(credentialed)
 
     assert not resolved.accepted
-    assert resolved.diagnostic == "GSP_CREDENTIAL_POLICY_UNSUPPORTED: no-network resolver supports only credential_policy=none"
+    assert (
+        resolved.diagnostic
+        == "GSP_CREDENTIAL_POLICY_UNSUPPORTED: no-network resolver supports only credential_policy=none"
+    )
 
 
 def test_demo_resolver_rejects_known_handle_with_url_metadata():

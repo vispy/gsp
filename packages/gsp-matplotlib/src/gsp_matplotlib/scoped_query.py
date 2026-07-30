@@ -66,16 +66,22 @@ def query_scoped_scene(
     if request.scope == QueryScope.GUIDES:
         if layout_snapshot is not None:
             if request.requested_extension_payload_kinds and not _guide_entries_support(request):
-                return unsupported_query_result(request, "guide query cannot satisfy requested extension payloads")
+                return unsupported_query_result(
+                    request, "guide query cannot satisfy requested extension payloads"
+                )
             return query_resolved_layout_guides(request, layout_snapshot)
         if view is None:
             return unsupported_query_result(request, "guide query requires a View2D")
         if request.requested_extension_payload_kinds and not _guide_entries_support(request):
-            return unsupported_query_result(request, "guide query cannot satisfy requested extension payloads")
+            return unsupported_query_result(
+                request, "guide query cannot satisfy requested extension payloads"
+            )
         return query_axis_guides(request, view, guide_entries)
     if request.scope == QueryScope.ALL_RENDERED:
         if guide_entries and view is None and layout_snapshot is None:
-            return unsupported_query_result(request, "all-rendered query with guides requires a View2D")
+            return unsupported_query_result(
+                request, "all-rendered query with guides requires a View2D"
+            )
         return _query_all_rendered(
             request,
             visual_entries,
@@ -85,7 +91,9 @@ def query_scoped_scene(
             layout_snapshot,
             panel_bounds,
         )
-    return unsupported_query_result(request, f"query scope {request.scope.value!r} is not supported")
+    return unsupported_query_result(
+        request, f"query scope {request.scope.value!r} is not supported"
+    )
 
 
 def _query_all_rendered(
@@ -99,9 +107,13 @@ def _query_all_rendered(
 ) -> QueryResult:
     if request.requested_extension_payload_kinds:
         data_supported = _extension_entries_support(request, extension_entries)
-        guide_supported = (layout_snapshot is not None or bool(guide_entries)) and _guide_entries_support(request)
+        guide_supported = (
+            layout_snapshot is not None or bool(guide_entries)
+        ) and _guide_entries_support(request)
         if not data_supported and not guide_supported:
-            return unsupported_query_result(request, "all-rendered query cannot satisfy requested extension payloads")
+            return unsupported_query_result(
+                request, "all-rendered query cannot satisfy requested extension payloads"
+            )
         data_result = (
             _query_all_data_hits(request, visual_entries, extension_entries, panel_bounds)
             if data_supported
@@ -114,14 +126,18 @@ def _query_all_rendered(
         )
         if data_result.status == QueryStatus.OUTSIDE_PANEL:
             return data_result
-        return _merge_ordered_results(request, data_result, guide_result, visual_entries, extension_entries, guide_entries)
+        return _merge_ordered_results(
+            request, data_result, guide_result, visual_entries, extension_entries, guide_entries
+        )
 
     data_result = _query_all_data_hits(request, visual_entries, extension_entries, panel_bounds)
     if data_result.status == QueryStatus.OUTSIDE_PANEL:
         return data_result
     guide_result = _query_all_guide_hits(request, view, guide_entries, layout_snapshot)
 
-    return _merge_ordered_results(request, data_result, guide_result, visual_entries, extension_entries, guide_entries)
+    return _merge_ordered_results(
+        request, data_result, guide_result, visual_entries, extension_entries, guide_entries
+    )
 
 
 def _merge_ordered_results(
@@ -202,8 +218,12 @@ def _query_data_scope(
             panel_coordinate=request.coordinate,
             layout_snapshot_id=request.layout_snapshot_id,
         )
-    if request.requested_extension_payload_kinds and not _extension_entries_support(request, extension_entries):
-        return unsupported_query_result(request, "data query cannot satisfy requested extension payloads")
+    if request.requested_extension_payload_kinds and not _extension_entries_support(
+        request, extension_entries
+    ):
+        return unsupported_query_result(
+            request, "data query cannot satisfy requested extension payloads"
+        )
 
     ordered_hits: list[_OrderedHit] = []
     if not request.requested_extension_payload_kinds:
@@ -216,7 +236,9 @@ def _query_data_scope(
             return data_result
         ordered_hits.extend(_ordered_data_hits(data_result, visual_entries))
 
-    extension_result = _query_extension_hits(_with_hit_policy(request, QueryHitPolicy.ALL), extension_entries)
+    extension_result = _query_extension_hits(
+        _with_hit_policy(request, QueryHitPolicy.ALL), extension_entries
+    )
     if extension_result.status in (QueryStatus.UNSUPPORTED, QueryStatus.FAILED):
         return extension_result
     ordered_hits.extend(_ordered_extension_hits(extension_result, extension_entries))
@@ -251,10 +273,14 @@ def _query_data_scope(
     )
 
 
-def _query_extension_hits(request: QueryRequest, entries: tuple[QueryExtensionEntry, ...]) -> QueryResult:
+def _query_extension_hits(
+    request: QueryRequest, entries: tuple[QueryExtensionEntry, ...]
+) -> QueryResult:
     hits: list[QueryHit] = []
     for entry in entries:
-        if request.requested_extension_payload_kinds and not _extension_entry_supports(request, entry):
+        if request.requested_extension_payload_kinds and not _extension_entry_supports(
+            request, entry
+        ):
             continue
         result = entry.query(request)
         if result.status in (QueryStatus.UNSUPPORTED, QueryStatus.FAILED):
@@ -317,7 +343,9 @@ def _query_all_guide_hits(
     return query_axis_guides(_with_hit_policy(request, QueryHitPolicy.ALL), view, guide_entries)
 
 
-def _ordered_data_hits(result: QueryResult, entries: tuple[QueryVisualEntry, ...]) -> list[_OrderedHit]:
+def _ordered_data_hits(
+    result: QueryResult, entries: tuple[QueryVisualEntry, ...]
+) -> list[_OrderedHit]:
     z_by_visual = {entry.visual.id: entry.z_order for entry in entries}
     return [
         _OrderedHit(hit, z_by_visual.get(hit.visual_id or "", 0))
@@ -326,12 +354,16 @@ def _ordered_data_hits(result: QueryResult, entries: tuple[QueryVisualEntry, ...
     ]
 
 
-def _ordered_guide_hits(result: QueryResult, entries: tuple[QueryGuideEntry, ...]) -> list[_OrderedHit]:
+def _ordered_guide_hits(
+    result: QueryResult, entries: tuple[QueryGuideEntry, ...]
+) -> list[_OrderedHit]:
     z_by_guide = {entry.guide.id: entry.z_order for entry in entries}
     return [_OrderedHit(hit, z_by_guide.get(hit.visual_id or "", 0)) for hit in result.hits]
 
 
-def _ordered_extension_hits(result: QueryResult, entries: tuple[QueryExtensionEntry, ...]) -> list[_OrderedHit]:
+def _ordered_extension_hits(
+    result: QueryResult, entries: tuple[QueryExtensionEntry, ...]
+) -> list[_OrderedHit]:
     z_by_kind = {kind: entry.z_order for entry in entries for kind in entry.extension_payload_kinds}
     return [
         _OrderedHit(hit, z_by_kind.get(hit.extension_payload_kind or "", 0))
@@ -340,13 +372,17 @@ def _ordered_extension_hits(result: QueryResult, entries: tuple[QueryExtensionEn
     ]
 
 
-def _extension_entries_support(request: QueryRequest, entries: tuple[QueryExtensionEntry, ...]) -> bool:
+def _extension_entries_support(
+    request: QueryRequest, entries: tuple[QueryExtensionEntry, ...]
+) -> bool:
     available = {kind for entry in entries for kind in entry.extension_payload_kinds}
     return set(request.requested_extension_payload_kinds).issubset(available)
 
 
 def _extension_entry_supports(request: QueryRequest, entry: QueryExtensionEntry) -> bool:
-    return set(request.requested_extension_payload_kinds).issubset(set(entry.extension_payload_kinds))
+    return set(request.requested_extension_payload_kinds).issubset(
+        set(entry.extension_payload_kinds)
+    )
 
 
 def _guide_entries_support(request: QueryRequest) -> bool:

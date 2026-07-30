@@ -45,9 +45,7 @@ def canonical_lut(colormap_id: ColorMapId) -> npt.NDArray[np.uint8]:
     return lut
 
 
-def map_scalar_value(
-    value: float, scale: ColorScale, *, alpha: float = 1.0
-) -> ScalarColorResult:
+def map_scalar_value(value: float, scale: ColorScale, *, alpha: float = 1.0) -> ScalarColorResult:
     """Map one scalar value using S026 linear normalization and LUT sampling."""
     source = float(value)
     normalize = scale.normalize

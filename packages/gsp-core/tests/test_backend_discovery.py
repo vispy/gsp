@@ -19,13 +19,26 @@ class FakeSession:
     capabilities = None
     diagnostics = ()
 
-    def render(self, scene, **kwargs): return scene
-    def display(self, scene, **kwargs): return scene
-    def query(self, request, *, scene_id=None): return request
-    def run(self): return None
-    def close(self): return None
-    def __enter__(self): return self
-    def __exit__(self, exc_type, exc, traceback): self.close()
+    def render(self, scene, **kwargs):
+        return scene
+
+    def display(self, scene, **kwargs):
+        return scene
+
+    def query(self, request, *, scene_id=None):
+        return request
+
+    def run(self):
+        return None
+
+    def close(self):
+        return None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, traceback):
+        self.close()
 
 
 class FakeProvider:
@@ -59,9 +72,7 @@ def test_metadata_discovery_does_not_load_provider(monkeypatch):
 
 
 def test_explicit_selection_and_capability_check(monkeypatch):
-    monkeypatch.setattr(
-        backends, "_entry_points", lambda: (FakeEntryPoint("fake", FakeProvider),)
-    )
+    monkeypatch.setattr(backends, "_entry_points", lambda: (FakeEntryPoint("fake", FakeProvider),))
     session = backends.open_session("fake", require={"visual.points"})
     assert session.backend_name == "fake"
     with pytest.raises(backends.BackendCapabilityError):
@@ -78,3 +89,17 @@ def test_selection_requires_policy_and_rejects_duplicates(monkeypatch):
     )
     with pytest.raises(backends.DuplicateBackendError):
         backends.discover_backends()
+
+
+@pytest.mark.parametrize(
+    "capability",
+    [
+        "gsp_vispy2.producer.mesh.texture2d_unlit.v1",
+        "vispy2.emit.meshvisual.material.texture2d_unlit.v1",
+    ],
+)
+def test_session_request_rejects_producer_emission_features(
+    capability: str,
+) -> None:
+    with pytest.raises(ValueError, match="not GSP session capabilities"):
+        backends.SessionRequest(require=frozenset({capability}))

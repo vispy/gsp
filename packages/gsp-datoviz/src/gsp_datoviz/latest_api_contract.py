@@ -81,11 +81,10 @@ REQUIRED_DATOVIZ_V04_DEV_SYMBOLS: tuple[str, ...] = (
     "dvz_camera_set_view",
 )
 
+
 def datoviz_current_api_missing_symbols(module: ModuleType | Any) -> tuple[str, ...]:
     """Return required current generated-binding symbols absent from *module*."""
-    return tuple(
-        name for name in REQUIRED_DATOVIZ_V04_DEV_SYMBOLS if not hasattr(module, name)
-    )
+    return tuple(name for name in REQUIRED_DATOVIZ_V04_DEV_SYMBOLS if not hasattr(module, name))
 
 
 def datoviz_vector_api_diagnostics(module: ModuleType | Any) -> tuple[str, ...]:
@@ -120,9 +119,7 @@ def datoviz_primitive_api_diagnostics(
             diagnostics.append(f"missing callable {name}")
         elif not name.startswith("dvz_") and value is None:
             diagnostics.append(f"missing {name}")
-    if indexed and not callable(
-        getattr(module, "dvz_visual_set_index_data", None)
-    ):
+    if indexed and not callable(getattr(module, "dvz_visual_set_index_data", None)):
         diagnostics.append("missing callable dvz_visual_set_index_data")
     return tuple(diagnostics)
 
@@ -143,8 +140,7 @@ def datoviz_current_api_contract_diagnostics(
 ) -> tuple[str, ...]:
     """Return latest-only contract diagnostics for a Datoviz module-like object."""
     diagnostics: list[str] = [
-        "Datoviz v0.4-dev generated Python binding is missing required current API symbol: "
-        f"{name}"
+        f"Datoviz v0.4-dev generated Python binding is missing required current API symbol: {name}"
         for name in datoviz_current_api_missing_symbols(module)
     ]
     if expected_package_root is not None:

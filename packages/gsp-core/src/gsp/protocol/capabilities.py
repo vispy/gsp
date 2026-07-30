@@ -93,7 +93,9 @@ class QueryTargetCapability:
             return True
         requested_set = set(requested)
         if self.payload_sets:
-            return any(requested_set.issubset(set(payload_set)) for payload_set in self.payload_sets)
+            return any(
+                requested_set.issubset(set(payload_set)) for payload_set in self.payload_sets
+            )
         if self.payloads:
             return requested_set.issubset(set(self.payloads))
         return True
@@ -108,7 +110,10 @@ class QueryScopeCapability:
     """Capability for querying a contribution scope."""
 
     scope: QueryScope
-    coordinate_spaces: tuple[QueryCoordinateSpace, ...] = (QueryCoordinateSpace.PANEL, QueryCoordinateSpace.DATA)
+    coordinate_spaces: tuple[QueryCoordinateSpace, ...] = (
+        QueryCoordinateSpace.PANEL,
+        QueryCoordinateSpace.DATA,
+    )
     hit_policies: tuple[QueryHitPolicy, ...] = (QueryHitPolicy.FRONTMOST,)
     targets: tuple[QueryTargetCapability, ...] = ()
     ordering: QueryOrderingGuarantee = QueryOrderingGuarantee.NONE
@@ -142,12 +147,18 @@ class QueryScopeCapability:
                 AdaptationOutcome.REJECT,
                 f"query hit policy {request.hit_policy.value!r} is not supported for scope {self.scope.value!r}",
             )
-        if request.hit_policy == QueryHitPolicy.ALL and self.ordering == QueryOrderingGuarantee.NONE:
+        if (
+            request.hit_policy == QueryHitPolicy.ALL
+            and self.ordering == QueryOrderingGuarantee.NONE
+        ):
             return AdaptationDecision(
                 AdaptationOutcome.REJECT,
                 f"query hit policy 'all' requires an ordering guarantee for scope {self.scope.value!r}",
             )
-        if request.scope == QueryScope.ALL_RENDERED and self.ordering != QueryOrderingGuarantee.GLOBAL_RENDER_ORDER:
+        if (
+            request.scope == QueryScope.ALL_RENDERED
+            and self.ordering != QueryOrderingGuarantee.GLOBAL_RENDER_ORDER
+        ):
             return AdaptationDecision(
                 AdaptationOutcome.REJECT,
                 "query scope 'all-rendered' requires a global render-order guarantee",
@@ -262,7 +273,11 @@ class LayoutCapability:
             raise ValueError("resolved_layout_produce must be none, partial, or full")
         if self.resolved_layout_consume not in ("none", "partial", "full"):
             raise ValueError("resolved_layout_consume must be none, partial, or full")
-        if self.layout_strict and self.resolved_layout_produce == "none" and self.resolved_layout_consume == "none":
+        if (
+            self.layout_strict
+            and self.resolved_layout_produce == "none"
+            and self.resolved_layout_consume == "none"
+        ):
             raise ValueError("layout_strict requires producing or consuming resolved layout")
         for diagnostic in self.diagnostics:
             if not diagnostic:
@@ -304,7 +319,9 @@ class GuideLayoutCapability:
     def __post_init__(self) -> None:
         for value in (self.panel_text_title, self.colorbar, self.legend):
             if value not in ("native", "resolved", "adapted", "unsupported"):
-                raise ValueError("guide realization status must be native, resolved, adapted, or unsupported")
+                raise ValueError(
+                    "guide realization status must be native, resolved, adapted, or unsupported"
+                )
         for diagnostic in self.diagnostics:
             if not diagnostic:
                 raise ValueError("guide layout diagnostics must not contain empty strings")
@@ -384,7 +401,9 @@ def select_axis_provider(
 ) -> AxisProviderCapability | None:
     """Select an axis provider using the small v0.2 policy surface."""
     request = request or AxisProviderRequest()
-    supported = tuple(provider for provider in providers if provider.provider_status != "unsupported")
+    supported = tuple(
+        provider for provider in providers if provider.provider_status != "unsupported"
+    )
     if request.policy == "disabled":
         return None
     if request.policy == "generated_primitives_only":
@@ -533,7 +552,9 @@ class CapabilitySnapshot:
 
     def query_capability(self, scope: QueryScope) -> QueryScopeCapability | None:
         """Return an advertised typed query capability by scope."""
-        return _first(capability for capability in self.query_capabilities if capability.scope == scope)
+        return _first(
+            capability for capability in self.query_capabilities if capability.scope == scope
+        )
 
     def supports_query_scope(self, scope: QueryScope) -> bool:
         """Return whether a typed query scope is advertised."""
@@ -547,7 +568,9 @@ class CapabilitySnapshot:
         """Return an advertised axis provider by id."""
         return _find_provider(self.axis_providers, provider_id)
 
-    def select_axis_provider(self, request: AxisProviderRequest | None = None) -> AxisProviderCapability | None:
+    def select_axis_provider(
+        self, request: AxisProviderRequest | None = None
+    ) -> AxisProviderCapability | None:
         """Select an advertised axis provider."""
         return select_axis_provider(self.axis_providers, request)
 
@@ -656,7 +679,9 @@ class CapabilitySnapshot:
         return self.adapt_extension(manifest.capability)
 
 
-def _find_provider(providers: tuple[AxisProviderCapability, ...], provider_id: str) -> AxisProviderCapability | None:
+def _find_provider(
+    providers: tuple[AxisProviderCapability, ...], provider_id: str
+) -> AxisProviderCapability | None:
     return _first(provider for provider in providers if provider.provider_id == provider_id)
 
 
@@ -666,7 +691,9 @@ def _first(items: Iterable[_T]) -> _T | None:
     return None
 
 
-def _adapt_guide_query_provider(request: QueryRequest, context: QueryPlanningContext) -> AdaptationDecision:
+def _adapt_guide_query_provider(
+    request: QueryRequest, context: QueryPlanningContext
+) -> AdaptationDecision:
     provider = context.selected_axis_provider
     if provider is None:
         return AdaptationDecision(

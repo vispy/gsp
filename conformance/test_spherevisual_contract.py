@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+from conformance.p038_support import single_panel_scene
 
-from gsp import Scene
 from gsp.protocol import (
     Camera3D,
     CoordinateSpace,
@@ -32,22 +32,16 @@ def _view3d() -> View3D:
 def test_spherevisual_scene_preserves_data_radii_and_colors() -> None:
     visual = SphereVisual(
         id="sphere:contract",
-        positions=np.array(
-            [[-0.5, 0.0, 0.0], [0.5, 0.0, 0.0]], dtype=np.float32
-        ),
+        positions=np.array([[-0.5, 0.0, 0.0], [0.5, 0.0, 0.0]], dtype=np.float32),
         radii=np.array([0.25, 0.75], dtype=np.float32),
-        colors=np.array(
-            [[255, 0, 0, 255], [0, 128, 255, 128]], dtype=np.uint8
-        ),
+        colors=np.array([[255, 0, 0, 255], [0, 128, 255, 128]], dtype=np.uint8),
     )
-    scene = Scene(id="scene:spheres", visuals=(visual,), view3d=_view3d())
+    scene = single_panel_scene(id="scene:spheres", visuals=(visual,), view3d=_view3d())
 
     assert scene.visuals == (visual,)
     assert visual.coordinate_space is CoordinateSpace.DATA
     np.testing.assert_allclose(visual.radius_values(), [0.25, 0.75])
-    np.testing.assert_array_equal(
-        visual.colors, [[255, 0, 0, 255], [0, 128, 255, 128]]
-    )
+    np.testing.assert_array_equal(visual.colors, [[255, 0, 0, 255], [0, 128, 255, 128]])
 
 
 def test_spherevisual_contract_requires_data_space_and_view3d() -> None:
@@ -59,7 +53,7 @@ def test_spherevisual_contract_requires_data_space_and_view3d() -> None:
     )
 
     with pytest.raises(ValueError, match="Scene.view3d"):
-        Scene(id="scene:missing-view3d", visuals=(visual,))
+        single_panel_scene(id="scene:missing-view3d", visuals=(visual,))
 
     with pytest.raises(ValueError, match="CoordinateSpace.DATA"):
         SphereVisual(

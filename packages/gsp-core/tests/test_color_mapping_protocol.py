@@ -250,9 +250,7 @@ def test_mesh_visual_rejects_face_scalar_encoding_conflicts():
     with pytest.raises(ValueError, match="mutually exclusive"):
         MeshVisual(
             id="visual:mesh",
-            positions=np.array(
-                [[-0.5, -0.5], [0.5, -0.5], [0.0, 0.5]], dtype=np.float32
-            ),
+            positions=np.array([[-0.5, -0.5], [0.5, -0.5], [0.0, 0.5]], dtype=np.float32),
             faces=np.array([[0, 1, 2]], dtype=np.uint32),
             coordinate_space=CoordinateSpace.DATA,
             color=np.array([255, 0, 0, 255], dtype=np.uint8),

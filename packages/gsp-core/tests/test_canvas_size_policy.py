@@ -41,9 +41,7 @@ def test_reference_px_uses_reference_dpi_for_physical_target():
 
 
 def test_physical_mm_derives_canvas_reference_pixels():
-    resolved = CanvasSize.physical_mm(254.0, 127.0, reference_dpi=96).resolve(
-        output_dpi=192
-    )
+    resolved = CanvasSize.physical_mm(254.0, 127.0, reference_dpi=96).resolve(output_dpi=192)
 
     assert resolved.canvas_width_px == pytest.approx(960.0)
     assert resolved.canvas_height_px == pytest.approx(480.0)

@@ -19,6 +19,7 @@ from gsp.protocol import (
     PixelOrigin,
     RenderTarget,
     ResolvedLayoutSnapshot,
+    ResolvedPanelLayout,
     ResetViewAction,
     SetViewAction,
     TransportKind,
@@ -253,9 +254,7 @@ def test_navigation_uses_plot_extents_and_rejects_guide_lane_anchor():
 
     assert panned.x_range == pytest.approx((-10.0, 90.0))
     assert panned.y_range == pytest.approx((-20.0, 80.0))
-    with pytest.raises(
-        ValueError, match=NavigationDiagnosticCode.NAVIGATION_OUTSIDE_PLOT.value
-    ):
+    with pytest.raises(ValueError, match=NavigationDiagnosticCode.NAVIGATION_OUTSIDE_PLOT.value):
         zoom_view2d_about(
             view,
             plot_rect,
@@ -268,10 +267,15 @@ def test_navigation_uses_plot_extents_and_rejects_guide_lane_anchor():
 def _navigation_layout(origin: PixelOrigin) -> ResolvedLayoutSnapshot:
     return ResolvedLayoutSnapshot(
         snapshot_id=f"layout:{origin.value}",
-        view_id="view:main",
         render_target=RenderTarget(800.0, 600.0, pixel_origin=origin),
-        panel_rect_px=LogicalPixelRect(100.0, 50.0, 600.0, 500.0),
-        plot_rect_px=LogicalPixelRect(140.0, 100.0, 520.0, 400.0),
+        panels=(
+            ResolvedPanelLayout(
+                panel_id="panel:main",
+                view_id="view:main",
+                panel_rect_px=LogicalPixelRect(100.0, 50.0, 600.0, 500.0),
+                plot_rect_px=LogicalPixelRect(140.0, 100.0, 520.0, 400.0),
+            ),
+        ),
     )
 
 
@@ -288,7 +292,7 @@ def test_view2d_navigation_resolved_layout_honors_pixel_origin() -> None:
 
     top_zoom = zoom_view2d_about(
         view,
-        top_left.plot_rect_px,
+        top_left.only_panel().plot_rect_px,
         anchor_px=origin_side_edge,
         factor_x=1.0,
         factor_y=2.0,
@@ -296,7 +300,7 @@ def test_view2d_navigation_resolved_layout_honors_pixel_origin() -> None:
     )
     bottom_zoom = zoom_view2d_about(
         view,
-        bottom_left.plot_rect_px,
+        bottom_left.only_panel().plot_rect_px,
         anchor_px=origin_side_edge,
         factor_x=1.0,
         factor_y=2.0,
@@ -304,14 +308,14 @@ def test_view2d_navigation_resolved_layout_honors_pixel_origin() -> None:
     )
     top_pan = pan_view2d(
         view,
-        top_left.plot_rect_px,
+        top_left.only_panel().plot_rect_px,
         dx_px=0.0,
         dy_px=40.0,
         layout_snapshot=top_left,
     )
     bottom_pan = pan_view2d(
         view,
-        bottom_left.plot_rect_px,
+        bottom_left.only_panel().plot_rect_px,
         dx_px=0.0,
         dy_px=40.0,
         layout_snapshot=bottom_left,
@@ -331,7 +335,7 @@ def test_navigation_input_adapter_consumes_layout_plot_and_origin() -> None:
         layout_snapshot=layout,
     )
 
-    assert adapter.panel_rect == layout.plot_rect_px
+    assert adapter.panel_rect == layout.only_panel().plot_rect_px
     assert adapter.pixel_origin is PixelOrigin.BOTTOM_LEFT
     action = adapter.handle_pointer_event(
         NavigationPointerEvent(
@@ -390,7 +394,7 @@ def test_navigation_input_adapter_rejects_partial_snapshot_geometry_update() -> 
             scroll_steps=1.0,
         )
     )
-    assert adapter.panel_rect == layout.plot_rect_px
+    assert adapter.panel_rect == layout.only_panel().plot_rect_px
     assert adapter.pixel_origin is PixelOrigin.TOP_LEFT
     assert isinstance(action, ZoomAboutAction)
     assert action.layout_snapshot_id == layout.snapshot_id
@@ -399,10 +403,15 @@ def test_navigation_input_adapter_rejects_partial_snapshot_geometry_update() -> 
 def test_navigation_input_adapter_snapshot_update_is_atomic() -> None:
     updated = ResolvedLayoutSnapshot(
         snapshot_id="layout:updated",
-        view_id="view:main",
         render_target=RenderTarget(800.0, 600.0, pixel_origin=PixelOrigin.BOTTOM_LEFT),
-        panel_rect_px=LogicalPixelRect(50.0, 40.0, 700.0, 520.0),
-        plot_rect_px=LogicalPixelRect(90.0, 80.0, 620.0, 440.0),
+        panels=(
+            ResolvedPanelLayout(
+                panel_id="panel:main",
+                view_id="view:main",
+                panel_rect_px=LogicalPixelRect(50.0, 40.0, 700.0, 520.0),
+                plot_rect_px=LogicalPixelRect(90.0, 80.0, 620.0, 440.0),
+            ),
+        ),
     )
     adapter = View2DNavigationInputAdapter(
         controller_id="nav:main",
@@ -423,7 +432,7 @@ def test_navigation_input_adapter_snapshot_update_is_atomic() -> None:
         )
     )
 
-    assert adapter.panel_rect == updated.plot_rect_px
+    assert adapter.panel_rect == updated.only_panel().plot_rect_px
     assert adapter.pixel_origin is PixelOrigin.BOTTOM_LEFT
     assert isinstance(action, ZoomAboutAction)
     assert action.layout_snapshot_id == updated.snapshot_id
@@ -524,9 +533,7 @@ def test_navigation_input_adapter_emits_wheel_zoom_and_tracks_accepted_revision(
     assert isinstance(zoom, ZoomAboutAction)
     assert zoom.anchor_px == pytest.approx((210.0, 120.0))
     expected_factor_x, expected_factor_y = (
-        navigation_module._DatovizPanzoomProfile.for_platform().wheel_zoom_factor(
-            panel_rect, 2.0
-        )
+        navigation_module._DatovizPanzoomProfile.for_platform().wheel_zoom_factor(panel_rect, 2.0)
     )
     assert zoom.factor_x == pytest.approx(expected_factor_x)
     assert zoom.factor_y == pytest.approx(expected_factor_y)
@@ -552,9 +559,7 @@ def test_navigation_input_adapter_emits_wheel_zoom_and_tracks_accepted_revision(
     assert isinstance(next_zoom, ZoomAboutAction)
     assert next_zoom.view2d_revision == "view-rev:2"
     expected_next_factor_x, expected_next_factor_y = (
-        navigation_module._DatovizPanzoomProfile.for_platform().wheel_zoom_factor(
-            panel_rect, -1.0
-        )
+        navigation_module._DatovizPanzoomProfile.for_platform().wheel_zoom_factor(panel_rect, -1.0)
     )
     assert next_zoom.factor_x == pytest.approx(expected_next_factor_x)
     assert next_zoom.factor_y == pytest.approx(expected_next_factor_y)
@@ -589,6 +594,8 @@ def test_navigation_input_adapter_ignores_pointer_anchors_outside_plot():
         )
         is None
     )
+
+
 def test_navigation_input_adapter_emits_right_drag_axis_zoom_actions():
     panel_rect = LogicalPixelRect(x=10.0, y=20.0, width=400.0, height=200.0)
     adapter = View2DNavigationInputAdapter(

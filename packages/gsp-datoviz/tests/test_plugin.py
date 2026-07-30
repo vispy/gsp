@@ -25,9 +25,7 @@ def test_probe_removes_vector_capability_when_runtime_probe_rejects_it(
             transform_capabilities=(),
             navigation_capabilities=(),
             view3d_capabilities=(),
-            supports_visual=lambda family: (
-                vector_ready if family == "vector" else True
-            ),
+            supports_visual=lambda family: (vector_ready if family == "vector" else True),
         ),
     )
 
@@ -52,9 +50,7 @@ def test_probe_removes_primitive_capability_when_runtime_probe_rejects_it(
             transform_capabilities=(),
             navigation_capabilities=(),
             view3d_capabilities=(),
-            supports_visual=lambda family: (
-                primitive_ready if family == "primitive" else True
-            ),
+            supports_visual=lambda family: (primitive_ready if family == "primitive" else True),
         ),
     )
 

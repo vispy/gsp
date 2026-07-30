@@ -130,6 +130,7 @@ class _DatovizPanzoomProfile:
             math.exp(self.drag_coef * average_extent_px * normalized_y),
         )
 
+
 @dataclass(frozen=True, slots=True)
 class View2DNavigationController:
     """Controller metadata for one target panel/view pair."""
@@ -360,8 +361,7 @@ class View2DNavigationInputAdapter:
         """
         if self._snapshot_backed:
             raise ValueError(
-                "set_panel_rect cannot replace snapshot-backed geometry; "
-                "use set_layout_snapshot"
+                "set_panel_rect cannot replace snapshot-backed geometry; use set_layout_snapshot"
             )
         _validate_panel_rect(panel_rect)
         self._panel_rect = panel_rect
@@ -395,9 +395,7 @@ class View2DNavigationInputAdapter:
     def handle_pointer_event(self, event: NavigationPointerEvent) -> NavigationAction | None:
         """Return a semantic navigation action for one pointer event, if any."""
         if event.kind is NavigationPointerEventKind.BUTTON_PRESS:
-            if not _rect_contains_coordinate(
-                self._panel_rect, (event.x_px, event.y_px)
-            ):
+            if not _rect_contains_coordinate(self._panel_rect, (event.x_px, event.y_px)):
                 self._clear_drag()
                 return None
             if event.left_button:
@@ -419,15 +417,11 @@ class View2DNavigationInputAdapter:
         if event.kind is NavigationPointerEventKind.MOUSE_MOVE:
             return self._handle_mouse_move(event)
         if event.kind is NavigationPointerEventKind.WHEEL:
-            if not _rect_contains_coordinate(
-                self._panel_rect, (event.x_px, event.y_px)
-            ):
+            if not _rect_contains_coordinate(self._panel_rect, (event.x_px, event.y_px)):
                 return None
             return self._handle_wheel(event)
         if event.kind is NavigationPointerEventKind.DOUBLE_CLICK:
-            if not _rect_contains_coordinate(
-                self._panel_rect, (event.x_px, event.y_px)
-            ):
+            if not _rect_contains_coordinate(self._panel_rect, (event.x_px, event.y_px)):
                 return None
             self._zoom = (1.0, 1.0)
             self._clear_drag()
@@ -484,9 +478,7 @@ class View2DNavigationInputAdapter:
     def _handle_wheel(self, event: NavigationPointerEvent) -> ZoomAboutAction | None:
         if event.scroll_steps == 0.0:
             return None
-        factor_x, factor_y = self._profile.wheel_zoom_factor(
-            self._panel_rect, event.scroll_steps
-        )
+        factor_x, factor_y = self._profile.wheel_zoom_factor(self._panel_rect, event.scroll_steps)
         target_zoom = (
             self._profile.clamp_zoom(self._zoom[0] * factor_x),
             self._profile.clamp_zoom(self._zoom[1] * factor_y),
@@ -504,9 +496,7 @@ class View2DNavigationInputAdapter:
             layout_snapshot_id=self._layout_snapshot_id,
         )
 
-    def _relative_zoom_factors(
-        self, target_zoom: tuple[float, float]
-    ) -> tuple[float, float]:
+    def _relative_zoom_factors(self, target_zoom: tuple[float, float]) -> tuple[float, float]:
         current_x, current_y = self._zoom
         if current_x <= 0.0 or current_y <= 0.0:
             self._zoom = (1.0, 1.0)
@@ -554,7 +544,6 @@ def pan_view2d(
         y_range=(y0 + data_dy, y1 + data_dy),
         aspect_policy=view.aspect_policy,
         kind=view.kind,
-        clip=view.clip,
     )
 
 
@@ -589,11 +578,7 @@ def zoom_view2d_about(
     _validate_zoom_factor("factor_y", factor_y)
     tx = (anchor_px[0] - panel_rect.x) / panel_rect.width
     logical_y_fraction = (anchor_px[1] - panel_rect.y) / panel_rect.height
-    ty = (
-        1.0 - logical_y_fraction
-        if pixel_origin is PixelOrigin.TOP_LEFT
-        else logical_y_fraction
-    )
+    ty = 1.0 - logical_y_fraction if pixel_origin is PixelOrigin.TOP_LEFT else logical_y_fraction
     x0, x1 = view.x_range
     y0, y1 = view.y_range
     anchor_data_x = x0 + tx * (x1 - x0)
@@ -607,7 +592,6 @@ def zoom_view2d_about(
         y_range=(anchor_data_y - ty * new_span_y, anchor_data_y + (1.0 - ty) * new_span_y),
         aspect_policy=view.aspect_policy,
         kind=view.kind,
-        clip=view.clip,
     )
 
 
@@ -621,7 +605,7 @@ def navigation_pointer_event_from_ndc(
     right_button: bool = False,
     scroll_steps: float = 0.0,
 ) -> NavigationPointerEvent:
-    """Create a pointer event from target-panel NDC coordinates."""
+    """Create a pointer event from target-plot NDC coordinates."""
     _validate_panel_rect(panel_rect)
     _validate_finite("x_ndc", x_ndc)
     _validate_finite("y_ndc", y_ndc)
@@ -669,19 +653,22 @@ def _resolve_navigation_geometry(
     if layout_snapshot is not None:
         if not isinstance(layout_snapshot, ResolvedLayoutSnapshot):
             raise TypeError("layout_snapshot must be a ResolvedLayoutSnapshot")
-        if (
-            layout_snapshot_id is not None
-            and layout_snapshot_id != layout_snapshot.snapshot_id
-        ):
+        if layout_snapshot_id is not None and layout_snapshot_id != layout_snapshot.snapshot_id:
             raise ValueError(
                 f"{NavigationDiagnosticCode.NAVIGATION_STALE_LAYOUT.value}: "
                 "layout snapshot id does not match supplied layout geometry"
             )
-        if pixel_origin is not None and pixel_origin is not layout_snapshot.render_target.pixel_origin:
-            raise ValueError("pixel_origin conflicts with layout_snapshot.render_target.pixel_origin")
-        if panel_rect is not None and panel_rect != layout_snapshot.plot_rect_px:
+        if (
+            pixel_origin is not None
+            and pixel_origin is not layout_snapshot.render_target.pixel_origin
+        ):
+            raise ValueError(
+                "pixel_origin conflicts with layout_snapshot.render_target.pixel_origin"
+            )
+        resolved_panel = layout_snapshot.only_panel()
+        if panel_rect is not None and panel_rect != resolved_panel.plot_rect_px:
             raise ValueError("panel_rect conflicts with layout_snapshot.plot_rect_px")
-        panel_rect = layout_snapshot.plot_rect_px
+        panel_rect = resolved_panel.plot_rect_px
         pixel_origin = layout_snapshot.render_target.pixel_origin
         layout_snapshot_id = layout_snapshot.snapshot_id
     else:
@@ -702,9 +689,7 @@ def _validate_pair(field_name: str, value: tuple[float, float]) -> None:
     _validate_finite(f"{field_name}[1]", value[1])
 
 
-def _rect_contains_coordinate(
-    rect: LogicalPixelRect, coordinate: tuple[float, float]
-) -> bool:
+def _rect_contains_coordinate(rect: LogicalPixelRect, coordinate: tuple[float, float]) -> bool:
     return (
         rect.x <= coordinate[0] <= rect.x + rect.width
         and rect.y <= coordinate[1] <= rect.y + rect.height

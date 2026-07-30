@@ -66,10 +66,14 @@ def query_axis_guides(
 
 def unsupported_guide_query_result(request: QueryRequest, provider_id: str) -> QueryResult:
     """Return unsupported for providers that render guides but cannot query them."""
-    return unsupported_query_result(request, f"axis provider {provider_id!r} does not support guide queries")
+    return unsupported_query_result(
+        request, f"axis provider {provider_id!r} does not support guide queries"
+    )
 
 
-def _query_axis_guide(request: QueryRequest, view: View2D, guide: AxisGuide, tolerance: float) -> QueryResult | None:
+def _query_axis_guide(
+    request: QueryRequest, view: View2D, guide: AxisGuide, tolerance: float
+) -> QueryResult | None:
     x, y = request.coordinate
     if guide.dimension == AxisDimension.X:
         axis_value = view.y_range[0]

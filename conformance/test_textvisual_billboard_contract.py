@@ -2,8 +2,8 @@
 
 import numpy as np
 import pytest
+from conformance.p038_support import single_panel_scene
 
-from gsp import Scene
 from gsp.protocol import (
     Camera3D,
     CoordinateSpace,
@@ -46,7 +46,7 @@ def test_billboard_contract_preserves_bounded_text_fields() -> None:
         z_order=3,
     )
 
-    scene = Scene(id="scene:labels", visuals=(visual,), view3d=_view3d())
+    scene = single_panel_scene(id="scene:labels", visuals=(visual,), view3d=_view3d())
 
     assert scene.visuals == (visual,)
     assert visual.font_size_values().tolist() == [12.0, 18.0]
@@ -74,4 +74,4 @@ def test_billboard_requires_view3d() -> None:
         coordinate_space=CoordinateSpace.DATA,
     )
     with pytest.raises(ValueError, match="DATA positions3d require Scene.view3d"):
-        Scene(id="scene:invalid", visuals=(visual,))
+        single_panel_scene(id="scene:invalid", visuals=(visual,))

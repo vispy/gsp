@@ -25,8 +25,10 @@ from gsp.protocol import (
     ResolvedCanvas,
     ResolvedGuideBox,
     ResolvedLayoutSnapshot,
+    ResolvedPanelLayout,
     View2D,
     View3D,
+    quantize_logical_rect,
 )
 from gsp.protocol.guides import PanelTextGuide, PanelTextRole
 
@@ -48,6 +50,7 @@ def resolve_matplotlib_layout_snapshot(
     axes: matplotlib.axes.Axes,
     *,
     snapshot_id: str,
+    panel_id: str = "panel:default",
     view: View2D | None = None,
     view3d: View3D | None = None,
     axis_guides: Iterable[AxisGuide] = (),
@@ -68,46 +71,46 @@ def resolve_matplotlib_layout_snapshot(
         device_scale=metrics.device_scale,
         dpi=metrics.dpi,
         pixel_origin=PixelOrigin.TOP_LEFT,
-        query_coordinate_space="panel",
+        query_coordinate_space="plot",
     )
     panel_rect = panel_rect_px or LogicalPixelRect(
         0.0, 0.0, metrics.logical_width_px, metrics.logical_height_px
     )
-    plot_rect = _rect_from_bbox(axes.get_window_extent(renderer), metrics)
+    native_plot_rect = _rect_from_bbox(axes.get_window_extent(renderer), metrics)
+    plot_rect = quantize_logical_rect(native_plot_rect, render_target)
     axis_guides_tuple = tuple(axis_guides)
     panel_text_guides_tuple = tuple(panel_text_guides)
-    axis_label_boxes = _axis_label_boxes(
-        axes, axis_guides_tuple, metrics, renderer
-    )
-    tick_label_boxes = _tick_label_boxes(
-        axes, axis_guides_tuple, metrics, renderer
-    )
-    title_boxes = _title_boxes(
-        axes, panel_text_guides_tuple, metrics, renderer
-    )
+    axis_label_boxes = _axis_label_boxes(axes, axis_guides_tuple, metrics, renderer)
+    tick_label_boxes = _tick_label_boxes(axes, axis_guides_tuple, metrics, renderer)
+    title_boxes = _title_boxes(axes, panel_text_guides_tuple, metrics, renderer)
     guide_boxes = axis_label_boxes + tick_label_boxes + title_boxes
     return ResolvedLayoutSnapshot(
         snapshot_id=snapshot_id,
         render_target=render_target,
-        panel_rect_px=panel_rect,
-        plot_rect_px=plot_rect,
-        view_id=(
-            view.id
-            if view is not None
-            else view3d.id if view3d is not None else None
-        ),
-        data_to_screen_transform=_data_to_top_left_transform(axes, metrics),
-        guide_boxes=guide_boxes,
-        tick_label_boxes=tick_label_boxes,
-        axis_label_boxes=axis_label_boxes,
-        title_boxes=title_boxes,
-        grid_clip_rect_px=plot_rect,
-        z_layers=_layout_layers(axis_guides_tuple, panel_text_guides_tuple),
-        diagnostics=(
-            LayoutDiagnostic(
-                code="matplotlib_native_layout_resolved",
-                status=LayoutDiagnosticStatus.RESOLVED,
-                message="Snapshot extracted from Matplotlib native artist layout after draw.",
+        panels=(
+            ResolvedPanelLayout(
+                panel_id=panel_id,
+                panel_rect_px=panel_rect,
+                plot_rect_px=plot_rect,
+                view_id=(
+                    view.id if view is not None else view3d.id if view3d is not None else None
+                ),
+                data_to_screen_transform=_data_to_top_left_transform(
+                    axes, metrics, native_plot_rect, plot_rect
+                ),
+                guide_boxes=guide_boxes,
+                tick_label_boxes=tick_label_boxes,
+                axis_label_boxes=axis_label_boxes,
+                title_boxes=title_boxes,
+                grid_clip_rect_px=plot_rect,
+                z_layers=_layout_layers(axis_guides_tuple, panel_text_guides_tuple),
+                diagnostics=(
+                    LayoutDiagnostic(
+                        code="matplotlib_native_layout_resolved",
+                        status=LayoutDiagnosticStatus.RESOLVED,
+                        message="Snapshot extracted from Matplotlib native artist layout after draw.",
+                    ),
+                ),
             ),
         ),
     )
@@ -145,9 +148,7 @@ def _tick_label_boxes(
     boxes: list[ResolvedGuideBox] = []
     for guide in guides:
         artists = (
-            axes.get_xticklabels()
-            if guide.dimension == AxisDimension.X
-            else axes.get_yticklabels()
+            axes.get_xticklabels() if guide.dimension == AxisDimension.X else axes.get_yticklabels()
         )
         for artist in artists:
             if not artist.get_visible() or not artist.get_text():
@@ -156,9 +157,7 @@ def _tick_label_boxes(
                 ResolvedGuideBox(
                     guide_id=guide.id,
                     kind="tick_label",
-                    rect_px=_rect_from_bbox(
-                        artist.get_window_extent(renderer), metrics
-                    ),
+                    rect_px=_rect_from_bbox(artist.get_window_extent(renderer), metrics),
                     role=f"{guide.dimension.value}_tick_label",
                     layer="guides",
                 )
@@ -184,9 +183,7 @@ def _title_boxes(
             ResolvedGuideBox(
                 guide_id=guide.id,
                 kind="title",
-                rect_px=_rect_from_bbox(
-                    title_artist.get_window_extent(renderer), metrics
-                ),
+                rect_px=_rect_from_bbox(title_artist.get_window_extent(renderer), metrics),
                 role=guide.role.value,
                 layer="guides",
             )
@@ -199,14 +196,16 @@ def _layout_layers(
 ) -> tuple[LayoutLayer, ...]:
     layers = [LayoutLayer(object_id=guide.id, layer="guides", z_order=0.0) for guide in axis_guides]
     layers.extend(
-        LayoutLayer(object_id=guide.id, layer="guides", z_order=1.0)
-        for guide in panel_text_guides
+        LayoutLayer(object_id=guide.id, layer="guides", z_order=1.0) for guide in panel_text_guides
     )
     return tuple(layers)
 
 
 def _data_to_top_left_transform(
-    axes: matplotlib.axes.Axes, metrics: _LayoutMetrics
+    axes: matplotlib.axes.Axes,
+    metrics: _LayoutMetrics,
+    native_plot_rect: LogicalPixelRect,
+    canonical_plot_rect: LogicalPixelRect,
 ) -> tuple[float, ...]:
     matrix = axes.transData.get_affine().get_matrix()
     display_to_logical_top_left = np.array(
@@ -222,7 +221,30 @@ def _data_to_top_left_transform(
         dtype=np.float64,
     )
     top_left = display_to_logical_top_left @ matrix
-    return tuple(float(value) for value in top_left.reshape(-1))
+    correction = np.array(
+        [
+            [
+                canonical_plot_rect.width / native_plot_rect.width,
+                0.0,
+                canonical_plot_rect.x
+                - native_plot_rect.x
+                * canonical_plot_rect.width
+                / native_plot_rect.width,
+            ],
+            [
+                0.0,
+                canonical_plot_rect.height / native_plot_rect.height,
+                canonical_plot_rect.y
+                - native_plot_rect.y
+                * canonical_plot_rect.height
+                / native_plot_rect.height,
+            ],
+            [0.0, 0.0, 1.0],
+        ],
+        dtype=np.float64,
+    )
+    canonical = correction @ top_left
+    return tuple(float(value) for value in canonical.reshape(-1))
 
 
 def _rect_from_bbox(
@@ -230,8 +252,7 @@ def _rect_from_bbox(
 ) -> LogicalPixelRect:
     return LogicalPixelRect(
         x=float(bbox.x0) / metrics.display_per_logical_x,
-        y=(metrics.display_height_px - float(bbox.y1))
-        / metrics.display_per_logical_y,
+        y=(metrics.display_height_px - float(bbox.y1)) / metrics.display_per_logical_y,
         width=float(bbox.width) / metrics.display_per_logical_x,
         height=float(bbox.height) / metrics.display_per_logical_y,
     )
@@ -244,8 +265,7 @@ def _resolve_layout_metrics(
     if isinstance(resolved, ResolvedCanvas):
         if resolved.device_scale_x != resolved.device_scale_y:
             raise ValueError(
-                "Matplotlib layout requires equal resolved device_scale_x and "
-                "device_scale_y values"
+                "Matplotlib layout requires equal resolved device_scale_x and device_scale_y values"
             )
         logical_width = float(resolved.canvas_width_px)
         logical_height = float(resolved.canvas_height_px)
@@ -279,9 +299,7 @@ def _resolve_layout_metrics(
         or not math.isfinite(display_per_logical_y)
         or display_per_logical_y <= 0.0
     ):
-        raise ValueError(
-            "Matplotlib display-to-logical layout factors must be finite and positive"
-        )
+        raise ValueError("Matplotlib display-to-logical layout factors must be finite and positive")
     return _LayoutMetrics(
         logical_width_px=logical_width,
         logical_height_px=logical_height,

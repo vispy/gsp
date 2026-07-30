@@ -6,7 +6,13 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Mapping, TypeAlias
 
-from .data_sources import CredentialPolicy, DataLocality, DataSourceDescriptor, DataSourceKind, MaterializationPolicy
+from .data_sources import (
+    CredentialPolicy,
+    DataLocality,
+    DataSourceDescriptor,
+    DataSourceKind,
+    MaterializationPolicy,
+)
 from .extensions import ExtensionManifest
 
 
@@ -265,7 +271,11 @@ def validate_no_network_source_descriptor(
                 "preconfigured-source descriptors require an opaque source_ref",
             )
         )
-    if descriptor.locality == DataLocality.PRECONFIGURED_SOURCE and descriptor.source_ref and allowed_source_refs is not None:
+    if (
+        descriptor.locality == DataLocality.PRECONFIGURED_SOURCE
+        and descriptor.source_ref
+        and allowed_source_refs is not None
+    ):
         source_ref = dict(descriptor.source_ref)
         allowed = tuple(dict(ref) for ref in allowed_source_refs)
         if source_ref not in allowed:
@@ -314,7 +324,9 @@ def validate_s022_http_array_source_descriptor(
     hosts, inspect files, look up credentials, execute decoders, or load plugins.
     """
     diagnostics: list[SecurityDiagnostic] = list(
-        validate_no_network_source_descriptor(descriptor, allowed_source_refs=allowed_source_refs).diagnostics
+        validate_no_network_source_descriptor(
+            descriptor, allowed_source_refs=allowed_source_refs
+        ).diagnostics
     )
     if descriptor.kind != DataSourceKind.ARRAY:
         diagnostics.append(
@@ -403,7 +415,9 @@ def validate_s022_http_array_source_descriptor(
             )
         )
     _validate_s022_cache_policy(descriptor.cache_policy or {}, diagnostics)
-    _scan_s022_forbidden_mapping(metadata, diagnostics, allowed_keys=("format", "decoder_id", "materialization_target"))
+    _scan_s022_forbidden_mapping(
+        metadata, diagnostics, allowed_keys=("format", "decoder_id", "materialization_target")
+    )
     return SecurityValidationResult(accepted=not diagnostics, diagnostics=tuple(diagnostics))
 
 
@@ -431,7 +445,9 @@ def redact_security_value(value: object) -> JsonValue:
         redacted: dict[str, JsonValue] = {}
         for key, item in value.items():
             key_text = str(key)
-            redacted[key_text] = _redacted_placeholder_for_key(key_text) or redact_security_value(item)
+            redacted[key_text] = _redacted_placeholder_for_key(key_text) or redact_security_value(
+                item
+            )
         return redacted
     if isinstance(value, tuple):
         return [redact_security_value(item) for item in value]
@@ -446,9 +462,13 @@ def s020_security_capability_metadata(
     """Return a conservative no-network capability metadata block."""
     return {
         "data_sources": {
-            "supported_source_localities": [locality.value for locality in S020_EXECUTABLE_LOCALITIES],
+            "supported_source_localities": [
+                locality.value for locality in S020_EXECUTABLE_LOCALITIES
+            ],
             "supported_credential_policies": [policy.value for policy in S020_CREDENTIAL_POLICIES],
-            "preconfigured_resolvers": [redact_security_value(resolver) for resolver in preconfigured_resolvers],
+            "preconfigured_resolvers": [
+                redact_security_value(resolver) for resolver in preconfigured_resolvers
+            ],
             "remote_fetch_descriptors": {"accepted": False},
             "supports_server_side_fetch": {"accepted": False},
             "cache_modes": ["none", "session-memory"],
@@ -474,16 +494,29 @@ def _scan_mapping(value: Mapping[str, object], diagnostics: list[SecurityDiagnos
         key = str(raw_key).lower()
         if any(part in key for part in _SENSITIVE_KEY_PARTS):
             diagnostics.append(
-                SecurityDiagnostic(SecurityDiagnosticCode.INLINE_SECRET_REJECTED, f"field {raw_key!r} may contain secret material")
+                SecurityDiagnostic(
+                    SecurityDiagnosticCode.INLINE_SECRET_REJECTED,
+                    f"field {raw_key!r} may contain secret material",
+                )
             )
         if any(part in key for part in _URL_KEY_PARTS):
-            diagnostics.append(SecurityDiagnostic(SecurityDiagnosticCode.REMOTE_FETCH_DISABLED, f"field {raw_key!r} is URL-like"))
+            diagnostics.append(
+                SecurityDiagnostic(
+                    SecurityDiagnosticCode.REMOTE_FETCH_DISABLED, f"field {raw_key!r} is URL-like"
+                )
+            )
         if any(part in key for part in _PATH_KEY_PARTS):
-            diagnostics.append(SecurityDiagnostic(SecurityDiagnosticCode.LOCAL_PATH_FORBIDDEN, f"field {raw_key!r} is path-like"))
+            diagnostics.append(
+                SecurityDiagnostic(
+                    SecurityDiagnosticCode.LOCAL_PATH_FORBIDDEN, f"field {raw_key!r} is path-like"
+                )
+            )
         _scan_value(item, diagnostics)
 
 
-def _validate_s022_cache_policy(value: Mapping[str, object], diagnostics: list[SecurityDiagnostic]) -> None:
+def _validate_s022_cache_policy(
+    value: Mapping[str, object], diagnostics: list[SecurityDiagnostic]
+) -> None:
     mode = value.get("mode", "none")
     if mode not in S022_HTTP_ARRAY_CACHE_MODES:
         diagnostics.append(
@@ -509,19 +542,36 @@ def _scan_s022_forbidden_mapping(
         forbidden = key in _S022_FORBIDDEN_METADATA_KEYS
         if key in _S022_SECRET_METADATA_KEYS or any(part in key for part in _SENSITIVE_KEY_PARTS):
             diagnostics.append(
-                SecurityDiagnostic(SecurityDiagnosticCode.INLINE_SECRET_REJECTED, f"field {raw_key!r} is forbidden in S022 descriptors")
+                SecurityDiagnostic(
+                    SecurityDiagnosticCode.INLINE_SECRET_REJECTED,
+                    f"field {raw_key!r} is forbidden in S022 descriptors",
+                )
             )
         if key in _S022_URL_METADATA_KEYS or any(part in key for part in _URL_KEY_PARTS):
-            diagnostics.append(SecurityDiagnostic(SecurityDiagnosticCode.REMOTE_FETCH_DISABLED, f"field {raw_key!r} is URL-like"))
+            diagnostics.append(
+                SecurityDiagnostic(
+                    SecurityDiagnosticCode.REMOTE_FETCH_DISABLED, f"field {raw_key!r} is URL-like"
+                )
+            )
         if key in _S022_PATH_METADATA_KEYS or any(part in key for part in _PATH_KEY_PARTS):
-            diagnostics.append(SecurityDiagnostic(SecurityDiagnosticCode.LOCAL_PATH_FORBIDDEN, f"field {raw_key!r} is path-like"))
+            diagnostics.append(
+                SecurityDiagnostic(
+                    SecurityDiagnosticCode.LOCAL_PATH_FORBIDDEN, f"field {raw_key!r} is path-like"
+                )
+            )
         if key in _S022_DECODER_PLUGIN_METADATA_KEYS:
             diagnostics.append(
-                SecurityDiagnostic(SecurityDiagnosticCode.DECODER_PLUGIN_DISABLED, f"field {raw_key!r} implies decoder plugin behavior")
+                SecurityDiagnostic(
+                    SecurityDiagnosticCode.DECODER_PLUGIN_DISABLED,
+                    f"field {raw_key!r} implies decoder plugin behavior",
+                )
             )
         if key not in allowed_keys and not forbidden:
             diagnostics.append(
-                SecurityDiagnostic(SecurityDiagnosticCode.MANIFEST_SCHEMA_INVALID, f"field {raw_key!r} is not allowed in S022 descriptors")
+                SecurityDiagnostic(
+                    SecurityDiagnosticCode.MANIFEST_SCHEMA_INVALID,
+                    f"field {raw_key!r} is not allowed in S022 descriptors",
+                )
             )
         if (
             forbidden
@@ -531,7 +581,10 @@ def _scan_s022_forbidden_mapping(
             and key not in _S022_DECODER_PLUGIN_METADATA_KEYS
         ):
             diagnostics.append(
-                SecurityDiagnostic(SecurityDiagnosticCode.MANIFEST_SCHEMA_INVALID, f"field {raw_key!r} is forbidden in S022 descriptors")
+                SecurityDiagnostic(
+                    SecurityDiagnosticCode.MANIFEST_SCHEMA_INVALID,
+                    f"field {raw_key!r} is forbidden in S022 descriptors",
+                )
             )
         _scan_value(item, diagnostics)
 
@@ -540,20 +593,40 @@ def _looks_executable_decoder_id(value: object) -> bool:
     if not isinstance(value, str):
         return False
     lowered = value.lower()
-    return any(marker in lowered for marker in ("python", "import", "entry_point", "plugin", "callback", "hook", ":", "/"))
+    return any(
+        marker in lowered
+        for marker in ("python", "import", "entry_point", "plugin", "callback", "hook", ":", "/")
+    )
 
 
 def _scan_value(value: object, diagnostics: list[SecurityDiagnostic]) -> None:
     if isinstance(value, str):
         lowered = value.lower()
         if any(lowered.startswith(scheme) for scheme in _URL_SCHEMES):
-            diagnostics.append(SecurityDiagnostic(SecurityDiagnosticCode.REMOTE_FETCH_DISABLED, "URL-like values are rejected"))
+            diagnostics.append(
+                SecurityDiagnostic(
+                    SecurityDiagnosticCode.REMOTE_FETCH_DISABLED, "URL-like values are rejected"
+                )
+            )
         if any(marker in lowered for marker in _PRIVATE_URL_MARKERS):
-            diagnostics.append(SecurityDiagnostic(SecurityDiagnosticCode.URL_RESOLVES_PRIVATE, "private or metadata-service targets are rejected"))
+            diagnostics.append(
+                SecurityDiagnostic(
+                    SecurityDiagnosticCode.URL_RESOLVES_PRIVATE,
+                    "private or metadata-service targets are rejected",
+                )
+            )
         if "@" in lowered and (lowered.startswith("http://") or lowered.startswith("https://")):
-            diagnostics.append(SecurityDiagnostic(SecurityDiagnosticCode.URL_USERINFO_FORBIDDEN, "URL userinfo is rejected"))
+            diagnostics.append(
+                SecurityDiagnostic(
+                    SecurityDiagnosticCode.URL_USERINFO_FORBIDDEN, "URL userinfo is rejected"
+                )
+            )
         if ".." in lowered or lowered.startswith("/") or lowered.startswith("\\\\"):
-            diagnostics.append(SecurityDiagnostic(SecurityDiagnosticCode.LOCAL_PATH_FORBIDDEN, "path-like values are rejected"))
+            diagnostics.append(
+                SecurityDiagnostic(
+                    SecurityDiagnosticCode.LOCAL_PATH_FORBIDDEN, "path-like values are rejected"
+                )
+            )
     elif isinstance(value, Mapping):
         _scan_mapping({str(key): item for key, item in value.items()}, diagnostics)
     elif isinstance(value, (list, tuple)):
@@ -576,7 +649,11 @@ def _scan_manifest_mapping(
                 )
             )
         if isinstance(item, Mapping):
-            _scan_manifest_mapping(f"{section_name}.{raw_key}", {str(key): child for key, child in item.items()}, diagnostics)
+            _scan_manifest_mapping(
+                f"{section_name}.{raw_key}",
+                {str(key): child for key, child in item.items()},
+                diagnostics,
+            )
         elif isinstance(item, (list, tuple)):
             for index, child in enumerate(item):
                 if isinstance(child, Mapping):

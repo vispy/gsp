@@ -1,0 +1,40 @@
+{
+  "scenes": [
+    {
+      "attachments": [
+        {
+          "clip_scope": "render_target",
+          "panel_id": "panel:main",
+          "view_id": "view:main",
+          "visual_id": "visual:main"
+        }
+      ],
+      "id": "scene:migration",
+      "panel_layout": {
+        "kind": "layout.panel.explicit_rects.v1",
+        "placements": [
+          {
+            "allocation_rect": {
+              "height": 0.6,
+              "left": 0.1,
+              "top": 0.2,
+              "width": 0.8
+            },
+            "panel_id": "panel:main"
+          }
+        ]
+      },
+      "panels": [
+        {
+          "id": "panel:main"
+        }
+      ],
+      "view2d": [
+        {
+          "id": "view:main",
+          "panel_id": "panel:main"
+        }
+      ]
+    }
+  ]
+}

@@ -82,9 +82,7 @@ class DatovizProvider:
             capabilities.discard("visual.primitive")
         if not snapshot.supports_visual("text"):
             capabilities.discard("visual.text")
-        if not getattr(snapshot, "supports_query_mode", lambda _mode: False)(
-            "panel-query"
-        ):
+        if not getattr(snapshot, "supports_query_mode", lambda _mode: False)("panel-query"):
             capabilities.discard("query.panel")
         return BackendInfo(
             name="datoviz",

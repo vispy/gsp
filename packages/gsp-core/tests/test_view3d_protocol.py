@@ -45,7 +45,7 @@ from gsp.protocol import (
     face_culling_excludes,
     mesh_pick_barycentric_2d,
     mesh_pick_data_xyz,
-    mesh_pick_panel_ndc_z,
+    mesh_pick_plot_ndc_z,
     mesh_pick_projected_front_facing,
     orbit_view3d,
     pan_view3d,
@@ -53,7 +53,7 @@ from gsp.protocol import (
     projected_triangle_area2,
     projected_triangle_has_strict_contribution,
     resolve_view3d_projection_snapshot,
-    unproject_view3d_panel_ndc_point,
+    unproject_view3d_plot_ndc_point,
     zoom_view3d,
 )
 
@@ -74,9 +74,7 @@ def test_camera3d_accepts_canonical_basis():
 
 @pytest.mark.parametrize(
     "camera",
-    (
-        Camera3D,
-    ),
+    (Camera3D,),
 )
 def test_camera3d_rejects_degenerate_inputs(camera):
     diagnostic = View3DDiagnosticCode.VIEW3D_INVALID_CAMERA_DEGENERATE.value
@@ -307,7 +305,7 @@ def test_view3d_mesh_triangle_pick_request_and_payload_validate_s044_fields():
         view_id=request.view_id,
         panel_id="panel:main",
         panel_xy=request.panel_xy,
-        panel_ndc_xy=(0.0, 0.0),
+        plot_ndc_xy=(0.0, 0.0),
         layout_snapshot_id="layout:main",
         view_revision=3,
         view_projection_snapshot_id="view3d-projection:abc",
@@ -331,7 +329,7 @@ def test_view3d_mesh_triangle_pick_request_and_payload_validate_s044_fields():
             view_id="view:main",
             panel_id="panel:main",
             panel_xy=(0.0, 0.0),
-            panel_ndc_xy=(0.0, 0.0),
+            plot_ndc_xy=(0.0, 0.0),
             layout_snapshot_id="layout:main",
             view_revision=0,
             view_projection_snapshot_id="view3d-projection:abc",
@@ -348,7 +346,7 @@ def test_view3d_mesh_pick_geometry_helpers_interpolate_public_triangle_fields():
     barycentric = mesh_pick_barycentric_2d(point_xy, q0, q1, q2)
 
     assert barycentric == pytest.approx((0.5, 0.25, 0.25))
-    assert mesh_pick_panel_ndc_z(barycentric, q0, q1, q2) == pytest.approx(-0.125)
+    assert mesh_pick_plot_ndc_z(barycentric, q0, q1, q2) == pytest.approx(-0.125)
     assert mesh_pick_data_xyz(
         barycentric,
         (-1.0, -1.0, 0.0),
@@ -374,7 +372,7 @@ def test_view3d_mesh_triangle_pick_geometry_payload_validates_s050_fields():
         view_id="view:main",
         panel_id="panel:main",
         panel_xy=(12.0, 24.0),
-        panel_ndc_xy=(0.0, 0.0),
+        plot_ndc_xy=(0.0, 0.0),
         layout_snapshot_id="layout:main",
         view_revision=3,
         view_projection_snapshot_id="view3d-projection:abc",
@@ -385,7 +383,7 @@ def test_view3d_mesh_triangle_pick_geometry_payload_validates_s050_fields():
         primitive_kind="triangle",
         primitive_index=2,
         hit_barycentric=(0.5, 0.25, 0.25),
-        hit_panel_ndc_z=-0.125,
+        hit_plot_ndc_z=-0.125,
         hit_data_xyz=(-0.5, -0.5, 1.5),
         front_facing=True,
         diagnostics=(diagnostic,),
@@ -403,7 +401,7 @@ def test_view3d_mesh_triangle_pick_geometry_payload_validates_s050_fields():
             view_id="view:main",
             panel_id="panel:main",
             panel_xy=(0.0, 0.0),
-            panel_ndc_xy=(0.0, 0.0),
+            plot_ndc_xy=(0.0, 0.0),
             layout_snapshot_id="layout:main",
             view_revision=0,
             view_projection_snapshot_id="view3d-projection:abc",
@@ -413,7 +411,7 @@ def test_view3d_mesh_triangle_pick_geometry_payload_validates_s050_fields():
             visual_type="MeshVisual",
             primitive_kind="triangle",
             primitive_index=0,
-            hit_panel_ndc_z=0.0,
+            hit_plot_ndc_z=0.0,
             hit_data_xyz=(0.0, 0.0, 0.0),
         )
 
@@ -424,7 +422,7 @@ def test_view3d_mesh_triangle_pick_geometry_payload_validates_s050_fields():
             view_id="view:main",
             panel_id="panel:main",
             panel_xy=(0.0, 0.0),
-            panel_ndc_xy=(0.0, 0.0),
+            plot_ndc_xy=(0.0, 0.0),
             layout_snapshot_id="layout:main",
             view_revision=0,
             view_projection_snapshot_id="view3d-projection:abc",
@@ -436,9 +434,7 @@ def test_view3d_mesh_triangle_pick_geometry_payload_validates_s050_fields():
 
 def test_view3d_navigation_action_validates_payload_kind():
     view = _canonical_view3d(revision=2)
-    snapshot = resolve_view3d_projection_snapshot(
-        view, layout_snapshot_id="layout:main"
-    )
+    snapshot = resolve_view3d_projection_snapshot(view, layout_snapshot_id="layout:main")
 
     action = View3DNavigationAction(
         kind=View3DNavigationActionKind.PAN,
@@ -481,9 +477,7 @@ def test_view3d_navigation_reducers_pan_zoom_and_orbit():
     assert zoomed.projection.xlim == pytest.approx((-1.0, 1.0))
     assert zoomed.projection.ylim == pytest.approx((-1.0, 1.0))
 
-    anchored = zoom_view3d(
-        view, Zoom3DPayload(scale=2.0, anchor_panel_ndc_xy=(-1.0, -1.0))
-    )
+    anchored = zoom_view3d(view, Zoom3DPayload(scale=2.0, anchor_plot_ndc_xy=(-1.0, -1.0)))
     assert anchored.projection.xlim == pytest.approx((-2.0, 0.0))
     assert anchored.projection.ylim == pytest.approx((-2.0, 0.0))
 
@@ -523,14 +517,12 @@ def test_view3d_navigation_reducer_zooms_perspective_by_dolly():
         ValueError,
         match=View3DDiagnosticCode.VIEW3D_NAVIGATION_ACTION_UNSUPPORTED.value,
     ):
-        zoom_view3d(view, Zoom3DPayload(scale=2.0, anchor_panel_ndc_xy=(0.25, -0.25)))
+        zoom_view3d(view, Zoom3DPayload(scale=2.0, anchor_plot_ndc_xy=(0.25, -0.25)))
 
 
 def test_apply_view3d_navigation_action_accepts_and_refreshes_snapshot():
     view = _canonical_view3d(revision=3)
-    snapshot = resolve_view3d_projection_snapshot(
-        view, layout_snapshot_id="layout:main"
-    )
+    snapshot = resolve_view3d_projection_snapshot(view, layout_snapshot_id="layout:main")
     action = View3DNavigationAction(
         kind=View3DNavigationActionKind.ZOOM,
         view_id=view.id,
@@ -540,9 +532,7 @@ def test_apply_view3d_navigation_action_accepts_and_refreshes_snapshot():
         base_layout_snapshot_id=snapshot.layout_snapshot_id,
     )
 
-    result = apply_view3d_navigation_action(
-        view, action, layout_snapshot_id="layout:main"
-    )
+    result = apply_view3d_navigation_action(view, action, layout_snapshot_id="layout:main")
 
     assert result.accepted
     assert result.old_revision == 3
@@ -556,9 +546,7 @@ def test_apply_view3d_navigation_action_accepts_and_refreshes_snapshot():
 
 def test_apply_view3d_navigation_action_rejects_stale_state():
     view = _canonical_view3d(revision=3)
-    snapshot = resolve_view3d_projection_snapshot(
-        view, layout_snapshot_id="layout:main"
-    )
+    snapshot = resolve_view3d_projection_snapshot(view, layout_snapshot_id="layout:main")
     stale_action = View3DNavigationAction(
         kind=View3DNavigationActionKind.PAN,
         view_id=view.id,
@@ -568,9 +556,7 @@ def test_apply_view3d_navigation_action_rejects_stale_state():
         base_layout_snapshot_id=snapshot.layout_snapshot_id,
     )
 
-    result = apply_view3d_navigation_action(
-        view, stale_action, layout_snapshot_id="layout:main"
-    )
+    result = apply_view3d_navigation_action(view, stale_action, layout_snapshot_id="layout:main")
 
     assert not result.accepted
     assert result.view is None
@@ -580,9 +566,7 @@ def test_apply_view3d_navigation_action_rejects_stale_state():
 
 def test_apply_view3d_navigation_action_supports_setters_and_reset():
     view = _canonical_view3d(revision=1)
-    snapshot = resolve_view3d_projection_snapshot(
-        view, layout_snapshot_id="layout:main"
-    )
+    snapshot = resolve_view3d_projection_snapshot(view, layout_snapshot_id="layout:main")
     camera = Camera3D(
         eye=(1.0, 2.0, 6.0),
         target=(1.0, 2.0, 0.0),
@@ -596,17 +580,13 @@ def test_apply_view3d_navigation_action_supports_setters_and_reset():
         payload=SetCamera3DPayload(camera=camera),
     )
 
-    result = apply_view3d_navigation_action(
-        view, set_camera, layout_snapshot_id="layout:main"
-    )
+    result = apply_view3d_navigation_action(view, set_camera, layout_snapshot_id="layout:main")
     assert result.accepted
     assert result.camera == camera
 
     updated = result.view
     assert updated is not None
-    updated_snapshot = resolve_view3d_projection_snapshot(
-        updated, layout_snapshot_id="layout:main"
-    )
+    updated_snapshot = resolve_view3d_projection_snapshot(updated, layout_snapshot_id="layout:main")
     projection = OrthographicProjection3D(xlim=(-4.0, 4.0), near_far=(1.0, 12.0))
     reset_action = View3DNavigationAction(
         kind=View3DNavigationActionKind.RESET,
@@ -616,9 +596,7 @@ def test_apply_view3d_navigation_action_supports_setters_and_reset():
         payload=ResetView3DPayload(camera=view.camera, projection=projection),
     )
 
-    reset = apply_view3d_navigation_action(
-        updated, reset_action, layout_snapshot_id="layout:main"
-    )
+    reset = apply_view3d_navigation_action(updated, reset_action, layout_snapshot_id="layout:main")
     assert reset.accepted
     assert reset.camera == view.camera
     assert reset.projection == projection
@@ -649,9 +627,7 @@ def test_apply_view3d_navigation_accepts_perspective_zoom_dolly():
         ),
         revision=3,
     )
-    snapshot = resolve_view3d_projection_snapshot(
-        view, layout_snapshot_id="layout:main"
-    )
+    snapshot = resolve_view3d_projection_snapshot(view, layout_snapshot_id="layout:main")
     action = View3DNavigationAction(
         kind=View3DNavigationActionKind.ZOOM,
         view_id=view.id,
@@ -661,9 +637,7 @@ def test_apply_view3d_navigation_accepts_perspective_zoom_dolly():
         base_layout_snapshot_id=snapshot.layout_snapshot_id,
     )
 
-    result = apply_view3d_navigation_action(
-        view, action, layout_snapshot_id="layout:main"
-    )
+    result = apply_view3d_navigation_action(view, action, layout_snapshot_id="layout:main")
 
     assert result.accepted
     assert result.view is not None
@@ -714,33 +688,21 @@ def test_view3d_projects_canonical_cube_vertices_to_ndc3():
         ),
     )
 
-    assert project_view3d_data_point(view, (-2.0, -2.0, 4.0)) == pytest.approx(
-        (-1.0, -1.0, -1.0)
-    )
-    assert project_view3d_data_point(view, (2.0, 2.0, -5.0)) == pytest.approx(
-        (1.0, 1.0, 1.0)
-    )
-    assert project_view3d_data_point(view, (0.0, 0.0, -0.5)) == pytest.approx(
-        (0.0, 0.0, 0.0)
-    )
+    assert project_view3d_data_point(view, (-2.0, -2.0, 4.0)) == pytest.approx((-1.0, -1.0, -1.0))
+    assert project_view3d_data_point(view, (2.0, 2.0, -5.0)) == pytest.approx((1.0, 1.0, 1.0))
+    assert project_view3d_data_point(view, (0.0, 0.0, -0.5)) == pytest.approx((0.0, 0.0, 0.0))
 
 
 def test_projected_ndc_face_culling_helpers_classify_panel_winding():
-    front_area = projected_triangle_area2(
-        (-0.5, -0.5, 0.0), (0.5, -0.5, 0.0), (0.0, 0.5, 0.0)
-    )
-    back_area = projected_triangle_area2(
-        (-0.5, -0.5, 0.0), (0.0, 0.5, 0.0), (0.5, -0.5, 0.0)
-    )
+    front_area = projected_triangle_area2((-0.5, -0.5, 0.0), (0.5, -0.5, 0.0), (0.0, 0.5, 0.0))
+    back_area = projected_triangle_area2((-0.5, -0.5, 0.0), (0.0, 0.5, 0.0), (0.5, -0.5, 0.0))
 
     assert front_area == pytest.approx(1.0)
     assert back_area == pytest.approx(-1.0)
     assert classify_projected_triangle(front_area) is ProjectedFaceClassification.FRONT
     assert classify_projected_triangle(back_area) is ProjectedFaceClassification.BACK
     assert classify_projected_triangle(0.0) is ProjectedFaceClassification.DEGENERATE
-    assert not face_culling_excludes(
-        ProjectedFaceClassification.FRONT, FaceCulling.BACK
-    )
+    assert not face_culling_excludes(ProjectedFaceClassification.FRONT, FaceCulling.BACK)
     assert face_culling_excludes(ProjectedFaceClassification.BACK, FaceCulling.BACK)
     assert projected_triangle_has_strict_contribution(front_area, FaceCulling.BACK)
     assert not projected_triangle_has_strict_contribution(front_area, FaceCulling.FRONT)
@@ -795,7 +757,7 @@ def test_projected_ndc_face_culling_uses_projected_view3d_bounds():
     )
 
 
-def test_view3d_unprojects_panel_ndc3_to_data_space():
+def test_view3d_unprojects_plot_ndc3_to_data_space():
     view = View3D(
         id="view:unproject",
         panel_id="panel:main",
@@ -811,12 +773,10 @@ def test_view3d_unprojects_panel_ndc3_to_data_space():
         ),
     )
 
-    assert unproject_view3d_panel_ndc_point(view, (-1.0, -1.0, -1.0)) == pytest.approx(
+    assert unproject_view3d_plot_ndc_point(view, (-1.0, -1.0, -1.0)) == pytest.approx(
         (-2.0, -2.0, 4.0)
     )
-    assert unproject_view3d_panel_ndc_point(view, (1.0, 1.0, 1.0)) == pytest.approx(
-        (2.0, 2.0, -5.0)
-    )
+    assert unproject_view3d_plot_ndc_point(view, (1.0, 1.0, 1.0)) == pytest.approx((2.0, 2.0, -5.0))
 
 
 def test_view3d_projects_perspective_points_to_ndc3():
@@ -835,15 +795,9 @@ def test_view3d_projects_perspective_points_to_ndc3():
         ),
     )
 
-    assert project_view3d_data_point(view, (0.0, 0.0, -1.0)) == pytest.approx(
-        (0.0, 0.0, -1.0)
-    )
-    assert project_view3d_data_point(view, (1.0, 1.0, -1.0)) == pytest.approx(
-        (1.0, 1.0, -1.0)
-    )
-    assert project_view3d_data_point(view, (0.0, 0.0, -5.5)) == pytest.approx(
-        (0.0, 0.0, 0.0)
-    )
+    assert project_view3d_data_point(view, (0.0, 0.0, -1.0)) == pytest.approx((0.0, 0.0, -1.0))
+    assert project_view3d_data_point(view, (1.0, 1.0, -1.0)) == pytest.approx((1.0, 1.0, -1.0))
+    assert project_view3d_data_point(view, (0.0, 0.0, -5.5)) == pytest.approx((0.0, 0.0, 0.0))
 
 
 def test_view3d_perspective_projection_uses_resolved_aspect_ratio():
@@ -861,9 +815,9 @@ def test_view3d_perspective_projection_uses_resolved_aspect_ratio():
         ),
     )
 
-    assert project_view3d_data_point(
-        view, (2.0, 1.0, -1.0), aspect_ratio=2.0
-    ) == pytest.approx((1.0, 1.0, -1.0))
+    assert project_view3d_data_point(view, (2.0, 1.0, -1.0), aspect_ratio=2.0) == pytest.approx(
+        (1.0, 1.0, -1.0)
+    )
 
 
 def test_low_level_projection_math_preserves_authored_perspective_aspect() -> None:
@@ -882,12 +836,8 @@ def test_low_level_projection_math_preserves_authored_perspective_aspect() -> No
         ),
     )
 
-    projected = project_view3d_data_point(
-        explicit, (2.0, 1.0, -1.0), aspect_ratio=1.0
-    )
-    unprojected = unproject_view3d_panel_ndc_point(
-        explicit, (1.0, 1.0, -1.0), aspect_ratio=1.0
-    )
+    projected = project_view3d_data_point(explicit, (2.0, 1.0, -1.0), aspect_ratio=1.0)
+    unprojected = unproject_view3d_plot_ndc_point(explicit, (1.0, 1.0, -1.0), aspect_ratio=1.0)
 
     assert projected == pytest.approx((1.0, 1.0, -1.0))
     assert unprojected == pytest.approx((2.0, 1.0, -1.0))
@@ -908,21 +858,19 @@ def test_low_level_projection_math_uses_supplied_then_compatibility_aspect() -> 
         ),
     )
 
-    assert project_view3d_data_point(
-        implicit, (2.0, 1.0, -1.0), aspect_ratio=2.0
-    ) == pytest.approx((1.0, 1.0, -1.0))
-    assert unproject_view3d_panel_ndc_point(
+    assert project_view3d_data_point(implicit, (2.0, 1.0, -1.0), aspect_ratio=2.0) == pytest.approx(
+        (1.0, 1.0, -1.0)
+    )
+    assert unproject_view3d_plot_ndc_point(
         implicit, (1.0, 1.0, -1.0), aspect_ratio=2.0
     ) == pytest.approx((2.0, 1.0, -1.0))
-    assert project_view3d_data_point(
-        implicit, (1.0, 1.0, -1.0)
-    ) == pytest.approx((1.0, 1.0, -1.0))
-    assert unproject_view3d_panel_ndc_point(
-        implicit, (1.0, 1.0, -1.0)
-    ) == pytest.approx((1.0, 1.0, -1.0))
+    assert project_view3d_data_point(implicit, (1.0, 1.0, -1.0)) == pytest.approx((1.0, 1.0, -1.0))
+    assert unproject_view3d_plot_ndc_point(implicit, (1.0, 1.0, -1.0)) == pytest.approx(
+        (1.0, 1.0, -1.0)
+    )
 
 
-def test_view3d_unprojects_perspective_panel_ndc3_to_data_space():
+def test_view3d_unprojects_perspective_plot_ndc3_to_data_space():
     view = View3D(
         id="view:perspective-unproject",
         panel_id="panel:main",
@@ -938,12 +886,10 @@ def test_view3d_unprojects_perspective_panel_ndc3_to_data_space():
         ),
     )
 
-    assert unproject_view3d_panel_ndc_point(view, (1.0, 1.0, -1.0)) == pytest.approx(
+    assert unproject_view3d_plot_ndc_point(view, (1.0, 1.0, -1.0)) == pytest.approx(
         (1.0, 1.0, -1.0)
     )
-    assert unproject_view3d_panel_ndc_point(view, (0.0, 0.0, 0.0)) == pytest.approx(
-        (0.0, 0.0, -5.5)
-    )
+    assert unproject_view3d_plot_ndc_point(view, (0.0, 0.0, 0.0)) == pytest.approx((0.0, 0.0, -5.5))
 
 
 def test_view3d_projection_preserves_reversed_xy_bounds():
@@ -962,9 +908,7 @@ def test_view3d_projection_preserves_reversed_xy_bounds():
         ),
     )
 
-    assert project_view3d_data_point(view, (-2.0, -2.0, 4.0)) == pytest.approx(
-        (1.0, 1.0, -1.0)
-    )
+    assert project_view3d_data_point(view, (-2.0, -2.0, 4.0)) == pytest.approx((1.0, 1.0, -1.0))
 
 
 def test_view3d_projection_uses_explicit_off_axis_bounds():
@@ -983,9 +927,7 @@ def test_view3d_projection_uses_explicit_off_axis_bounds():
         ),
     )
 
-    assert project_view3d_data_point(view, (0.0, 0.0, 4.0)) == pytest.approx(
-        (-1.0, -0.5, -1.0)
-    )
+    assert project_view3d_data_point(view, (0.0, 0.0, 4.0)) == pytest.approx((-1.0, -0.5, -1.0))
 
 
 def test_view3d_projection_snapshot_identity_tracks_view_and_layout_state():
@@ -1005,13 +947,9 @@ def test_view3d_projection_snapshot_identity_tracks_view_and_layout_state():
         revision=3,
     )
 
-    snapshot = resolve_view3d_projection_snapshot(
-        view, layout_snapshot_id="layout:main"
-    )
+    snapshot = resolve_view3d_projection_snapshot(view, layout_snapshot_id="layout:main")
     same = resolve_view3d_projection_snapshot(view, layout_snapshot_id="layout:main")
-    different_layout = resolve_view3d_projection_snapshot(
-        view, layout_snapshot_id="layout:other"
-    )
+    different_layout = resolve_view3d_projection_snapshot(view, layout_snapshot_id="layout:other")
     updated_view = View3D(
         id=view.id,
         panel_id=view.panel_id,
@@ -1023,9 +961,7 @@ def test_view3d_projection_snapshot_identity_tracks_view_and_layout_state():
         projection=view.projection,
         revision=4,
     )
-    updated = resolve_view3d_projection_snapshot(
-        updated_view, layout_snapshot_id="layout:main"
-    )
+    updated = resolve_view3d_projection_snapshot(updated_view, layout_snapshot_id="layout:main")
 
     assert snapshot.view_projection_snapshot_id.startswith("view3d-projection:")
     assert snapshot.view_projection_snapshot_id == same.view_projection_snapshot_id
@@ -1051,18 +987,12 @@ def test_view3d_perspective_projection_snapshot_tracks_projection_parameters():
         )
     )
 
-    snapshot = resolve_view3d_projection_snapshot(
-        view, layout_snapshot_id="layout:main"
-    )
-    changed_snapshot = resolve_view3d_projection_snapshot(
-        changed, layout_snapshot_id="layout:main"
-    )
+    snapshot = resolve_view3d_projection_snapshot(view, layout_snapshot_id="layout:main")
+    changed_snapshot = resolve_view3d_projection_snapshot(changed, layout_snapshot_id="layout:main")
 
     assert snapshot.projection_kind is Projection3DKind.PERSPECTIVE
     assert snapshot.xlim is None
     assert snapshot.ylim is None
     assert snapshot.fov_y_degrees == pytest.approx(45.0)
     assert snapshot.aspect_ratio == pytest.approx(1.5)
-    assert snapshot.view_projection_snapshot_id != (
-        changed_snapshot.view_projection_snapshot_id
-    )
+    assert snapshot.view_projection_snapshot_id != (changed_snapshot.view_projection_snapshot_id)

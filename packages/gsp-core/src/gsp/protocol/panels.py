@@ -4,10 +4,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-import math
 
 from .ids import validate_id
-from .layout import LogicalPixelRect, RenderTarget
+from .layout import LogicalPixelRect, ResolvedLayoutSnapshot
 from .transforms import TransformDiagnosticCode, ViewKind, validate_view2d_limits
 
 
@@ -26,46 +25,22 @@ class VisualCoordinateSpace(str, Enum):
     PANEL = "panel"
 
 
+class ClipScope(str, Enum):
+    """Rectangular raster-clipping boundary for one visual attachment."""
+
+    PLOT = "plot"
+    PANEL = "panel"
+    RENDER_TARGET = "render_target"
+
+
 @dataclass(frozen=True, slots=True)
 class Panel:
-    """Semantic plot panel with a stable protocol identity."""
+    """Scene-scoped semantic panel identity."""
 
     id: str
-    figure_id: str
-    viewport_rect: tuple[float, float, float, float] = (0.0, 0.0, 1.0, 1.0)
 
     def __post_init__(self) -> None:
         validate_id(self.id)
-        validate_id(self.figure_id)
-        if len(self.viewport_rect) != 4:
-            raise ValueError("panel viewport_rect must contain four values")
-        x, y, width, height = self.viewport_rect
-        for index, value in enumerate(self.viewport_rect):
-            if not isinstance(value, (int, float)):
-                raise TypeError(f"panel viewport_rect[{index}] must be a number")
-            if not math.isfinite(value):
-                raise ValueError(f"panel viewport_rect[{index}] must be finite")
-        if width <= 0 or height <= 0:
-            raise ValueError("panel viewport width and height must be positive")
-        if x < 0 or y < 0:
-            raise ValueError("panel viewport origin must be non-negative")
-        if x + width > 1.0 or y + height > 1.0:
-            raise ValueError("panel viewport_rect must be contained by the normalized render target")
-
-
-def resolve_panel_viewport_rect(panel: Panel, render_target: RenderTarget) -> LogicalPixelRect:
-    """Resolve normalized outer-panel allocation intent into logical pixels."""
-    if not isinstance(panel, Panel):
-        raise TypeError("panel must be a Panel")
-    if not isinstance(render_target, RenderTarget):
-        raise TypeError("render_target must be a RenderTarget")
-    x, y, width, height = panel.viewport_rect
-    return LogicalPixelRect(
-        x=x * render_target.logical_width_px,
-        y=y * render_target.logical_height_px,
-        width=width * render_target.logical_width_px,
-        height=height * render_target.logical_height_px,
-    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,7 +53,6 @@ class View2D:
     y_range: tuple[float, float] = (-1.0, 1.0)
     aspect_policy: AspectPolicy = AspectPolicy.AUTO
     kind: ViewKind = ViewKind.VIEW2D_LINEAR
-    clip: bool = True
 
     def __post_init__(self) -> None:
         validate_id(self.id)
@@ -90,8 +64,6 @@ class View2D:
                 f"{TransformDiagnosticCode.VIEW2D_ASPECT_UNSUPPORTED.value}: "
                 "equal/fixed aspect layout is deferred"
             )
-        if not isinstance(self.clip, bool):
-            raise TypeError("clip must be a bool")
         validate_view2d_limits("x_range", self.x_range)
         validate_view2d_limits("y_range", self.y_range)
 
@@ -115,8 +87,39 @@ class VisualAttachment:
     view_id: str
     coordinate_space: VisualCoordinateSpace = VisualCoordinateSpace.DATA
     z_order: int = 0
+    clip_scope: ClipScope = ClipScope.PLOT
 
     def __post_init__(self) -> None:
         validate_id(self.visual_id)
         validate_id(self.panel_id)
         validate_id(self.view_id)
+        if isinstance(self.clip_scope, str):
+            try:
+                object.__setattr__(self, "clip_scope", ClipScope(self.clip_scope))
+            except ValueError as exc:
+                raise ValueError(
+                    f"clip_scope must be one of {[scope.value for scope in ClipScope]}"
+                ) from exc
+        elif not isinstance(self.clip_scope, ClipScope):
+            raise TypeError("clip_scope must be a ClipScope or its string value")
+
+
+def resolved_attachment_clip_rect(
+    attachment: VisualAttachment, snapshot: ResolvedLayoutSnapshot
+) -> LogicalPixelRect:
+    """Return the exact logical-pixel scissor selected by one attachment."""
+    if not isinstance(attachment, VisualAttachment):
+        raise TypeError("attachment must be a VisualAttachment")
+    if not isinstance(snapshot, ResolvedLayoutSnapshot):
+        raise TypeError("snapshot must be a ResolvedLayoutSnapshot")
+    panel = snapshot.panel(attachment.panel_id)
+    if attachment.clip_scope is ClipScope.PLOT:
+        return panel.plot_rect_px
+    if attachment.clip_scope is ClipScope.PANEL:
+        return panel.panel_rect_px
+    return LogicalPixelRect(
+        0,
+        0,
+        snapshot.render_target.logical_width_px,
+        snapshot.render_target.logical_height_px,
+    )

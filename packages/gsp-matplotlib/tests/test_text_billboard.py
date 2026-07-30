@@ -94,7 +94,5 @@ def test_matplotlib_advertises_billboard_without_depth_or_glyph_parity() -> None
     caps = capability_snapshot()
 
     assert caps.supports_view3d_capability("textvisual.billboard3d.v1")
-    assert not caps.supports_view3d_capability(
-        "textvisual.billboard3d.depth_occlusion.v1"
-    )
+    assert not caps.supports_view3d_capability("textvisual.billboard3d.depth_occlusion.v1")
     assert caps.font_layout_capability.rasterization_parity is False
