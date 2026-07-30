@@ -1,5 +1,39 @@
 # Local bootstrap qualification
 
+## M303 pre-release mechanical correction gate
+
+Date: 2026-07-30
+
+Committed GSP head: `aee00ca22f52b8168ab6d5e6ceb877b218452729`.
+
+The intended first ordinary publication set is `gsp-core`, `gsp-matplotlib`, and VisPy2.
+`gsp-datoviz` remains a separately built development artifact until a compatible Datoviz runtime
+is ordinarily resolvable.
+
+| Gate | Result |
+|---|---|
+| Complete GSP source pytest | 804 passed |
+| Strict mypy | 51 source files clean |
+| Ruff | packages and conformance clean |
+| Three-package isolated qualification with VisPy2 | 628 passed, one Datoviz-only conformance module skipped |
+| Wheel and sdist builds | all four projects built; Datoviz classified development-only |
+| Twine | all eight wheel/sdist checks passed without warnings |
+| Wheel contents | all four wheels passed |
+| Licensing | SPDX `BSD-3-Clause` plus packaged LICENSE in every wheel |
+
+Candidate wheel hashes:
+
+| Artifact | SHA-256 |
+|---|---|
+| `gsp_core-0.2.0a1-py3-none-any.whl` | `82b4701800f798c0d9e98002727199ecbad4859433e9a6d063eb3f75e98c06ea` |
+| `gsp_matplotlib-0.2.0a1-py3-none-any.whl` | `a04780d70dfc64648814ed0a74af29a736eef07214b634af032e667c7512268a` |
+| development-only `gsp_datoviz-0.2.0a1-py3-none-any.whl` | `a940f23cc1c54b41fe204b11214396d1722f9fad7a876d01e5520e1fe2e8b83a` |
+
+This gate performs no version, tag, push, or publication operation. P038 still blocks the
+independent Panel and producer-capability protocol refactor.
+
+## Original local bootstrap
+
 Date: 2026-07-22
 
 This unpublished `0.2.0a1` bootstrap was built from committed source and installed into isolated
