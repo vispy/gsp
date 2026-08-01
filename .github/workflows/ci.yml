@@ -41,4 +41,4 @@ jobs:
           python -m venv "$RUNNER_TEMP/gsp-wheel-venv"
           "$RUNNER_TEMP/gsp-wheel-venv/bin/python" -m pip install "$RUNNER_TEMP"/gsp-dist/*.whl "pytest>=8,<10"
           cd "$RUNNER_TEMP"
-          "$RUNNER_TEMP/gsp-wheel-venv/bin/python" -m pytest -q "$GITHUB_WORKSPACE/packages" "$GITHUB_WORKSPACE/conformance"
+          PYTHONPATH="$GITHUB_WORKSPACE" "$RUNNER_TEMP/gsp-wheel-venv/bin/python" -m pytest -q "$GITHUB_WORKSPACE/packages" "$GITHUB_WORKSPACE/conformance"
