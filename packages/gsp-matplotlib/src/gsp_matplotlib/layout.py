@@ -227,17 +227,13 @@ def _data_to_top_left_transform(
                 canonical_plot_rect.width / native_plot_rect.width,
                 0.0,
                 canonical_plot_rect.x
-                - native_plot_rect.x
-                * canonical_plot_rect.width
-                / native_plot_rect.width,
+                - native_plot_rect.x * canonical_plot_rect.width / native_plot_rect.width,
             ],
             [
                 0.0,
                 canonical_plot_rect.height / native_plot_rect.height,
                 canonical_plot_rect.y
-                - native_plot_rect.y
-                * canonical_plot_rect.height
-                / native_plot_rect.height,
+                - native_plot_rect.y * canonical_plot_rect.height / native_plot_rect.height,
             ],
             [0.0, 0.0, 1.0],
         ],

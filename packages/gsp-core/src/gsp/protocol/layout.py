@@ -59,9 +59,9 @@ class LogicalCoordinateRegion(str, Enum):
     DATA_PLOT = "data-plot"
 
 
-EXPLICIT_PANEL_LAYOUT_V1_KIND: Final[
-    Literal["layout.panel.explicit_rects.v1"]
-] = "layout.panel.explicit_rects.v1"
+EXPLICIT_PANEL_LAYOUT_V1_KIND: Final[Literal["layout.panel.explicit_rects.v1"]] = (
+    "layout.panel.explicit_rects.v1"
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -369,16 +369,10 @@ def quantize_normalized_edge(coordinate: float, target_extent_px: int) -> int:
     )
 
 
-def quantize_logical_rect(
-    rect: LogicalPixelRect, render_target: RenderTarget
-) -> LogicalPixelRect:
+def quantize_logical_rect(rect: LogicalPixelRect, render_target: RenderTarget) -> LogicalPixelRect:
     """Quantize logical rectangle edges to canonical integer pixel boundaries."""
-    width = _integral_target_extent(
-        "logical_width_px", render_target.logical_width_px
-    )
-    height = _integral_target_extent(
-        "logical_height_px", render_target.logical_height_px
-    )
+    width = _integral_target_extent("logical_width_px", render_target.logical_width_px)
+    height = _integral_target_extent("logical_height_px", render_target.logical_height_px)
     left = min(width, max(0, math.floor(rect.x + 0.5)))
     right = min(width, max(0, math.floor(rect.x + rect.width + 0.5)))
     top = min(height, max(0, math.floor(rect.y + 0.5)))

@@ -25,7 +25,7 @@ def test_probe_removes_vector_capability_when_runtime_probe_rejects_it(
             transform_capabilities=(),
             navigation_capabilities=(),
             view3d_capabilities=(),
-            supports_visual=lambda family: (vector_ready if family == "vector" else True),
+            supports_visual=lambda family: vector_ready if family == "vector" else True,
         ),
     )
 
@@ -50,7 +50,7 @@ def test_probe_removes_primitive_capability_when_runtime_probe_rejects_it(
             transform_capabilities=(),
             navigation_capabilities=(),
             view3d_capabilities=(),
-            supports_visual=lambda family: (primitive_ready if family == "primitive" else True),
+            supports_visual=lambda family: primitive_ready if family == "primitive" else True,
         ),
     )
 
@@ -103,9 +103,7 @@ def test_probe_conditionally_exposes_panel_query_from_runtime_snapshot(
             navigation_capabilities=(),
             view3d_capabilities=(),
             supports_visual=lambda _family: True,
-            supports_query_mode=lambda mode: (
-                panel_query_ready if mode == "panel-query" else False
-            ),
+            supports_query_mode=lambda mode: panel_query_ready if mode == "panel-query" else False,
         ),
     )
 
