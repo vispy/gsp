@@ -18,3 +18,6 @@ implementation. Source material from `GSP_API` is not authoritative merely becau
 Record source commit/path/blob provenance for every imported file. Do not copy an archive-only
 component wholesale. Validate built wheels rather than relying only on editable source imports.
 
+## Before committing
+
+Before every commit, stage the intended changes and run `just pre-commit-check`. Do not commit if it fails. If `just format` changes files, inspect and re-stage them before rerunning the check.

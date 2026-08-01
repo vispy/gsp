@@ -1,6 +1,18 @@
 docs_host := env("GSP_DOCS_HOST", "")
 docs_port := env("GSP_DOCS_PORT", "8296")
 
+lint:
+    @uvx --from 'ruff==0.16.1' ruff check packages conformance
+    @uvx --from 'ruff==0.16.1' ruff format --check packages conformance
+
+format:
+    @uvx --from 'ruff==0.16.1' ruff check --fix packages conformance
+    @uvx --from 'ruff==0.16.1' ruff format packages conformance
+
+pre-commit-check: lint
+    @git diff --check
+    @git diff --cached --check
+
 _docs-command command:
     @uv run --no-project --with 'mkdocs-material==9.7.7' mkdocs {{command}}
 
