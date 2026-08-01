@@ -1,0 +1,66 @@
+site_name: GSP Documentation
+site_description: Backend-independent graphics session protocol for scientific visualization
+repo_name: vispy/gsp
+repo_url: https://github.com/vispy/gsp
+
+docs_dir: docs
+site_dir: site
+
+theme:
+  name: material
+  font: false
+  features:
+    - content.code.copy
+    - navigation.footer
+    - navigation.top
+    - search.highlight
+    - search.suggest
+    - toc.follow
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: black
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+
+plugins:
+  - search
+
+validation:
+  links:
+    not_found: warn
+
+nav:
+  - Home: index.md
+  - Protocol and backends: protocol-and-backends.md
+  - Specification:
+    - Overview: specification/index.md
+    - Protocol lifecycle: specification/protocol.md
+    - Scene model: specification/scene.md
+    - Resources and data: specification/resources.md
+    - Visual semantics: specification/visuals.md
+    - Views, transforms, and layout: specification/views-layout.md
+    - Capabilities and diagnostics: specification/capabilities.md
+    - Queries and readback: specification/queries.md
+    - Transports and extensions: specification/transports-extensions.md
+    - Backend profiles: specification/backend-profiles.md
+    - Normative registries: specification/registries.md
