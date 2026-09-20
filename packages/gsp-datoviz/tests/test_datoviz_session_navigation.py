@@ -171,7 +171,7 @@ def _scene() -> gsp.Scene:
     )
 
 
-def test_datoviz_rejects_direct_multi_panel_scene_before_renderer_build() -> None:
+def test_datoviz_accepts_direct_multi_panel_scene() -> None:
     panels = (Panel("panel:left"), Panel("panel:right"))
     scene = gsp.Scene(
         id="scene:multi",
@@ -191,9 +191,8 @@ def test_datoviz_rejects_direct_multi_panel_scene_before_renderer_build() -> Non
     )
     renderer = _FakeRenderer(View2D("view:unused", "panel:left"))
     session = _session(renderer)
-    with pytest.raises(ValueError, match="exactly one scene panel"):
-        session.render(scene)
-    assert session._renderers == []
+    assert session.render(scene) is renderer  # type: ignore[comparison-overlap]
+    assert session._renderers == [renderer]
 
 
 def _mesh3d_scene() -> gsp.Scene:

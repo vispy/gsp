@@ -31,7 +31,7 @@ def query_resolved_layout_guides(
         )
     hits = tuple(
         _hit_for_box(request, snapshot.snapshot_id, box, index)
-        for index, box in enumerate(_queryable_boxes(snapshot))
+        for index, box in enumerate(_queryable_boxes(request, snapshot))
         if _contains(box, request.coordinate)
     )
     if not hits:
@@ -55,14 +55,19 @@ def query_resolved_layout_guides(
 
 
 def _queryable_boxes(
+    request: QueryRequest,
     snapshot: ResolvedLayoutSnapshot,
 ) -> tuple[ResolvedGuideBox, ...]:
+    # The low-level singular renderer historically emits ``panel:default`` when
+    # its caller does not supply a panel id.  Preserve that direct-call
+    # convenience while requiring exact identity for scene-wide snapshots.
+    panel = snapshot.only_panel() if len(snapshot.panels) == 1 else snapshot.panel(request.panel_id)
     return (
-        snapshot.only_panel().title_boxes
-        + snapshot.only_panel().axis_label_boxes
-        + snapshot.only_panel().tick_label_boxes
-        + snapshot.only_panel().legend_boxes
-        + snapshot.only_panel().colorbar_boxes
+        panel.title_boxes
+        + panel.axis_label_boxes
+        + panel.tick_label_boxes
+        + panel.legend_boxes
+        + panel.colorbar_boxes
     )
 
 

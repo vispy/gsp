@@ -158,11 +158,45 @@ class MatplotlibProtocolRenderResult:
     view_snapshot_id: str | None = None
     view3d_projection_snapshot: View3DProjectionSnapshot | None = None
     layout_was_consumed: bool = False
+    panel_axes: tuple[tuple[str, matplotlib.axes.Axes], ...] = ()
+    panel_view_snapshot_ids: tuple[tuple[str, str | None], ...] = ()
+    panel_view3d_projection_snapshots: tuple[tuple[str, View3DProjectionSnapshot | None], ...] = ()
 
     @property
     def layout_snapshot_id(self) -> str:
         """Return the resolved layout snapshot id used by this render result."""
         return self.layout_snapshot.snapshot_id
+
+    def axes_for_panel(self, panel_id: str) -> matplotlib.axes.Axes:
+        """Return the native axes for one exact scene panel identity."""
+        matches = tuple(axes for candidate, axes in self.panel_axes if candidate == panel_id)
+        if len(matches) != 1:
+            raise KeyError(panel_id)
+        return matches[0]
+
+    def view_snapshot_id_for_panel(self, panel_id: str) -> str | None:
+        """Return the current view snapshot identity for one rendered panel."""
+        matches = tuple(
+            snapshot_id
+            for candidate, snapshot_id in self.panel_view_snapshot_ids
+            if candidate == panel_id
+        )
+        if len(matches) != 1:
+            raise KeyError(panel_id)
+        return matches[0]
+
+    def view3d_projection_snapshot_for_panel(
+        self, panel_id: str
+    ) -> View3DProjectionSnapshot | None:
+        """Return the resolved View3D projection for one exact panel."""
+        matches = tuple(
+            snapshot
+            for candidate, snapshot in self.panel_view3d_projection_snapshots
+            if candidate == panel_id
+        )
+        if len(matches) != 1:
+            raise KeyError(panel_id)
+        return matches[0]
 
 
 def render_protocol_scene_with_layout(
@@ -327,6 +361,18 @@ def render_protocol_scene_with_layout(
         ),
         view3d_projection_snapshot=projection_snapshot,
         layout_was_consumed=layout_snapshot is not None,
+        panel_axes=((panel_id, axes),),
+        panel_view_snapshot_ids=(
+            (
+                panel_id,
+                (
+                    projection_snapshot.view_projection_snapshot_id
+                    if projection_snapshot is not None
+                    else view_snapshot_id
+                ),
+            ),
+        ),
+        panel_view3d_projection_snapshots=((panel_id, projection_snapshot),),
     )
 
 

@@ -86,8 +86,6 @@ class DatovizSession:
         self._require_open()
         if not isinstance(scene, Scene):
             raise TypeError("render() requires a gsp.Scene")
-        if len(scene.panels) != 1:
-            raise ValueError("Datoviz adapter supports exactly one scene panel")
         unsupported_clip_scopes = {
             attachment.clip_scope
             for attachment in scene.attachments
@@ -153,9 +151,9 @@ class DatovizSession:
                 f"panel {request.panel_id!r} is not present in scene {scene.id!r}",
             )
 
-        if (
-            bool(scene.views3d)
-            and VIEW3D_QUERY_PAYLOAD_KIND in request.requested_extension_payload_kinds
+        panel_view = scene.primary_view_for_panel(request.panel_id)
+        if isinstance(panel_view, View3D) and (
+            VIEW3D_QUERY_PAYLOAD_KIND in request.requested_extension_payload_kinds
         ):
             layout_getter = getattr(renderer, "authoritative_layout_snapshot", None)
             effective_layout = layout_getter() if layout_getter is not None else None
@@ -169,7 +167,8 @@ class DatovizSession:
             )
 
         if not any(
-            isinstance(visual, _DATOVIZ_ITEM_QUERY_VISUAL_TYPES) for visual in scene.visuals
+            isinstance(visual, _DATOVIZ_ITEM_QUERY_VISUAL_TYPES)
+            for visual in scene.visuals_for_panel(request.panel_id)
         ):
             return _unsupported_query_result(
                 request,
@@ -229,9 +228,15 @@ class DatovizSession:
         renderer_id = id(renderer)
         if renderer_id in self._interactive_view2d_renderers:
             return
-        if len(scene.views2d) != 1 or scene.views3d:
+        if not scene.views2d:
             return
-        renderer.enable_gsp_view2d_navigation(scene.views2d[0])
+        for index, view in enumerate(scene.views2d):
+            if len(scene.views2d) == 1:
+                renderer.enable_gsp_view2d_navigation(view)
+            else:
+                renderer.enable_gsp_view2d_navigation(
+                    view, controller_id=f"nav:datoviz-live:{index}"
+                )
         self._interactive_view2d_renderers.add(renderer_id)
 
     def _enable_interactive_view3d(
@@ -240,13 +245,19 @@ class DatovizSession:
         renderer_id = id(renderer)
         if renderer_id in self._interactive_view3d_renderers:
             return
-        if len(scene.views3d) != 1 or scene.views2d:
+        if not scene.views3d:
             return
         if not self.capabilities.supports_view3d_capability(
             VIEW3D_NAVIGATION_ORBIT_PAN_ZOOM_CAPABILITY
         ):
             return
-        renderer.enable_gsp_view3d_navigation(scene.views3d[0])
+        for index, view in enumerate(scene.views3d):
+            if len(scene.views3d) == 1:
+                renderer.enable_gsp_view3d_navigation(view)
+            else:
+                renderer.enable_gsp_view3d_navigation(
+                    view, controller_id=f"nav:datoviz-live-3d:{index}"
+                )
         self._interactive_view3d_renderers.add(renderer_id)
 
     def _build_renderer(
@@ -255,9 +266,14 @@ class DatovizSession:
         *,
         layout_snapshot: ResolvedLayoutSnapshot | None = None,
     ) -> DatovizV04ProtocolRenderer:
-        panel_bounds = (
-            _normalized_plot_bounds(layout_snapshot) if layout_snapshot is not None else None
+        first_panel = scene.panels[0]
+        first_view = scene.primary_view_for_panel(first_panel.id)
+        first_layout = (
+            _layout_snapshot_for_panel(layout_snapshot, first_panel.id)
+            if layout_snapshot is not None
+            else None
         )
+        panel_bounds = _normalized_plot_bounds(first_layout) if first_layout is not None else None
         renderer = DatovizV04ProtocolRenderer(
             dvz=self._dvz,
             color_scales={item.id: item for item in scene.color_scales},
@@ -267,40 +283,74 @@ class DatovizSession:
                 if layout_snapshot is not None
                 else scene.canvas_size
             ),
-            view=None if scene.axis_guides or not scene.views2d else scene.views2d[0],
-            view3d=scene.views3d[0] if scene.views3d else None,
+            view=first_view
+            if isinstance(first_view, View2D) and not _panel_has_axes(scene, first_panel.id)
+            else None,
+            view3d=first_view if isinstance(first_view, View3D) else None,
             transform_resources={item.id: item for item in scene.transforms},
             panel_bounds=panel_bounds,
-            panel_id=scene.panels[0].id,
+            panel_id=first_panel.id,
             panel_layout=scene.panel_layout,
-            consumed_layout_snapshot=layout_snapshot,
+            consumed_layout_snapshot=first_layout,
         )
         try:
-            self._configure_guides(renderer, scene)
-            for visual in _canonical_visual_emission_order(
-                scene.visuals_for_panel(scene.panels[0].id)
-            ):
-                _add_visual(renderer, visual)
-            for guide in scene.colorbar_guides:
-                renderer.add_colorbar_guide(guide)
+            for index, panel in enumerate(scene.panels):
+                view = scene.primary_view_for_panel(panel.id)
+                panel_layout = (
+                    _layout_snapshot_for_panel(layout_snapshot, panel.id)
+                    if layout_snapshot is not None
+                    else None
+                )
+                if index:
+                    renderer.add_retained_panel(
+                        panel_id=panel.id,
+                        view=(
+                            view
+                            if isinstance(view, View2D) and not _panel_has_axes(scene, panel.id)
+                            else None
+                        ),
+                        view3d=view if isinstance(view, View3D) else None,
+                        panel_layout=scene.panel_layout,
+                        consumed_layout_snapshot=panel_layout,
+                    )
+                self._configure_guides(renderer, scene, panel.id)
+                for visual in _canonical_visual_emission_order(scene.visuals_for_panel(panel.id)):
+                    _add_visual(renderer, visual)
+                for guide in scene.colorbar_guides:
+                    if guide.panel_id == panel.id:
+                        renderer.add_colorbar_guide(guide)
+            set_layout = getattr(renderer, "set_authoritative_scene_layout_snapshot", None)
+            if set_layout is not None:
+                set_layout(layout_snapshot)
+            activate_panel = getattr(renderer, "activate_panel", None)
+            if activate_panel is not None:
+                activate_panel(first_panel.id)
         except Exception:
             renderer.close()
             raise
         return renderer
 
     @staticmethod
-    def _configure_guides(renderer: DatovizV04ProtocolRenderer, scene: Scene) -> None:
-        if not scene.axis_guides:
+    def _configure_guides(
+        renderer: DatovizV04ProtocolRenderer, scene: Scene, panel_id: str
+    ) -> None:
+        view = scene.primary_view_for_panel(panel_id)
+        guides = (
+            tuple(guide for guide in scene.axis_guides if guide.view_id == view.id)
+            if isinstance(view, View2D)
+            else ()
+        )
+        if not guides:
             return
-        if len(scene.views2d) != 1:
-            raise ValueError("axis guides require exactly one Scene.views2d entry")
-        view2d = scene.views2d[0]
+        if not isinstance(view, View2D):
+            raise ValueError("axis guides require a View2D on their panel")
+        view2d = view
         x_guide = next(
-            (guide for guide in scene.axis_guides if guide.dimension is AxisDimension.X),
+            (guide for guide in guides if guide.dimension is AxisDimension.X),
             None,
         )
         y_guide = next(
-            (guide for guide in scene.axis_guides if guide.dimension is AxisDimension.Y),
+            (guide for guide in guides if guide.dimension is AxisDimension.Y),
             None,
         )
         if x_guide is None or y_guide is None:
@@ -372,6 +422,27 @@ def _scene_panel_ids(scene: Scene) -> frozenset[str]:
     return frozenset(panel.id for panel in scene.panels)
 
 
+def _panel_has_axes(scene: Scene, panel_id: str) -> bool:
+    view = scene.primary_view_for_panel(panel_id)
+    return isinstance(view, View2D) and any(guide.view_id == view.id for guide in scene.axis_guides)
+
+
+def _layout_snapshot_for_panel(
+    snapshot: ResolvedLayoutSnapshot, panel_id: str
+) -> ResolvedLayoutSnapshot:
+    try:
+        panel = snapshot.panel(panel_id)
+    except ValueError:
+        if len(snapshot.panels) != 1:
+            raise
+        panel = snapshot.only_panel()
+    return ResolvedLayoutSnapshot(
+        snapshot_id=snapshot.snapshot_id,
+        render_target=snapshot.render_target,
+        panels=(panel,),
+    )
+
+
 def _unsupported_query_result(request: QueryRequest, diagnostic: str) -> QueryResult:
     return QueryResult(
         request_id=request.id,
@@ -409,24 +480,33 @@ def _validate_consumed_layout_scene(
         return
     if not isinstance(layout_snapshot, ResolvedLayoutSnapshot):
         raise TypeError("layout_snapshot must be a ResolvedLayoutSnapshot")
-    if len(scene.panels) != 1:
-        raise ValueError("resolved-layout consumption supports exactly one scene panel")
-    panel = scene.panels[0]
-    views: tuple[View2D | View3D, ...] = (*scene.views2d, *scene.views3d)
-    if len(views) > 1:
-        raise ValueError("resolved-layout consumption supports at most one active scene view")
-    active_view = views[0] if views else None
-    if active_view is not None:
-        if active_view.panel_id != panel.id:
-            raise ValueError("active view panel_id does not match the consumed scene panel")
-        if layout_snapshot.only_panel().view_id != active_view.id:
-            raise ValueError("layout_snapshot view_id does not match the active scene view")
-    elif layout_snapshot.only_panel().view_id is not None:
-        raise ValueError("viewless scene cannot consume a view-bound layout_snapshot")
+    scene_panel_ids = _scene_panel_ids(scene)
+    snapshot_panel_ids = frozenset(panel.panel_id for panel in layout_snapshot.panels)
+    singleton_compatibility = len(scene.panels) == len(layout_snapshot.panels) == 1
+    if snapshot_panel_ids != scene_panel_ids and not singleton_compatibility:
+        raise ValueError("layout_snapshot panels do not match the scene panels")
+    for panel in scene.panels:
+        active_view = scene.primary_view_for_panel(panel.id)
+        resolved_panel = (
+            layout_snapshot.only_panel()
+            if singleton_compatibility
+            else layout_snapshot.panel(panel.id)
+        )
+        if active_view is not None:
+            if resolved_panel.view_id != active_view.id:
+                raise ValueError("layout_snapshot view_id does not match the active scene view")
+        elif resolved_panel.view_id is not None:
+            raise ValueError("viewless scene panel cannot consume a view-bound layout_snapshot")
     expected = resolve_panel_layout_intent(scene.panel_layout, layout_snapshot.render_target)
-    if (
-        len(expected) != 1
-        or expected[0].panel_rect_px != layout_snapshot.only_panel().panel_rect_px
+    expected_by_id = {panel.panel_id: panel for panel in expected}
+    if any(
+        expected_by_id[panel.id].panel_rect_px
+        != (
+            layout_snapshot.only_panel().panel_rect_px
+            if singleton_compatibility
+            else layout_snapshot.panel(panel.id).panel_rect_px
+        )
+        for panel in scene.panels
     ):
         raise ValueError("layout_snapshot panel_rect_px does not match the scene panel allocation")
     _validate_scene_canvas_target(scene.canvas_size, layout_snapshot)

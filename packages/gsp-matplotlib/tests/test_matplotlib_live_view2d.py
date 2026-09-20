@@ -9,7 +9,15 @@ from conformance.p038_support import single_panel_scene
 import pytest
 
 import gsp
-from gsp.protocol import CoordinateSpace, PointVisual, View2D
+from gsp.protocol import (
+    CoordinateSpace,
+    ExplicitPanelLayoutV1,
+    NormalizedRenderTargetRect,
+    Panel,
+    PanelPlacement,
+    PointVisual,
+    View2D,
+)
 
 
 def _scene(coordinate_space: CoordinateSpace) -> gsp.Scene:
@@ -100,3 +108,38 @@ def test_canonical_view_application_advances_once_without_callback_recursion() -
         assert binding.revision_index == 2
         assert result.axes.get_xlim() == pytest.approx((-4.0, 2.0))
         assert result.axes.get_ylim() == pytest.approx((8.0, -3.0))
+
+
+def test_multi_panel_native_navigation_updates_only_target_view_binding() -> None:
+    panels = (Panel("panel:left"), Panel("panel:right"))
+    views = (
+        View2D(id="view:left", panel_id=panels[0].id),
+        View2D(id="view:right", panel_id=panels[1].id),
+    )
+    scene = gsp.Scene(
+        id="scene:live-multi",
+        panels=panels,
+        panel_layout=ExplicitPanelLayoutV1(
+            (
+                PanelPlacement(panels[0].id, NormalizedRenderTargetRect(0.0, 0.0, 0.5, 1.0)),
+                PanelPlacement(panels[1].id, NormalizedRenderTargetRect(0.5, 0.0, 0.5, 1.0)),
+            )
+        ),
+        views2d=views,
+    )
+    session = gsp.open_session("matplotlib")
+    result = session.display(scene)
+    left_axes = result.axes_for_panel(panels[0].id)
+    right_axes = result.axes_for_panel(panels[1].id)
+    left_binding = session._view2d_bindings[left_axes]  # type: ignore[attr-defined]
+    right_binding = session._view2d_bindings[right_axes]  # type: ignore[attr-defined]
+    right_snapshot_id = result.view_snapshot_id_for_panel(panels[1].id)
+    right_layout = result.layout_snapshot.panel(panels[1].id)
+
+    left_axes.set_xlim(-4.0, 2.0)
+
+    assert left_binding.view.x_range == pytest.approx((-4.0, 2.0))
+    assert right_binding.view == views[1]
+    assert result.view_snapshot_id_for_panel(panels[1].id) == right_snapshot_id
+    assert result.layout_snapshot.panel(panels[1].id) == right_layout
+    session.close()

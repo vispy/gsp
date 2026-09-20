@@ -951,6 +951,23 @@ class _DatovizView2DAxisState:
 
 
 @dataclass
+class _DatovizRetainedPanelState:
+    """All panel-local state retained inside one Datoviz scene/figure."""
+
+    panel: Any
+    view: View2D | None
+    view3d: View3D | None
+    panel_bounds: tuple[float, float, float, float] | None
+    consumed_layout_snapshot: ResolvedLayoutSnapshot | None
+    retained_view2d_position_uploads: list[_RetainedView2DPositionUpload]
+    retained_view3d_meshes: list[_RetainedView3DMeshAttachment]
+    retained_view3d_texts: list[_RetainedView3DTextAttachment]
+    retained_view3d_update_stats: DatovizRetainedView3DUpdateStats
+    view2d_axis_state: _DatovizView2DAxisState | None
+    native_view3d_camera: Any | None
+
+
+@dataclass
 class DatovizV04ProtocolRenderer:
     """Minimal point/image renderer using Datoviz v0.4 top-level functions."""
 
@@ -979,6 +996,12 @@ class DatovizV04ProtocolRenderer:
     native_arcball: Any | None = field(default=None, init=False)
     live_navigation: "_DatovizLiveView2DNavigation | None" = field(default=None, init=False)
     live_view3d_navigation: "_DatovizLiveView3DNavigation | None" = field(default=None, init=False)
+    live_navigations: dict[str, "_DatovizLiveView2DNavigation"] = field(
+        default_factory=dict, init=False
+    )
+    live_view3d_navigations: dict[str, "_DatovizLiveView3DNavigation"] = field(
+        default_factory=dict, init=False
+    )
     visuals: dict[str, Any] = field(default_factory=dict, init=False)
     sampled_fields: dict[str, Any] = field(default_factory=dict, init=False)
     native_scales: dict[str, Any] = field(default_factory=dict, init=False)
@@ -1002,6 +1025,10 @@ class DatovizV04ProtocolRenderer:
     native_view3d_camera: Any | None = field(default=None, init=False)
     transform_adaptations: dict[str, tuple[str, ...]] = field(default_factory=dict, init=False)
     last_view2d_carrier_diagnostics: dict[str, object] = field(default_factory=dict, init=False)
+    _panel_states: dict[str, _DatovizRetainedPanelState] = field(default_factory=dict, init=False)
+    _authoritative_scene_layout_snapshot: ResolvedLayoutSnapshot | None = field(
+        default=None, init=False
+    )
     _cpu_map_data_visuals_to_view: bool = field(default=False, init=False)
     _closed: bool = field(default=False, init=False)
 
@@ -1083,6 +1110,128 @@ class DatovizV04ProtocolRenderer:
                 self.dvz, self.panel, self.view3d
             )
             self.retained_view3d_update_stats.view_projection_uniform_updates += 1
+        self._store_active_panel_state()
+
+    def _store_active_panel_state(self) -> None:
+        self._panel_states[self.panel_id] = _DatovizRetainedPanelState(
+            panel=self.panel,
+            view=self.view,
+            view3d=self.view3d,
+            panel_bounds=self.panel_bounds,
+            consumed_layout_snapshot=self.consumed_layout_snapshot,
+            retained_view2d_position_uploads=self.retained_view2d_position_uploads,
+            retained_view3d_meshes=self.retained_view3d_meshes,
+            retained_view3d_texts=self.retained_view3d_texts,
+            retained_view3d_update_stats=self.retained_view3d_update_stats,
+            view2d_axis_state=self.view2d_axis_state,
+            native_view3d_camera=self.native_view3d_camera,
+        )
+
+    def activate_panel(self, panel_id: str) -> None:
+        """Select one retained panel as the target of subsequent adapter operations."""
+        if panel_id == self.panel_id:
+            self._store_active_panel_state()
+            return
+        # Preserve the direct-renderer single-panel API, where QueryRequest historically used
+        # an arbitrary scene panel id because the renderer itself had no scene identity.
+        if len(self._panel_states) == 1:
+            return
+        self._store_active_panel_state()
+        try:
+            state = self._panel_states[panel_id]
+        except KeyError as exc:
+            raise ValueError(f"renderer has no retained panel {panel_id!r}") from exc
+        self.panel_id = panel_id
+        self.panel = state.panel
+        self.view = state.view
+        self.view3d = state.view3d
+        self.panel_bounds = state.panel_bounds
+        self.consumed_layout_snapshot = state.consumed_layout_snapshot
+        self.retained_view2d_position_uploads = state.retained_view2d_position_uploads
+        self.retained_view3d_meshes = state.retained_view3d_meshes
+        self.retained_view3d_texts = state.retained_view3d_texts
+        self.retained_view3d_update_stats = state.retained_view3d_update_stats
+        self.view2d_axis_state = state.view2d_axis_state
+        self.native_view3d_camera = state.native_view3d_camera
+
+    def add_retained_panel(
+        self,
+        *,
+        panel_id: str,
+        view: View2D | None,
+        view3d: View3D | None,
+        panel_layout: PanelLayoutIntent,
+        consumed_layout_snapshot: ResolvedLayoutSnapshot | None = None,
+    ) -> Any:
+        """Create another typed panel in this renderer's retained figure."""
+        if panel_id in self._panel_states:
+            raise ValueError(f"renderer already contains panel {panel_id!r}")
+        if view is not None and view3d is not None:
+            raise ValueError("a retained panel accepts either View2D or View3D, not both")
+        if view is not None and view.panel_id != panel_id:
+            raise ValueError("View2D panel_id does not match retained panel")
+        if view3d is not None and view3d.panel_id != panel_id:
+            raise ValueError("View3D panel_id does not match retained panel")
+        if consumed_layout_snapshot is not None:
+            _preflight_consumed_layout_panel_api(self.dvz)
+            _validate_renderer_consumed_layout_view(
+                consumed_layout_snapshot, view=view, view3d=view3d
+            )
+            _validate_consumed_perspective_aspect(consumed_layout_snapshot, view3d)
+            panel_bounds = _consumed_layout_native_panel_bounds(consumed_layout_snapshot)
+        else:
+            target = RenderTarget(
+                logical_width_px=self.resolved_canvas.canvas_width_px,
+                logical_height_px=self.resolved_canvas.canvas_height_px,
+                device_scale=self.resolved_canvas.framebuffer_per_canvas_px,
+                dpi=self.resolved_canvas.output_dpi,
+                pixel_origin=PixelOrigin.TOP_LEFT,
+                query_coordinate_space="plot",
+            )
+            resolved = tuple(
+                item
+                for item in resolve_panel_layout_intent(panel_layout, target)
+                if item.panel_id == panel_id
+            )
+            if len(resolved) != 1:
+                raise ValueError("panel_layout must resolve the retained panel exactly once")
+            rect = resolved[0].panel_rect_px
+            panel_bounds = (
+                rect.x / target.logical_width_px,
+                rect.y / target.logical_height_px,
+                rect.width / target.logical_width_px,
+                rect.height / target.logical_height_px,
+            )
+
+        self._store_active_panel_state()
+        self.panel_id = panel_id
+        self.view = view
+        self.view3d = view3d
+        self.panel_bounds = panel_bounds
+        self.consumed_layout_snapshot = consumed_layout_snapshot
+        self.retained_view2d_position_uploads = []
+        self.retained_view3d_meshes = []
+        self.retained_view3d_texts = []
+        self.retained_view3d_update_stats = DatovizRetainedView3DUpdateStats()
+        self.view2d_axis_state = None
+        self.native_view3d_camera = None
+        self.panel = _create_panel(self.dvz, self.figure, panel_bounds)
+        _set_panel_background_color(self.dvz, self.panel, self.background_rgba8)
+        _configure_ndc_panel_view2d(self.dvz, self.panel)
+        if view is not None:
+            self.apply_datoviz_data_view2d(view)
+        if view3d is not None:
+            self.native_view3d_camera = _configure_datoviz_view3d_camera(
+                self.dvz, self.panel, view3d
+            )
+            self.retained_view3d_update_stats.view_projection_uniform_updates += 1
+        self._store_active_panel_state()
+        return self.panel
+
+    def set_authoritative_scene_layout_snapshot(
+        self, snapshot: ResolvedLayoutSnapshot | None
+    ) -> None:
+        self._authoritative_scene_layout_snapshot = snapshot
 
     def capabilities(self) -> CapabilitySnapshot:
         """Return the capability snapshot for this adapter slice."""
@@ -1096,6 +1245,35 @@ class DatovizV04ProtocolRenderer:
         The adapter only copies geometry and identities reported by Datoviz. Missing guide/query
         semantics remain explicit diagnostics and are intentionally not synthesized here.
         """
+        if self._authoritative_scene_layout_snapshot is not None:
+            return self._authoritative_scene_layout_snapshot
+        if len(self._panel_states) > 1:
+            active_panel_id = self.panel_id
+            snapshots: list[ResolvedLayoutSnapshot] = []
+            for panel_id in self._panel_states:
+                self.activate_panel(panel_id)
+                snapshots.append(
+                    _resolve_datoviz_partial_layout_snapshot(
+                        self.dvz,
+                        self.panel,
+                        resolved_canvas=self.resolved_canvas,
+                        panel_id=panel_id,
+                        view_id=(
+                            self.view.id
+                            if self.view is not None
+                            else self.view3d.id
+                            if self.view3d is not None
+                            else None
+                        ),
+                        snapshot_id_prefix=snapshot_id_prefix,
+                    )
+                )
+            self.activate_panel(active_panel_id)
+            return ResolvedLayoutSnapshot(
+                snapshot_id=f"{snapshot_id_prefix}:multi-panel",
+                render_target=snapshots[0].render_target,
+                panels=tuple(snapshot.only_panel() for snapshot in snapshots),
+            )
         if self.consumed_layout_snapshot is not None:
             return self.consumed_layout_snapshot
         return _resolve_datoviz_partial_layout_snapshot(
@@ -1121,7 +1299,7 @@ class DatovizV04ProtocolRenderer:
 
     def authoritative_layout_snapshot(self) -> ResolvedLayoutSnapshot | None:
         """Return the consumed GSP layout retained independently of the native panel."""
-        return self.consumed_layout_snapshot
+        return self._authoritative_scene_layout_snapshot or self.consumed_layout_snapshot
 
     def _canvas_px_scale(self) -> float:
         """Convert GSP canvas pixels to Datoviz logical screen pixels.
@@ -1148,12 +1326,14 @@ class DatovizV04ProtocolRenderer:
         """Destroy the scene when the facade exposes a destroy helper."""
         if self._closed:
             return
-        if self.live_navigation is not None:
-            self.live_navigation.close()
-            self.live_navigation = None
-        if self.live_view3d_navigation is not None:
-            self.live_view3d_navigation.close()
-            self.live_view3d_navigation = None
+        for navigation2d in self.live_navigations.values():
+            navigation2d.close()
+        for navigation3d in self.live_view3d_navigations.values():
+            navigation3d.close()
+        self.live_navigations.clear()
+        self.live_view3d_navigations.clear()
+        self.live_navigation = None
+        self.live_view3d_navigation = None
         destroy_app = getattr(self.dvz, "dvz_app_destroy", None)
         if destroy_app is not None and self.app is not None:
             destroy_app(self.app)
@@ -2290,12 +2470,14 @@ class DatovizV04ProtocolRenderer:
         target_view = view or self.view
         if target_view is None:
             raise DatovizV04Unavailable("Datoviz GSP navigation requires an initial View2D")
+        self.activate_panel(target_view.panel_id)
         live_view = self._ensure_live_view()
         router = self.dvz.dvz_view_input(live_view)
         if _is_null_handle(router):
             raise DatovizV04Unavailable("Datoviz live input router is unavailable")
-        if self.live_navigation is not None:
-            self.live_navigation.close()
+        previous = self.live_navigations.get(target_view.panel_id)
+        if previous is not None:
+            previous.close()
         effective_layout_snapshot_id = (
             self.consumed_layout_snapshot.snapshot_id
             if self.consumed_layout_snapshot is not None
@@ -2312,6 +2494,7 @@ class DatovizV04ProtocolRenderer:
         self.live_navigation.subscription_id = self.dvz.dvz_input_subscribe_event(
             router, self.live_navigation.handle_input_event, None
         )
+        self.live_navigations[target_view.panel_id] = self.live_navigation
         return self.live_navigation
 
     def enable_gsp_view3d_navigation(
@@ -2325,6 +2508,7 @@ class DatovizV04ProtocolRenderer:
         target_view3d = view3d or self.view3d
         if target_view3d is None:
             raise DatovizV04Unavailable("Datoviz GSP View3D navigation requires an initial View3D")
+        self.activate_panel(target_view3d.panel_id)
         diagnostics = datoviz_v04_view3d_live_navigation_diagnostics(self.dvz)
         if diagnostics:
             raise DatovizV04Unavailable("; ".join(diagnostics))
@@ -2332,8 +2516,9 @@ class DatovizV04ProtocolRenderer:
         router = self.dvz.dvz_view_input(live_view)
         if _is_null_handle(router):
             raise DatovizV04Unavailable("Datoviz live input router is unavailable")
-        if self.live_view3d_navigation is not None:
-            self.live_view3d_navigation.close()
+        previous = self.live_view3d_navigations.get(target_view3d.panel_id)
+        if previous is not None:
+            previous.close()
         effective_layout_snapshot_id = (
             self.consumed_layout_snapshot.snapshot_id
             if self.consumed_layout_snapshot is not None
@@ -2350,6 +2535,7 @@ class DatovizV04ProtocolRenderer:
         self.live_view3d_navigation.subscription_id = self.dvz.dvz_input_subscribe_event(
             router, self.live_view3d_navigation.handle_input_event, None
         )
+        self.live_view3d_navigations[target_view3d.panel_id] = self.live_view3d_navigation
         return self.live_view3d_navigation
 
     def _create_rgba8_sampled_field(
@@ -2518,6 +2704,7 @@ class DatovizV04ProtocolRenderer:
         self, request: QueryRequest, *, native_target: int = DVZ_SCENE_TARGET_ITEM
     ) -> QueryResult:
         """Queue and poll one Datoviz panel query for data-scope panel coordinates."""
+        self.activate_panel(request.panel_id)
         stale = self._stale_consumed_layout_result(request)
         if stale is not None:
             return stale
@@ -2718,6 +2905,7 @@ class DatovizV04ProtocolRenderer:
         self, request: QueryRequest, *, layout_snapshot_id: str
     ) -> QueryResult:
         """Return a canonical View3D ray-context payload for the current Datoviz panel."""
+        self.activate_panel(request.panel_id)
         if self.consumed_layout_snapshot is not None and (
             layout_snapshot_id != self.consumed_layout_snapshot.snapshot_id
             or request.layout_snapshot_id not in (None, self.consumed_layout_snapshot.snapshot_id)
@@ -3360,6 +3548,9 @@ class _DatovizLiveView2DNavigation:
 
     def handle_input_event(self, _router: Any, event_ptr: Any, _user_data: Any) -> None:
         """Handle one routed Datoviz input callback."""
+        activate_panel = getattr(self.renderer, "activate_panel", None)
+        if activate_panel is not None:
+            activate_panel(self.view.panel_id)
         input_event = getattr(event_ptr, "contents", event_ptr)
         input_event_type = int(getattr(input_event, "type"))
         if input_event_type == _enum_value(
@@ -3523,6 +3714,9 @@ class _DatovizLiveView3DNavigation:
 
     def handle_input_event(self, _router: Any, event_ptr: Any, _user_data: Any) -> None:
         """Handle one routed Datoviz input callback."""
+        activate_panel = getattr(self.renderer, "activate_panel", None)
+        if activate_panel is not None:
+            activate_panel(self.view3d.panel_id)
         input_event = getattr(event_ptr, "contents", event_ptr)
         input_event_type = int(getattr(input_event, "type"))
         if input_event_type == _enum_value(
@@ -3577,7 +3771,13 @@ class _DatovizLiveView3DNavigation:
         self._request_frame()
 
     def _apply_event(self, event: NavigationPointerEvent) -> None:
+        inside_panel = (
+            self.panel_rect.x <= event.x_px <= self.panel_rect.x + self.panel_rect.width
+            and self.panel_rect.y <= event.y_px <= self.panel_rect.y + self.panel_rect.height
+        )
         if event.kind is NavigationPointerEventKind.BUTTON_PRESS:
+            if not inside_panel:
+                return
             if event.left_button:
                 self._drag_mode = "orbit"
             elif event.right_button:
@@ -3594,12 +3794,16 @@ class _DatovizLiveView3DNavigation:
             self._apply_drag_event(event)
             return
         if event.kind is NavigationPointerEventKind.WHEEL and event.scroll_steps != 0.0:
+            if not inside_panel:
+                return
             self._apply_payload(
                 View3DNavigationActionKind.ZOOM,
                 Zoom3DPayload(scale=1.1**event.scroll_steps),
             )
             return
         if event.kind is NavigationPointerEventKind.DOUBLE_CLICK:
+            if not inside_panel:
+                return
             self._apply_payload(
                 View3DNavigationActionKind.RESET,
                 ResetView3DPayload(

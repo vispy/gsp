@@ -110,6 +110,11 @@ from gsp.protocol import (
     Pan3DPayload,
     zoom_view2d_about,
 )
+from gsp.protocol import (
+    ExplicitPanelLayoutV1,
+    NormalizedRenderTargetRect,
+    PanelPlacement,
+)
 from gsp.protocol.visuals import CoordinateSpace, ImageInterpolation
 from gsp_datoviz.capabilities import (
     DATOVIZ_S034_AXIS_STYLE_FIELDS,
@@ -2605,6 +2610,54 @@ def test_query_panel_returns_dropped_when_bounded_poll_has_no_result():
 
     assert result.status == QueryStatus.DROPPED
     assert result.diagnostic == "Datoviz query produced no resolved result during bounded poll"
+
+
+def test_retained_multi_panel_query_uses_requested_native_panel():
+    class MultiPanelDatoviz(FakeDatovizV04WithRuntimeQuery):
+        def __init__(self):
+            super().__init__()
+            self.panel_index = 0
+
+        def dvz_panel(self, figure, desc):
+            self.panel_index += 1
+            panel = f"panel-{self.panel_index}"
+            self.calls.append(("panel", figure, desc.x, desc.y, desc.width, desc.height, panel))
+            return panel
+
+    layout = ExplicitPanelLayoutV1(
+        (
+            PanelPlacement("panel:left", NormalizedRenderTargetRect(0.0, 0.0, 0.5, 1.0)),
+            PanelPlacement("panel:right", NormalizedRenderTargetRect(0.5, 0.0, 0.5, 1.0)),
+        )
+    )
+    fake = MultiPanelDatoviz()
+    renderer = DatovizV04ProtocolRenderer(
+        dvz=fake,
+        panel_id="panel:left",
+        panel_layout=layout,
+        view=View2D("view:left", "panel:left"),
+    )
+    renderer.add_retained_panel(
+        panel_id="panel:right",
+        panel_layout=layout,
+        view=View2D("view:right", "panel:right"),
+        view3d=None,
+    )
+
+    result = renderer.query_panel(
+        QueryRequest(
+            id="query:right",
+            panel_id="panel:right",
+            coordinate=(10.0, 10.0),
+            coordinate_space=QueryCoordinateSpace.PANEL,
+            requested_payload=(QueryPayload.IDENTITY,),
+        )
+    )
+
+    assert result.status is QueryStatus.DROPPED
+    assert renderer.panel_id == "panel:right"
+    assert renderer.view == View2D("view:right", "panel:right")
+    assert _calls(fake, "panel_query_px")[0][1] == "panel-2"
 
 
 def test_query_panel_renders_offscreen_frame_before_poll_when_available():
