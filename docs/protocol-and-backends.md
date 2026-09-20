@@ -100,5 +100,9 @@ verifies wheel-installed imports, enforces process-group timeouts, requires all 
 exactly 800×600, and records dimensions and hashes. M292 regenerated and qualified all fourteen
 exact-wheel captures. M300 subsequently proved public DATA-space scalar images and linked
 colorbars through retained Datoviz View2D, including pan, zoom, reversed-x, multiple canvas sizes,
-and clean lifecycle. Native evidence remains exact-runtime evidence rather than a universal
-backend claim.
+and clean lifecycle. The pre-RC3 multi-panel pass additionally qualified the current GSP and
+VisPy2 wheels against a locally built Datoviz candidate wheel: the fourteen gallery captures
+passed, and a separate mixed View2D/View3D smoke retained two native panels, resolved both panel
+and view identities from native partial snapshots, and captured one 640×360 PNG. Live mixed-panel
+interaction remains a later qualification item. Native evidence remains exact-runtime evidence
+rather than a universal backend claim.
