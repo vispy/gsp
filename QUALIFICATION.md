@@ -1,5 +1,29 @@
 # Local bootstrap qualification
 
+## ADR-0036 multi-panel migration gate
+
+Date: 2026-09-20
+
+The accepted ADR-0036 migration replaces singular scene views with explicit panel-scoped view collections and exactly one attachment per visual. GSP commit `44f040fb1886ed8ad5e45a38b6dd699d4b688fde` and VisPy2 commit `19d163cf9d1a2b875ef380795740df31caaf82e2` were validated together.
+
+| Gate | Result |
+|---|---|
+| Complete GSP source pytest | 831 passed |
+| Strict mypy | 51 source files clean |
+| Ruff and strict MkDocs | passed |
+| VisPy2 source pytest | 129 passed |
+| Fresh installed-wheel gallery set | 14 Matplotlib/Datoviz captures validated |
+| Datoviz FACE ambiguity regression | native scene test passed; multi-visual FACE queries fail closed |
+
+The gallery gate installed newly built `gsp-core`, `gsp-matplotlib`, `gsp-datoviz`, and `vispy2` wheels into an isolated project site. Datoviz itself came from the clean source checkout at `e0d7df24e21a39d4091cd4084f7a15d13efb7747`; this is not an exact Datoviz runtime-wheel claim. Headless GLFW initialization warnings did not prevent offscreen capture validation.
+
+| Artifact | SHA-256 |
+|---|---|
+| `gsp_core-0.2.0a1-py3-none-any.whl` | `b31eb45f0f59f8a06699bf0026c41c5ccebd6b8051408892aa9261ee51ea4f15` |
+| `gsp_matplotlib-0.2.0a1-py3-none-any.whl` | `fcfbbae7d0c24c66bef07022fbe5b733242b8bdea03ac9d45984ace0031f2f53` |
+| `gsp_datoviz-0.2.0a1-py3-none-any.whl` | `a6e53da04bdb347cfd868f05c17025e150a47870629f03151b09c43eae27b7ac` |
+| `vispy2-0.2.0a1-py3-none-any.whl` | `f856875606fdc3121d6fdbdc85703fe3a041d7ca34683e33e4aee8e2d633baa2` |
+
 ## M305 P038 canonical protocol refactor gate
 
 Date: 2026-07-30
