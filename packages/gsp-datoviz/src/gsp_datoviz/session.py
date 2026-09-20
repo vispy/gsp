@@ -39,6 +39,20 @@ from .capabilities import datoviz_v04_capability_snapshot
 from .protocol_renderer import DatovizV04ProtocolRenderer, import_datoviz_v04
 
 
+_DATOVIZ_ITEM_QUERY_VISUAL_TYPES = (
+    PointVisual,
+    PixelVisual,
+    MarkerVisual,
+    SphereVisual,
+    VectorVisual,
+    SegmentVisual,
+    PathVisual,
+    PrimitiveVisual,
+    MeshVisual,
+    ImageVisual,
+)
+
+
 class DatovizSession:
     backend_name = "datoviz"
 
@@ -152,14 +166,12 @@ class DatovizSession:
                 ),
             )
 
-        unsupported = tuple(
-            type(visual).__name__ for visual in scene.visuals if not isinstance(visual, PointVisual)
-        )
-        if unsupported:
+        if not any(
+            isinstance(visual, _DATOVIZ_ITEM_QUERY_VISUAL_TYPES) for visual in scene.visuals
+        ):
             return _unsupported_query_result(
                 request,
-                "Datoviz public panel query supports only point-only scenes; "
-                f"unproven rendered visual families: {unsupported}",
+                "Datoviz scene contains no visual family with qualified native item queries",
             )
 
         decision = self.capabilities.adapt_query_request(request)

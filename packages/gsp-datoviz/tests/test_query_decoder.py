@@ -137,6 +137,7 @@ def test_decode_retains_bounded_native_metadata() -> None:
     payload = result.extension_payload
     assert result.extension_payload_kind == DATOVIZ_QUERY_PAYLOAD_KIND
     assert payload.payload_version == 3
+    assert payload.native_visual_id == 23
     assert payload.visual_family == DVZ_SCENE_VISUAL_FAMILY_POINT
     assert payload.resolved_target == 7
     assert payload.resolved_id == 41

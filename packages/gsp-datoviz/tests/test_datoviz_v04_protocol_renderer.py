@@ -404,6 +404,13 @@ class FakeDatovizV04:
         self.calls.append(("set_data", visual, name, np.array(data, copy=True)))
         return 0
 
+    def dvz_visual_set_query_capabilities(self, visual, capabilities):
+        self.calls.append(("set_query_capabilities", visual, capabilities))
+        return 0
+
+    def dvz_visual_id(self, visual):
+        return {"point-visual": 123, "image-visual": 456}.get(visual, 789)
+
     def dvz_visual_set_texture_rgba8(self, visual, pixels, width, height, size_bytes):
         assert isinstance(pixels, ctypes.POINTER(ctypes.c_ubyte))
         copied = np.ctypeslib.as_array(pixels, shape=(size_bytes,)).copy()
@@ -869,6 +876,10 @@ class FakeDvzQueryResultType:
 class FakeDatovizV04WithQuery(FakeDatovizV04WithCapabilities):
     DvzQueryResult = FakeDvzQueryResultType
 
+    def dvz_visual_set_query_capabilities(self, visual, capabilities):
+        self.calls.append(("set_query_capabilities", visual, capabilities))
+        return 0
+
     def dvz_query_request(self):
         self.calls.append(("query_request",))
         return "query-request"
@@ -959,6 +970,18 @@ class FakeDatovizV04WithCapture(FakeDatovizV04):
     def dvz_app_destroy(self, app):
         self.calls.append(("app_destroy", app))
         self.app_destroyed = True
+
+
+class FakeDatovizV04WithMemoryCapture(FakeDatovizV04WithCapture):
+    def dvz_view_canvas(self, view):
+        self.calls.append(("view_canvas", view))
+        return "offscreen-canvas"
+
+    def dvz_canvas_capture_rgba_into(self, canvas, width, height, rgba, byte_count):
+        self.calls.append(("capture_rgba_into", canvas, width, height, byte_count))
+        for index in range(byte_count):
+            rgba[index] = (index * 17) % 256
+        return 0
 
 
 class FakeDatovizV04WithInteractive(FakeDatovizV04WithCapture):
@@ -2327,8 +2350,16 @@ def test_datoviz_capability_translation_preserves_raw_fields_without_overclaimin
 def test_datoviz_capabilities_promote_png_output_only_when_capture_binding_is_ready():
     promoted = DatovizV04ProtocolRenderer(dvz=FakeDatovizV04WithCapture()).capabilities()
     unpromoted = DatovizV04ProtocolRenderer(dvz=FakeDatovizV04()).capabilities()
+    memory_only = SimpleNamespace(
+        dvz_app=lambda scene: None,
+        dvz_view_offscreen=lambda app, figure, width, height: None,
+        dvz_view_canvas=lambda view: None,
+        dvz_canvas_capture_rgba_into=lambda canvas, width, height, rgba, size: 0,
+        dvz_app_render_once=lambda app: 0,
+    )
 
     assert datoviz_v04_capture_ready(FakeDatovizV04WithCapture())
+    assert datoviz_v04_capture_ready(memory_only)
     assert promoted.output_formats == ("png",)
     assert (
         promoted.metadata["capture_support"]
@@ -2362,8 +2393,37 @@ def test_datoviz_capabilities_promote_panel_query_only_when_query_binding_is_rea
     promoted = DatovizV04ProtocolRenderer(dvz=FakeDatovizV04WithQuery()).capabilities()
     unpromoted = DatovizV04ProtocolRenderer(dvz=FakeDatovizV04WithCapabilities()).capabilities()
 
-    assert promoted.query_modes == ("panel-query", "point-item")
+    assert promoted.query_modes == (
+        "panel-query",
+        "point-item",
+        "pixel-item",
+        "marker-item",
+        "sphere-item",
+        "vector-item",
+        "segment-item",
+        "path-item",
+        "primitive-item",
+        "mesh-item",
+        "image-item",
+    )
     assert promoted.supports_query_scope(QueryScope.DATA)
+    data_capability = next(
+        capability
+        for capability in promoted.query_capabilities
+        if capability.scope is QueryScope.DATA
+    )
+    assert {target.target for target in data_capability.targets} == {
+        "point",
+        "pixel",
+        "marker",
+        "sphere",
+        "vector",
+        "segment",
+        "path",
+        "primitive",
+        "mesh",
+        "image",
+    }
     assert (
         promoted.adapt_query_request(
             QueryRequest(
@@ -2925,6 +2985,9 @@ def test_add_pixel_visual_keeps_logical_sizes_at_hidpi_scale():
     np.testing.assert_allclose(set_data[0][3], [[-0.5, 0.25, 0.0], [0.5, -0.25, 0.0]])
     np.testing.assert_array_equal(set_data[1][3], [[255, 0, 0, 255], [255, 0, 0, 255]])
     np.testing.assert_allclose(set_data[2][3], [2.0, 4.0])
+    assert _calls(fake, "set_query_capabilities") == [
+        ("set_query_capabilities", "pixel-visual", 0x02)
+    ]
     assert _calls(fake, "add_visual")[-1][2] == "pixel-visual"
 
 
@@ -3079,6 +3142,9 @@ def test_add_sphere_visual_uses_raycast_mode_and_data_unit_attributes() -> None:
     np.testing.assert_allclose(set_data[-3][3], visual.positions)
     np.testing.assert_array_equal(set_data[-2][3], visual.colors)
     np.testing.assert_allclose(set_data[-1][3], [0.25, 0.75])
+    assert _calls(fake, "set_query_capabilities") == [
+        ("set_query_capabilities", "sphere-visual", 0x02)
+    ]
     assert _calls(fake, "add_visual")[-1][3].coord_space == fake.DVZ_VISUAL_COORD_DATA
 
 
@@ -3296,6 +3362,9 @@ def test_add_vector_visual_uploads_canonical_endpoints_with_native_unit_style() 
     np.testing.assert_allclose(uploads[-3][3], expected_heads - expected_tails)
     np.testing.assert_array_equal(uploads[-2][3], visual.colors)
     np.testing.assert_allclose(uploads[-1][3], [2.0, 5.0])
+    assert _calls(fake, "set_query_capabilities") == [
+        ("set_query_capabilities", "vector-visual", 0x02)
+    ]
 
 
 @pytest.mark.parametrize(
@@ -4202,6 +4271,7 @@ def test_query_panel_adds_scalar_point_payload_from_retained_scene_data():
     )
 
     assert result.status == QueryStatus.HIT
+    assert result.visual_id == "visual:scalar-points"
     assert result.extension_payload_kind == SCALAR_COLOR_QUERY_PAYLOAD_KIND
     assert result.extension_payload.visual_id == "visual:scalar-points"
     assert result.extension_payload.item_kind == "point"
@@ -4243,6 +4313,7 @@ def test_query_panel_adds_scalar_image_payload_from_flat_datoviz_texel_id():
     )
 
     assert result.status == QueryStatus.HIT
+    assert result.visual_id == "visual:scalar-image"
     assert result.extension_payload_kind == SCALAR_COLOR_QUERY_PAYLOAD_KIND
     assert result.extension_payload.visual_id == "visual:scalar-image"
     assert result.extension_payload.texel == (1, 1)
@@ -4407,6 +4478,20 @@ def test_capture_png_bytes_uses_offscreen_view_and_returns_png_bytes():
     assert capture_calls[0][2].endswith(b".png")
 
 
+def test_capture_png_bytes_prefers_in_memory_rgba_capture():
+    fake = FakeDatovizV04WithMemoryCapture()
+    renderer = DatovizV04ProtocolRenderer(dvz=fake, width=2, height=3)
+
+    png = renderer.capture_png_bytes()
+
+    assert png.startswith(b"\x89PNG\r\n\x1a\n")
+    assert _calls(fake, "view_canvas") == [("view_canvas", "offscreen-view")]
+    assert _calls(fake, "capture_rgba_into") == [
+        ("capture_rgba_into", "offscreen-canvas", 2, 3, 24)
+    ]
+    assert _calls(fake, "capture_png") == []
+
+
 def test_capture_png_bytes_rejects_missing_capture_binding():
     fake = FakeDatovizV04()
     renderer = DatovizV04ProtocolRenderer(dvz=fake)
@@ -4493,6 +4578,9 @@ def test_add_mesh_visual_uploads_uniform_indexed_triangles():
         np.array([0, 1, 2, 0, 2, 3], dtype=np.uint32),
     )
     assert _calls(fake, "set_depth_test") == [("set_depth_test", "mesh-visual", False)]
+    assert _calls(fake, "set_query_capabilities") == [
+        ("set_query_capabilities", "mesh-visual", 0x02)
+    ]
     assert _calls(fake, "set_alpha_mode")
 
 
@@ -7087,7 +7175,19 @@ def test_imported_datoviz_capability_snapshot_translates_when_available():
     assert "datoviz_raw_capabilities" in caps.metadata
     expected_modes: tuple[str, ...] = ()
     if datoviz_v04_query_binding_ready(dvz):
-        expected_modes = ("panel-query", "point-item")
+        expected_modes = (
+            "panel-query",
+            "point-item",
+            "pixel-item",
+            "marker-item",
+            "sphere-item",
+            "vector-item",
+            "segment-item",
+            "path-item",
+            "primitive-item",
+            "mesh-item",
+            "image-item",
+        )
     if not datoviz_v04_view3d_camera_diagnostics(dvz):
         expected_modes = (*expected_modes, "view3d-ray")
     assert caps.query_modes == expected_modes
@@ -7202,6 +7302,9 @@ def test_datoviz_primitive_uses_public_topology_and_optional_indices(
     assert any(call[:3] == ("set_data", "primitive-visual", "color") for call in fake.calls)
     index_calls = [call for call in fake.calls if call[0] == "set_index_data"]
     assert bool(index_calls) is indexed
+    assert _calls(fake, "set_query_capabilities") == [
+        ("set_query_capabilities", "primitive-visual", 0x02)
+    ]
     if indexed:
         np.testing.assert_array_equal(index_calls[0][2], visual.resolved_vertex_indices())
         assert index_calls[0][3] == count

@@ -97,6 +97,7 @@ class DatovizQueryPayload:
     """Versioned native metadata retained alongside a canonical query hit."""
 
     payload_version: int
+    native_visual_id: int
     visual_family: int
     resolved_target: int
     resolved_id: int
@@ -120,6 +121,8 @@ _REQUIRED_DVZ_QUERY_FUNCTIONS = (
     "dvz_query_request",
     "dvz_panel_query_px",
     "dvz_scene_poll_query",
+    "dvz_visual_set_query_capabilities",
+    "dvz_visual_id",
 )
 
 _UNSUPPORTED_STATUSES = {
@@ -476,6 +479,7 @@ def _datoviz_payload(raw: Any) -> DatovizQueryPayload:
     """Retain bounded native metadata without treating zero-valued IDs as absent."""
     return DatovizQueryPayload(
         payload_version=_int_field(raw, "payload_version"),
+        native_visual_id=_int_field(raw, "visual_id"),
         visual_family=_int_field(raw, "visual_family"),
         resolved_target=_int_field(raw, "resolved_target"),
         resolved_id=_int_field(raw, "resolved_id"),

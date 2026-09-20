@@ -14,10 +14,11 @@ from dataclasses import replace
 import math
 import os
 from pathlib import Path
+from struct import pack
 import tempfile
 from types import ModuleType
 from typing import Any, Literal, cast
-from zlib import crc32
+from zlib import compress, crc32
 
 import numpy as np
 import numpy.typing as npt
@@ -1251,6 +1252,7 @@ class DatovizV04ProtocolRenderer:
         sizes = self._scale_canvas_px_array(visual.pixel_size_values())
         dvz_visual = self.dvz.dvz_pixel(self.scene, 0)
         _set_alpha_mode_if_translucent(self.dvz, dvz_visual, colors)
+        _set_query_capabilities(self.dvz, dvz_visual, DVZ_QUERY_CAPABILITY_ITEM)
         _set_visual_data(self.dvz, dvz_visual, "position", positions)
         _set_visual_data(self.dvz, dvz_visual, "color", colors)
         _set_visual_data(self.dvz, dvz_visual, "pixel_size_px", sizes)
@@ -1303,6 +1305,7 @@ class DatovizV04ProtocolRenderer:
             "Datoviz accurate sphere raycast mode setup failed",
         )
         _set_alpha_mode_if_translucent(self.dvz, dvz_visual, colors)
+        _set_query_capabilities(self.dvz, dvz_visual, DVZ_QUERY_CAPABILITY_ITEM)
         _set_visual_data(self.dvz, dvz_visual, "position", positions)
         _set_visual_data(self.dvz, dvz_visual, "color", colors)
         _set_visual_data(self.dvz, dvz_visual, "radius", radii)
@@ -1380,6 +1383,7 @@ class DatovizV04ProtocolRenderer:
             "Datoviz vector style setup failed",
         )
         _set_alpha_mode_if_translucent(self.dvz, dvz_visual, colors)
+        _set_query_capabilities(self.dvz, dvz_visual, DVZ_QUERY_CAPABILITY_ITEM)
         _set_visual_data(self.dvz, dvz_visual, "position", positions3)
         _set_visual_data(self.dvz, dvz_visual, "vector", vectors)
         _set_visual_data(self.dvz, dvz_visual, "color", colors)
@@ -1440,6 +1444,7 @@ class DatovizV04ProtocolRenderer:
         if _is_null_handle(dvz_visual):
             raise DatovizV04Unavailable("Datoviz dvz_primitive() failed")
         _set_alpha_mode_if_translucent(self.dvz, dvz_visual, colors)
+        _set_query_capabilities(self.dvz, dvz_visual, DVZ_QUERY_CAPABILITY_ITEM)
         _set_visual_data(self.dvz, dvz_visual, "position", positions)
         _set_visual_data(self.dvz, dvz_visual, "color", colors)
         indices = visual.index_values()
@@ -1852,6 +1857,7 @@ class DatovizV04ProtocolRenderer:
             "Datoviz mesh depth-test configuration failed",
         )
         _set_alpha_mode_if_translucent(self.dvz, dvz_visual, colors)
+        _set_query_capabilities(self.dvz, dvz_visual, DVZ_QUERY_CAPABILITY_ITEM)
         _add_visual_to_panel(
             self.dvz,
             self.panel,
@@ -2380,6 +2386,28 @@ class DatovizV04ProtocolRenderer:
         view = self._ensure_offscreen_view()
         self._render_offscreen_frame()
 
+        if all(
+            hasattr(self.dvz, name) for name in ("dvz_view_canvas", "dvz_canvas_capture_rgba_into")
+        ):
+            width = self.resolved_canvas.framebuffer_width
+            height = self.resolved_canvas.framebuffer_height
+            byte_count = width * height * 4
+            rgba = (ctypes.c_uint8 * byte_count)()
+            canvas = self.dvz.dvz_view_canvas(view)
+            if _is_null_handle(canvas):
+                raise DatovizV04Unavailable("Datoviz offscreen canvas lookup failed")
+            _require_datoviz_success(
+                self.dvz.dvz_canvas_capture_rgba_into(
+                    canvas,
+                    width,
+                    height,
+                    rgba,
+                    byte_count,
+                ),
+                "Datoviz offscreen RGBA capture failed",
+            )
+            return _encode_rgba8_png(width, height, bytes(rgba))
+
         path: Path | None = None
         try:
             with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as file:
@@ -2557,7 +2585,23 @@ class DatovizV04ProtocolRenderer:
                 else request.layout_snapshot_id
             ),
         )
+        semantic_visual_id = self._semantic_visual_id(int(getattr(raw_result, "visual_id", 0)))
+        if semantic_visual_id is not None:
+            decoded = replace(decoded, visual_id=semantic_visual_id)
         return self._decorate_scalar_query_result(decoded, request)
+
+    def _semantic_visual_id(self, native_visual_id: int) -> str | None:
+        """Resolve one native Datoviz ID back to the GSP scene visual identity."""
+        getter = getattr(self.dvz, "dvz_visual_id", None)
+        if not callable(getter):
+            return None
+        for semantic_id, native_visual in self.visuals.items():
+            try:
+                if int(getter(native_visual)) == native_visual_id:
+                    return semantic_id
+            except (TypeError, ValueError):
+                continue
+        return None
 
     def _native_query_coordinate(
         self, coordinate: tuple[float, float]
@@ -5142,6 +5186,30 @@ def _rgba8_image_visual(
             return _rgba8_scalar_values(image, scale, alpha=1.0)
         return _rgba8_scalar_image(image, visual.clim)
     return _rgba8_image(image)
+
+
+def _encode_rgba8_png(width: int, height: int, rgba: bytes) -> bytes:
+    """Encode tightly packed RGBA8 screenshot pixels without filesystem round-tripping."""
+    if width <= 0 or height <= 0:
+        raise ValueError("PNG dimensions must be positive")
+    expected_size = width * height * 4
+    if len(rgba) != expected_size:
+        raise ValueError(f"RGBA8 payload must contain exactly {expected_size} bytes")
+
+    def chunk(kind: bytes, payload: bytes) -> bytes:
+        checksum = crc32(kind)
+        checksum = crc32(payload, checksum) & 0xFFFFFFFF
+        return pack(">I", len(payload)) + kind + payload + pack(">I", checksum)
+
+    stride = width * 4
+    scanlines = b"".join(b"\x00" + rgba[row * stride : (row + 1) * stride] for row in range(height))
+    header = pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", header)
+        + chunk(b"IDAT", compress(scanlines))
+        + chunk(b"IEND", b"")
+    )
 
 
 def _rgba8_image(image: npt.NDArray[Any]) -> npt.NDArray[np.uint8]:

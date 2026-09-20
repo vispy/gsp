@@ -66,22 +66,23 @@ Querying a closed session or a scene that was never rendered is a lifecycle erro
 and request structure are valid, unsupported visual families return a structured
 `QueryResult(status=UNSUPPORTED)` rather than raising.
 
-The qualified slice proves Matplotlib point identity `HIT`/`MISS` behavior and a bounded Datoviz
-point-only panel-query path. Sphere, vector, primitive, billboard, general 3D occlusion, and
-per-glyph picking are not claimed. View3D ray construction is separate from item picking.
+The qualified slice proves Matplotlib point identity `HIT`/`MISS` behavior and bounded Datoviz
+frontmost item-identity queries for point, pixel, marker, sphere, vector, segment, path, primitive,
+mesh, and image visuals. Mesh-face and image pixel/sample targets, billboard text, and per-glyph
+picking are not claimed. View3D ray construction is separate from item picking.
 
 ## Backend limitations
 
 | Concern | Matplotlib | Datoviz v0.4 |
 |---|---|---|
-| Output | Deterministic PNG/SVG/PDF | Offscreen PNG when capture binding qualifies |
+| Output | Deterministic PNG/SVG/PDF | Offscreen PNG, preferring direct RGBA readback when qualified |
 | 3D geometry | CPU projection and painter-order adaptations | Retained DATA-space GPU path when qualified |
 | Sphere | Projected-circle approximation | Raycast impostor with analytic surface depth when advertised |
 | Vector | Deterministic line/marker-cap adaptation | Public dense vector visual |
 | Primitive | Collection adaptation; no GPU raster parity | Public primitive topology/index binding |
 | Billboard text | Projected overlay; backend fonts | Projected retained overlay; default backend font |
 | Titles and guides | Native semantic axes/title layout | Native/adapted axes; panel title unsupported |
-| Query | Bounded reference paths and structured unsupported results | Proven point-only query and separate ray context |
+| Query | Bounded reference paths and structured unsupported results | Qualified native item identities and separate ray context |
 | Live View3D | Programmatic camera snapshots only | Experimental opt-in; human review required |
 
 Titles, tick layout, fonts, glyph metrics, and antialiasing remain backend-specific rather than

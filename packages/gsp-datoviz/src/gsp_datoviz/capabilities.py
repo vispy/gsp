@@ -97,10 +97,14 @@ S027_TRANSFORM_CAPABILITIES = (
     "gsp.transform.path@0.1",
 )
 
-_REQUIRED_DVZ_CAPTURE_FUNCTIONS = (
+_REQUIRED_DVZ_CAPTURE_BASE_FUNCTIONS = (
     "dvz_app",
     "dvz_view_offscreen",
-    "dvz_view_capture_png",
+)
+
+_REQUIRED_DVZ_CAPTURE_MEMORY_FUNCTIONS = (
+    "dvz_view_canvas",
+    "dvz_canvas_capture_rgba_into",
 )
 
 _DVZ_CAPTURE_RENDER_FUNCTIONS = (
@@ -499,11 +503,23 @@ def gsp_capability_snapshot_from_datoviz(
     if query_diagnostics:
         metadata["datoviz_query_binding_diagnostics"] = query_diagnostics
     else:
-        query_modes = ("panel-query", "point-item")
+        query_modes = (
+            "panel-query",
+            "point-item",
+            "pixel-item",
+            "marker-item",
+            "sphere-item",
+            "vector-item",
+            "segment-item",
+            "path-item",
+            "primitive-item",
+            "mesh-item",
+            "image-item",
+        )
         query_capabilities = (_datoviz_data_query_capability(),)
         metadata["query_support"] = (
-            "data-scope query queue, poll, and decode binding available; live payload "
-            "parity currently supports point identity but not image texel/color/value"
+            "data-scope query queue, poll, and decode binding available for qualified "
+            "native item-identity visual families; image texel/color/value remains unadvertised"
         )
 
     view3d_diagnostics = _datoviz_v04_view3d_binding_diagnostics(dvz)
@@ -844,24 +860,37 @@ def gsp_capability_snapshot_from_datoviz(
 
 
 def _datoviz_data_query_capability() -> QueryScopeCapability:
+    item_families = (
+        "point",
+        "pixel",
+        "marker",
+        "sphere",
+        "vector",
+        "segment",
+        "path",
+        "primitive",
+        "mesh",
+        "image",
+    )
     return QueryScopeCapability(
         scope=QueryScope.DATA,
         coordinate_spaces=(QueryCoordinateSpace.PANEL,),
         hit_policies=(QueryHitPolicy.FRONTMOST,),
         ordering=QueryOrderingGuarantee.NONE,
-        targets=(
+        targets=tuple(
             QueryTargetCapability(
                 target_kind=QueryTargetKind.VISUAL_FAMILY,
-                target="point",
+                target=family,
                 payloads=(QueryPayload.IDENTITY,),
                 diagnostics=(
-                    "live Datoviz point queries return visual family and item id, but not displayed color or value",
+                    "live Datoviz item queries return visual family and item id; richer family-specific targets remain unadvertised",
                 ),
-            ),
+            )
+            for family in item_families
         ),
         diagnostics=(
-            "Datoviz v0.4 data query supports frontmost panel-coordinate identity requests only in this slice",
-            "image texel/color/value payload parity remains unadvertised",
+            "Datoviz v0.4 data query supports frontmost panel-coordinate item identity requests for qualified families",
+            "mesh-face and image pixel/sample payload parity remain unadvertised",
         ),
     )
 
@@ -1008,8 +1037,14 @@ def datoviz_v04_capture_ready(dvz: ModuleType | Any) -> bool:
 def datoviz_v04_capture_diagnostics(dvz: ModuleType | Any) -> tuple[str, ...]:
     """Return missing requirements for v0.4 offscreen PNG capture."""
     diagnostics = [
-        f"missing {name}" for name in _REQUIRED_DVZ_CAPTURE_FUNCTIONS if not hasattr(dvz, name)
+        f"missing {name}" for name in _REQUIRED_DVZ_CAPTURE_BASE_FUNCTIONS if not hasattr(dvz, name)
     ]
+    has_memory_capture = all(hasattr(dvz, name) for name in _REQUIRED_DVZ_CAPTURE_MEMORY_FUNCTIONS)
+    if not has_memory_capture and not hasattr(dvz, "dvz_view_capture_png"):
+        diagnostics.append(
+            "missing either dvz_view_capture_png or the "
+            "dvz_view_canvas/dvz_canvas_capture_rgba_into memory capture path"
+        )
     if not any(hasattr(dvz, name) for name in _DVZ_CAPTURE_RENDER_FUNCTIONS):
         diagnostics.append("missing one of dvz_view_render_once, dvz_app_render_once, dvz_app_run")
     return tuple(diagnostics)

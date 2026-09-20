@@ -517,6 +517,38 @@ def test_public_datoviz_query_routes_to_live_renderer_and_checks_lifecycle() -> 
         session.query(request)
 
 
+def test_public_datoviz_query_routes_non_point_item_identity_scene() -> None:
+    base = _scene()
+    assert base.view2d is not None
+    scene = single_panel_scene(
+        id="scene:pixel-query",
+        visuals=(
+            PixelVisual(
+                id="visual:pixel",
+                positions=np.array([[0.0, 0.0]], dtype=np.float32),
+                colors=np.array([[255, 255, 255, 255]], dtype=np.uint8),
+                coordinate_space=CoordinateSpace.DATA,
+            ),
+        ),
+        view2d=base.view2d,
+    )
+    renderer = _FakeRenderer(base.view2d)
+    session = _session(renderer)
+    request = QueryRequest(
+        id="query:pixel",
+        panel_id="panel:main",
+        coordinate=(20.0, 20.0),
+        coordinate_space=QueryCoordinateSpace.PANEL,
+        requested_payload=(QueryPayload.IDENTITY,),
+    )
+
+    session.render(scene)
+    result = session.query(request)
+
+    assert result.status is QueryStatus.HIT
+    assert renderer.query_calls == [request]
+
+
 def test_public_datoviz_query_routes_proven_view3d_ray_path() -> None:
     scene = _mesh3d_scene()
     assert scene.view3d is not None
@@ -570,7 +602,7 @@ def test_public_datoviz_query_targets_latest_explicit_and_replaced_scene_render(
     assert replacement_renderer.query_calls == [request]
 
 
-def _unproven_visuals() -> tuple[Any, ...]:
+def _item_query_visuals() -> tuple[Any, ...]:
     rgba = np.asarray([[255, 0, 0, 255]], dtype=np.uint8)
     point = np.asarray([[0.0, 0.0]], dtype=np.float32)
     return (
@@ -620,12 +652,6 @@ def _unproven_visuals() -> tuple[Any, ...]:
             np.zeros((2, 2, 4), dtype=np.uint8),
             (-1.0, 1.0, -1.0, 1.0),
         ),
-        TextVisual(
-            "visual:text",
-            ("text",),
-            point,
-            CoordinateSpace.NDC,
-        ),
         MeshVisual(
             "visual:mesh",
             np.asarray([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]], dtype=np.float32),
@@ -637,8 +663,8 @@ def _unproven_visuals() -> tuple[Any, ...]:
 
 
 @pytest.mark.parametrize("mixed", [False, True])
-@pytest.mark.parametrize("visual", _unproven_visuals(), ids=lambda visual: type(visual).__name__)
-def test_public_datoviz_query_rejects_every_unproven_family_and_mixed_scene(
+@pytest.mark.parametrize("visual", _item_query_visuals(), ids=lambda visual: type(visual).__name__)
+def test_public_datoviz_query_routes_every_qualified_item_family_and_mixed_scene(
     visual: Any, mixed: bool
 ) -> None:
     base = _scene()
@@ -646,7 +672,7 @@ def test_public_datoviz_query_rejects_every_unproven_family_and_mixed_scene(
     view3d = _mesh3d_scene().view3d if isinstance(visual, SphereVisual) else None
     view2d = None if view3d is not None else base.view2d
     scene = single_panel_scene(
-        id=f"scene:unsupported:{type(visual).__name__.lower()}:{int(mixed)}",
+        id=f"scene:item-query:{type(visual).__name__.lower()}:{int(mixed)}",
         visuals=visuals,
         view2d=view2d,
         view3d=view3d,
@@ -657,17 +683,48 @@ def test_public_datoviz_query_rejects_every_unproven_family_and_mixed_scene(
 
     result = session.query(
         QueryRequest(
-            id="query:unsupported",
+            id="query:item",
             panel_id="panel:main",
             coordinate=(20.0, 20.0),
             requested_payload=(QueryPayload.IDENTITY,),
         )
     )
 
-    assert result.status is QueryStatus.UNSUPPORTED
-    assert result.diagnostic is not None
-    assert type(visual).__name__ in result.diagnostic
-    assert renderer.query_calls == []
+    assert result.status is QueryStatus.HIT
+    assert len(renderer.query_calls) == 1
+
+
+@pytest.mark.parametrize("mixed", [False, True])
+def test_public_datoviz_query_skips_unqueryable_text_when_a_qualified_visual_exists(
+    mixed: bool,
+) -> None:
+    base = _scene()
+    text = TextVisual(
+        "visual:text",
+        ("text",),
+        np.asarray([[0.0, 0.0]], dtype=np.float32),
+        CoordinateSpace.NDC,
+    )
+    scene = single_panel_scene(
+        id=f"scene:text-query:{int(mixed)}",
+        visuals=(base.visuals[0], text) if mixed else (text,),
+        view2d=base.view2d,
+    )
+    renderer = _FakeRenderer(base.view2d)  # type: ignore[arg-type]
+    session = _session(renderer)
+    session.render(scene)
+    request = QueryRequest(
+        id="query:text",
+        panel_id="panel:main",
+        coordinate=(20.0, 20.0),
+        coordinate_space=QueryCoordinateSpace.PANEL,
+        requested_payload=(QueryPayload.IDENTITY,),
+    )
+
+    result = session.query(request)
+
+    assert result.status is (QueryStatus.HIT if mixed else QueryStatus.UNSUPPORTED)
+    assert renderer.query_calls == ([request] if mixed else [])
 
 
 def test_public_datoviz_query_returns_structured_capability_rejection() -> None:
