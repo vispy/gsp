@@ -52,7 +52,7 @@ def test_spherevisual_contract_requires_data_space_and_view3d() -> None:
         colors=np.array([255, 0, 0, 255], dtype=np.uint8),
     )
 
-    with pytest.raises(ValueError, match="Scene.view3d"):
+    with pytest.raises(ValueError, match="requires an attachment view_id"):
         single_panel_scene(id="scene:missing-view3d", visuals=(visual,))
 
     with pytest.raises(ValueError, match="CoordinateSpace.DATA"):

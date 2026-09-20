@@ -1,6 +1,6 @@
 # ADR-0036: Multi-Panel Scenes Use Explicit View Collections
 
-Status: proposed
+Status: accepted
 
 Date: 2026-09-20
 
@@ -28,16 +28,27 @@ Scene.views3d: tuple[View3D, ...]
 
 View identifiers are unique across both collections. Each view names exactly one existing panel.
 A panel has at most one primary data view across both collections in GSP 0.2. A viewless panel is
-valid for visuals expressed entirely in NDC. Overlay or secondary data views remain deferred until
-they have an explicit attachment, transform, query, and navigation contract.
+valid for visuals expressed entirely in NDC. Overlay, secondary, and multi-attachment views remain
+deferred until they have an explicit transform, query, and navigation contract.
 
-Every DATA-space visual has an explicit `VisualAttachment`. The attachment's `panel_id` and the
-referenced view's `panel_id` must match. NDC visuals may use a viewless attachment only after the
-attachment schema makes `view_id` optional; no implementation infers a view from panel order.
+Every rendered visual has exactly one explicit `VisualAttachment`. `VisualAttachment.view_id` is
+optional: DATA-space visuals require it, while NDC visuals require `view_id=None`. The attachment's
+`panel_id` and the referenced view's `panel_id` must match. The attachment does not repeat the
+visual's coordinate space; that semantic field remains owned by the visual. No implementation
+infers a panel or view from collection order.
+
+The attachment is the scene-level owner of visibility, cross-visual `z_order`, and clipping. A
+visual-family field may order primitives within that visual, but it does not override attachment
+visibility, panel membership, clipping, or cross-visual ordering.
+
+Core exposes identifier-based lookup helpers for views, primary panel views, attachments, and
+panel visual membership. These helpers reject missing or ambiguous identities rather than falling
+back to tuple position.
 
 Queries name a panel and report the resolved view snapshot used for inverse mapping. A query that
 could match more than one panel or view is rejected rather than routed by creation order.
-Navigation actions continue to name `view_id`; each accepted result changes only that view's
+Navigation is routed to one explicit view: View3D requests name it directly, while View2D actions
+use a controller whose retained binding names it. Each accepted result changes only that view's
 revision and projection snapshot. Layout snapshot identity remains scene-wide because one resize
 or reservation change may affect several panels.
 
@@ -48,8 +59,8 @@ resources.
 
 ## Migration shape
 
-Because the packages are unpublished alphas, the preferred migration is a deliberate schema
-break rather than permanent singular aliases:
+Because the packages are unpublished alphas, this is a deliberate schema break rather than a
+compatibility layer:
 
 ```text
 view2d=None             -> views2d=()
@@ -58,15 +69,21 @@ view3d=None             -> views3d=()
 view3d=value            -> views3d=(value,)
 ```
 
-The migration tool may perform this rewrite for recorded fixtures. Runtime constructors, parsers,
-and adapters do not accept both shapes. VisPy2 may retain singular producer conveniences only when
-they lower to the collection fields before constructing a GSP `Scene`.
+The one-way migration also creates exactly one attachment for each legacy visual when the source
+scene has one unambiguous panel and view. NDC visuals receive a viewless attachment. A legacy
+multi-panel scene without explicit attachments fails migration as ambiguous. Runtime constructors,
+parsers, and adapters accept only the new form and expose no singular compatibility properties.
+VisPy2 may retain singular producer conveniences only when they lower to the collection fields and
+explicit attachments before constructing a GSP `Scene`.
 
 ## Required conformance before acceptance
 
 - reject duplicate view IDs across the 2D and 3D collections;
 - reject unknown panels and more than one primary data view for a panel;
+- require exactly one attachment for every visual and reject duplicate attachment visual IDs;
 - reject attachment/view panel mismatches;
+- require DATA attachments to name the dimensionally correct view and NDC attachments to be
+  viewless;
 - resolve two disjoint panel rectangles without a singular shortcut;
 - route DATA transforms, queries, and navigation by explicit panel/view identity;
 - preserve per-view revisions while changing a different panel's view;
@@ -79,14 +96,21 @@ they lower to the collection fields before constructing a GSP `Scene`.
 - Core scene state becomes consistent with the already multi-panel layout model.
 - VisPy2 can later expose subplot topology without embedding producer objects in GSP.
 - Matplotlib and Datoviz require coordinated adapter work rather than independent panel loops.
-- This proposal intentionally does not authorize implementation. Accepting it is a breaking schema
-  decision and requires project-owner approval plus a numbered migration decision.
+- Existing single-panel producers remain convenient, but convenience lowering ends before the
+  backend-neutral `Scene` boundary.
 
 ## Rejected alternatives
 
 - parallel arrays keyed by tuple position;
 - one implicit scene-wide view reused by every panel;
+- allowing simultaneous primary View2D and View3D records on one panel in the first slice;
 - allowing attachment `panel_id` and view `panel_id` to disagree;
 - backend-specific subplot extensions;
 - retaining singular fields alongside collections indefinitely;
 - implementing adapter grids before query and navigation routing are specified.
+
+## Acceptance record
+
+The project owner accepted this direction on 2026-09-20 after review of the schema, adapter,
+Datoviz, and VisPy2 consequences. ADR-0036 is the numbered migration decision for this unpublished
+GSP 0.2 schema break.

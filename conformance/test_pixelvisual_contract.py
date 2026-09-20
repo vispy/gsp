@@ -59,7 +59,7 @@ def test_pixelvisual_3d_contract_requires_data_space_and_view3d() -> None:
         coordinate_space=CoordinateSpace.DATA,
     )
 
-    with pytest.raises(ValueError, match="Scene.view3d"):
+    with pytest.raises(ValueError, match="requires an attachment view_id"):
         single_panel_scene(id="scene:missing-view3d", visuals=(visual,))
 
     scene = single_panel_scene(id="scene:pixel-3d", visuals=(visual,), view3d=_view3d())

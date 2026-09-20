@@ -226,14 +226,14 @@ def _mesh3d_scene() -> gsp.Scene:
 
 def test_interactive_2d_display_enables_canonical_navigation_exactly_once() -> None:
     scene = _scene()
-    assert scene.view2d is not None
-    renderer = _FakeRenderer(scene.view2d)
+    assert scene.views2d
+    renderer = _FakeRenderer(scene.views2d[0])
     session = _session(renderer)
 
     assert session.display(scene, block=False) is renderer  # type: ignore[comparison-overlap]
     session.run()
 
-    assert renderer.enable_calls == [scene.view2d]
+    assert renderer.enable_calls == [scene.views2d[0]]
     assert renderer.show_calls == [0]
 
     session.close()
@@ -267,13 +267,13 @@ def test_datoviz_consumed_layout_rejects_canvas_mismatch_before_renderer_build()
 
 def test_datoviz_consumed_layout_omits_two_titles_with_one_diagnostic_per_render() -> None:
     base = _mesh3d_scene()
-    assert base.view3d is not None
-    panel = Panel(id=base.view3d.panel_id)
+    assert base.views3d
+    panel = Panel(id=base.views3d[0].panel_id)
     scene = single_panel_scene(
         id=base.id,
         visuals=base.visuals,
         panels=(panel,),
-        view3d=base.view3d,
+        view3d=base.views3d[0],
         panel_text_guides=(
             PanelTextGuide(
                 id="guide:title:first",
@@ -295,9 +295,9 @@ def test_datoviz_consumed_layout_omits_two_titles_with_one_diagnostic_per_render
         render_target=RenderTarget(800, 600),
         panel_rect_px=LogicalPixelRect(0, 0, 800, 600),
         plot_rect_px=LogicalPixelRect(100, 72, 620, 462),
-        view_id=base.view3d.id,
+        view_id=base.views3d[0].id,
     )
-    renderer = _FakeRenderer(base.view3d)
+    renderer = _FakeRenderer(base.views3d[0])
     session = _session(renderer)
     session._build_renderer = (  # type: ignore[method-assign]
         lambda scene, *, layout_snapshot=None: renderer
@@ -319,13 +319,13 @@ def test_datoviz_consumed_layout_rejects_unsupported_panel_text_before_renderer_
     query_policy: GuideQueryPolicy,
 ) -> None:
     base = _mesh3d_scene()
-    assert base.view3d is not None
-    panel = Panel(id=base.view3d.panel_id)
+    assert base.views3d
+    panel = Panel(id=base.views3d[0].panel_id)
     scene = single_panel_scene(
         id=base.id,
         visuals=base.visuals,
         panels=(panel,),
-        view3d=base.view3d,
+        view3d=base.views3d[0],
         panel_text_guides=(
             PanelTextGuide(
                 id="guide:panel-text",
@@ -342,9 +342,9 @@ def test_datoviz_consumed_layout_rejects_unsupported_panel_text_before_renderer_
         render_target=RenderTarget(800, 600),
         panel_rect_px=LogicalPixelRect(0, 0, 800, 600),
         plot_rect_px=LogicalPixelRect(100, 72, 620, 462),
-        view_id=base.view3d.id,
+        view_id=base.views3d[0].id,
     )
-    renderer = _FakeRenderer(base.view3d)
+    renderer = _FakeRenderer(base.views3d[0])
     session = _session(renderer)
 
     with pytest.raises(ValueError, match="only non-queryable title"):
@@ -356,8 +356,8 @@ def test_datoviz_consumed_layout_rejects_unsupported_panel_text_before_renderer_
 
 def test_run_after_noninteractive_render_enables_navigation_once() -> None:
     scene = _scene()
-    assert scene.view2d is not None
-    renderer = _FakeRenderer(scene.view2d)
+    assert scene.views2d
+    renderer = _FakeRenderer(scene.views2d[0])
     session = _session(renderer)
 
     session.render(scene)
@@ -365,13 +365,13 @@ def test_run_after_noninteractive_render_enables_navigation_once() -> None:
 
     session.run()
 
-    assert renderer.enable_calls == [scene.view2d]
+    assert renderer.enable_calls == [scene.views2d[0]]
 
 
 def test_offscreen_render_does_not_enable_interactive_navigation(tmp_path: Any) -> None:
     scene = _scene()
-    assert scene.view2d is not None
-    renderer = _FakeRenderer(scene.view2d)
+    assert scene.views2d
+    renderer = _FakeRenderer(scene.views2d[0])
     renderer.capture_png_bytes = lambda: b"png"  # type: ignore[attr-defined]
     session = _session(renderer)
 
@@ -382,8 +382,8 @@ def test_offscreen_render_does_not_enable_interactive_navigation(tmp_path: Any) 
 
 def test_offscreen_render_accepts_static_view3d_mesh_scene(tmp_path: Any) -> None:
     scene = _mesh3d_scene()
-    assert scene.view3d is not None
-    renderer = _FakeRenderer(scene.view3d)
+    assert scene.views3d
+    renderer = _FakeRenderer(scene.views3d[0])
     renderer.capture_png_bytes = lambda: b"png"  # type: ignore[attr-defined]
     session = _session(renderer, live_view3d=True)
     target = tmp_path / "mesh3d.png"
@@ -397,20 +397,20 @@ def test_offscreen_render_accepts_static_view3d_mesh_scene(tmp_path: Any) -> Non
 
 def test_interactive_view3d_is_enabled_only_from_advertised_session_capability() -> None:
     scene = _mesh3d_scene()
-    assert scene.view3d is not None
+    assert scene.views3d
 
-    static_renderer = _FakeRenderer(scene.view3d)
+    static_renderer = _FakeRenderer(scene.views3d[0])
     static_session = _session(static_renderer)
     static_session.display(scene, block=False)
     static_session.run()
     assert static_renderer.enable_view3d_calls == []
 
-    live_renderer = _FakeRenderer(scene.view3d)
+    live_renderer = _FakeRenderer(scene.views3d[0])
     live_session = _session(live_renderer, live_view3d=True)
     live_session.display(scene, block=False)
     live_session.run()
 
-    assert live_renderer.enable_view3d_calls == [scene.view3d]
+    assert live_renderer.enable_view3d_calls == [scene.views3d[0]]
     assert live_renderer.show_calls == [0]
 
 
@@ -480,8 +480,8 @@ def test_scene_emits_geometry_then_stably_z_ordered_overlay_text(
 
 def test_public_datoviz_query_routes_to_live_renderer_and_checks_lifecycle() -> None:
     scene = _scene()
-    assert scene.view2d is not None
-    renderer = _FakeRenderer(scene.view2d)
+    assert scene.views2d
+    renderer = _FakeRenderer(scene.views2d[0])
     session = _session(renderer)
     request = QueryRequest(
         id="query:point",
@@ -519,7 +519,7 @@ def test_public_datoviz_query_routes_to_live_renderer_and_checks_lifecycle() -> 
 
 def test_public_datoviz_query_routes_non_point_item_identity_scene() -> None:
     base = _scene()
-    assert base.view2d is not None
+    assert base.views2d
     scene = single_panel_scene(
         id="scene:pixel-query",
         visuals=(
@@ -530,9 +530,9 @@ def test_public_datoviz_query_routes_non_point_item_identity_scene() -> None:
                 coordinate_space=CoordinateSpace.DATA,
             ),
         ),
-        view2d=base.view2d,
+        view2d=base.views2d[0],
     )
-    renderer = _FakeRenderer(base.view2d)
+    renderer = _FakeRenderer(base.views2d[0])
     session = _session(renderer)
     request = QueryRequest(
         id="query:pixel",
@@ -551,8 +551,8 @@ def test_public_datoviz_query_routes_non_point_item_identity_scene() -> None:
 
 def test_public_datoviz_query_routes_proven_view3d_ray_path() -> None:
     scene = _mesh3d_scene()
-    assert scene.view3d is not None
-    renderer = _FakeRenderer(scene.view3d)
+    assert scene.views3d
+    renderer = _FakeRenderer(scene.views3d[0])
     session = _session(renderer)
     request = QueryRequest(
         id="query:ray",
@@ -575,11 +575,11 @@ def test_public_datoviz_query_targets_latest_explicit_and_replaced_scene_render(
     second = single_panel_scene(
         id="scene:second",
         visuals=first.visuals,
-        view2d=first.view2d,
+        view2d=first.views2d[0],
     )
-    first_renderer = _FakeRenderer(first.view2d)  # type: ignore[arg-type]
-    second_renderer = _FakeRenderer(second.view2d)  # type: ignore[arg-type]
-    replacement_renderer = _FakeRenderer(first.view2d)  # type: ignore[arg-type]
+    first_renderer = _FakeRenderer(first.views2d[0])
+    second_renderer = _FakeRenderer(second.views2d[0])
+    replacement_renderer = _FakeRenderer(first.views2d[0])
     renderers = iter((first_renderer, second_renderer, replacement_renderer))
     session = _session(first_renderer)
     session._build_renderer = lambda scene: next(renderers)  # type: ignore[assignment,method-assign,return-value]
@@ -669,8 +669,8 @@ def test_public_datoviz_query_routes_every_qualified_item_family_and_mixed_scene
 ) -> None:
     base = _scene()
     visuals = (base.visuals[0], visual) if mixed else (visual,)
-    view3d = _mesh3d_scene().view3d if isinstance(visual, SphereVisual) else None
-    view2d = None if view3d is not None else base.view2d
+    view3d = _mesh3d_scene().views3d[0] if isinstance(visual, SphereVisual) else None
+    view2d = None if view3d is not None else base.views2d[0]
     scene = single_panel_scene(
         id=f"scene:item-query:{type(visual).__name__.lower()}:{int(mixed)}",
         visuals=visuals,
@@ -708,9 +708,9 @@ def test_public_datoviz_query_skips_unqueryable_text_when_a_qualified_visual_exi
     scene = single_panel_scene(
         id=f"scene:text-query:{int(mixed)}",
         visuals=(base.visuals[0], text) if mixed else (text,),
-        view2d=base.view2d,
+        view2d=base.views2d[0],
     )
-    renderer = _FakeRenderer(base.view2d)  # type: ignore[arg-type]
+    renderer = _FakeRenderer(base.views2d[0])
     session = _session(renderer)
     session.render(scene)
     request = QueryRequest(
@@ -729,7 +729,7 @@ def test_public_datoviz_query_skips_unqueryable_text_when_a_qualified_visual_exi
 
 def test_public_datoviz_query_returns_structured_capability_rejection() -> None:
     scene = _scene()
-    renderer = _FakeRenderer(scene.view2d)  # type: ignore[arg-type]
+    renderer = _FakeRenderer(scene.views2d[0])
     session = _session(renderer, query_outcome=AdaptationOutcome.REJECT)
     session.render(scene)
 

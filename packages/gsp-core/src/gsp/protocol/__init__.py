@@ -178,7 +178,6 @@ from .panels import (
     Panel,
     View2D,
     VisualAttachment,
-    VisualCoordinateSpace,
     resolved_attachment_clip_rect,
 )
 from .view3d import (
@@ -643,7 +642,6 @@ __all__ = [
     "ViewportMosaicResult",
     "ViewportTileRequest",
     "VisualAttachment",
-    "VisualCoordinateSpace",
     "VisualFamily",
     "VisualTransformBinding",
     "ZoomAboutAction",

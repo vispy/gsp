@@ -698,11 +698,10 @@
       "id": "GSP-SCENE-008",
       "notes": "Domain-level executable evidence; backend-specific limits are recorded in profiles/.",
       "source": "spec/visual_families_v1.md",
-      "statement": "a panel may have at most one active primary data view per view role in core GSP",
+      "statement": "a panel may have at most one active primary data view across all view roles in core GSP 0.2; association is never inferred from collection order",
       "status": "accepted",
       "tests": [
-        "tests/test_protocol_spine.py",
-        "tests/test_vispy2_protocol_mvp.py"
+        "packages/gsp-core/tests/test_scene_view_validation.py"
       ]
     },
     {
@@ -711,11 +710,11 @@
       "id": "GSP-SCENE-009",
       "notes": "Domain-level executable evidence; backend-specific limits are recorded in profiles/.",
       "source": "spec/visual_families_v1.md",
-      "statement": "attachments are explicit scene relationships. A visual can be attached more than",
+      "statement": "every rendered visual has exactly one explicit attachment; DATA visuals name the dimensionally correct view and NDC visuals are viewless",
       "status": "accepted",
       "tests": [
-        "tests/test_protocol_spine.py",
-        "tests/test_vispy2_protocol_mvp.py"
+        "packages/gsp-core/tests/test_scene_view_validation.py",
+        "packages/gsp-core/tests/test_panel_layout_protocol.py"
       ]
     },
     {

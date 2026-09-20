@@ -73,5 +73,5 @@ def test_billboard_requires_view3d() -> None:
         positions=np.array([[0, 0, 0]], dtype=np.float32),
         coordinate_space=CoordinateSpace.DATA,
     )
-    with pytest.raises(ValueError, match="DATA positions3d require Scene.view3d"):
+    with pytest.raises(ValueError, match="requires an attachment view_id"):
         single_panel_scene(id="scene:invalid", visuals=(visual,))

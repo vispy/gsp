@@ -299,6 +299,7 @@ class View2DNavigationInputAdapter:
         "_drag_start_zoom",
         "_drag_last_px",
         "_layout_snapshot_id",
+        "_panel_id",
         "_panel_rect",
         "_pixel_origin",
         "_profile",
@@ -316,6 +317,7 @@ class View2DNavigationInputAdapter:
         layout_snapshot_id: str | None = None,
         layout_snapshot: ResolvedLayoutSnapshot | None = None,
         pixel_origin: PixelOrigin | None = None,
+        panel_id: str | None = None,
     ) -> None:
         validate_id(controller_id)
         validate_id(view2d_revision)
@@ -324,10 +326,12 @@ class View2DNavigationInputAdapter:
             layout_snapshot=layout_snapshot,
             pixel_origin=pixel_origin,
             layout_snapshot_id=layout_snapshot_id,
+            panel_id=panel_id,
         )
         self._controller_id = controller_id
         self._view2d_revision = view2d_revision
         self._layout_snapshot_id = layout_snapshot_id
+        self._panel_id = panel_id
         self._panel_rect = panel_rect
         self._pixel_origin = pixel_origin
         self._snapshot_backed = layout_snapshot is not None
@@ -374,6 +378,7 @@ class View2DNavigationInputAdapter:
             layout_snapshot=layout_snapshot,
             pixel_origin=None,
             layout_snapshot_id=None,
+            panel_id=self._panel_id,
         )
         self._panel_rect = panel_rect
         self._pixel_origin = pixel_origin
@@ -529,6 +534,7 @@ def pan_view2d(
         layout_snapshot=layout_snapshot,
         pixel_origin=pixel_origin,
         layout_snapshot_id=None,
+        panel_id=view.panel_id if layout_snapshot is not None else None,
     )
     _validate_finite("dx_px", dx_px)
     _validate_finite("dy_px", dy_px)
@@ -567,6 +573,7 @@ def zoom_view2d_about(
         layout_snapshot=layout_snapshot,
         pixel_origin=pixel_origin,
         layout_snapshot_id=None,
+        panel_id=view.panel_id if layout_snapshot is not None else None,
     )
     _validate_pair("anchor_px", anchor_px)
     if not _rect_contains_coordinate(panel_rect, anchor_px):
@@ -649,6 +656,7 @@ def _resolve_navigation_geometry(
     layout_snapshot: ResolvedLayoutSnapshot | None,
     pixel_origin: PixelOrigin | None,
     layout_snapshot_id: str | None,
+    panel_id: str | None,
 ) -> tuple[LogicalPixelRect, PixelOrigin | None, str | None]:
     if layout_snapshot is not None:
         if not isinstance(layout_snapshot, ResolvedLayoutSnapshot):
@@ -665,7 +673,9 @@ def _resolve_navigation_geometry(
             raise ValueError(
                 "pixel_origin conflicts with layout_snapshot.render_target.pixel_origin"
             )
-        resolved_panel = layout_snapshot.only_panel()
+        resolved_panel = (
+            layout_snapshot.only_panel() if panel_id is None else layout_snapshot.panel(panel_id)
+        )
         if panel_rect is not None and panel_rect != resolved_panel.plot_rect_px:
             raise ValueError("panel_rect conflicts with layout_snapshot.plot_rect_px")
         panel_rect = resolved_panel.plot_rect_px

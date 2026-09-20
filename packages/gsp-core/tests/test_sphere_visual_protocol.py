@@ -9,6 +9,7 @@ from gsp.protocol import (
     PerspectiveProjection3D,
     SphereVisual,
     View3D,
+    VisualAttachment,
 )
 
 
@@ -66,16 +67,26 @@ def test_sphere_visual_rejects_invalid_inputs(field: str, value: object, error: 
 
 def test_sphere_visual_requires_scene_view3d() -> None:
     visual = _sphere()
-    with pytest.raises(ValueError, match="Scene.view3d"):
+    with pytest.raises(ValueError, match="requires an attachment view_id"):
         _scene(id="scene:no-view", visuals=(visual,))
     _scene(id="scene:view3d", visuals=(visual,), view3d=_view3d())
 
 
 def _scene(**kwargs: object) -> Scene:
-    view = kwargs.get("view3d")
+    view = kwargs.pop("view3d", None)
     panel_id = view.panel_id if isinstance(view, View3D) else "panel:main"
+    visuals = kwargs.get("visuals", ())
     return Scene(
         panels=(Panel(id=panel_id),),
         panel_layout=full_target_panel_layout(panel_id),
+        views3d=(view,) if isinstance(view, View3D) else (),
+        attachments=tuple(
+            VisualAttachment(
+                visual_id=visual.id,
+                panel_id=panel_id,
+                view_id=view.id if view is not None else None,
+            )
+            for visual in visuals  # type: ignore[union-attr]
+        ),
         **kwargs,  # type: ignore[arg-type]
     )

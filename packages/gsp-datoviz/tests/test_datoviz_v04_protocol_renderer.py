@@ -2866,7 +2866,7 @@ def test_datoviz_renderer_view3d_ray_context_rejects_missing_or_stale_view():
     assert stale.diagnostic == View3DDiagnosticCode.QUERY_3D_SNAPSHOT_MISMATCH.value
 
 
-def test_datoviz_renderer_mesh_triangle_pick_reports_structured_unsupported():
+def test_datoviz_renderer_mesh_triangle_pick_rejects_scene_without_one_mesh():
     view = _canonical_view3d_for_datoviz_query()
     renderer = DatovizV04ProtocolRenderer(dvz=FakeDatovizV04WithRetainedView3D(), view3d=view)
 
@@ -2876,14 +2876,72 @@ def test_datoviz_renderer_mesh_triangle_pick_reports_structured_unsupported():
     )
 
     assert result.status == QueryStatus.UNSUPPORTED
-    assert (
-        result.diagnostic == View3DMeshPickDiagnosticCode.UNSUPPORTED_NO_PUBLIC_PRIMITIVE_MAP.value
-    )
+    assert result.diagnostic == View3DMeshPickDiagnosticCode.UNSUPPORTED_SCENE_OCCLUDER.value
     assert isinstance(result.extension_payload, View3DMeshTrianglePickPayload)
     assert result.extension_payload.status == QueryStatus.UNSUPPORTED
     assert result.extension_payload.diagnostics[0].code == (
-        View3DMeshPickDiagnosticCode.UNSUPPORTED_NO_PUBLIC_PRIMITIVE_MAP
+        View3DMeshPickDiagnosticCode.UNSUPPORTED_SCENE_OCCLUDER
     )
+
+
+def test_datoviz_renderer_mesh_triangle_pick_uses_public_face_identity():
+    class FakeDatovizFacePick(FakeDatovizV04WithRetainedView3D):
+        DvzQueryResult = FakeDvzQueryResult
+        DVZ_SCENE_TARGET_FACE = 4
+        DVZ_QUERY_CAPABILITY_FACE = 0x08
+
+        def dvz_query_request(self):
+            self.calls.append(("query_request",))
+            return type("FakeDvzQueryRequest", (), {})()
+
+        def dvz_panel_query_px(self, panel, x, y, request):
+            self.calls.append(("panel_query_px", panel, x, y, request))
+            return 0
+
+        def dvz_scene_poll_query(self, scene, out_result):
+            self.calls.append(("scene_poll_query", scene, out_result))
+            result = FakeDvzQueryResult(
+                status=DVZ_QUERY_STATUS_HIT,
+                hit=True,
+                visual_id=789,
+                visual_family=8,
+                resolved_target=4,
+                face_id=3,
+                freshness_serial=17,
+            )
+            for name, value in vars(result).items():
+                setattr(out_result, name, value)
+            return True
+
+    view = _canonical_view3d_for_datoviz_query()
+    fake = FakeDatovizFacePick()
+    renderer = DatovizV04ProtocolRenderer(dvz=fake, view3d=view)
+    renderer.add_mesh_visual(
+        MeshVisual(
+            id="visual:face-pick",
+            positions=np.asarray(
+                [[-1.0, -1.0, 0.0], [1.0, -1.0, 0.0], [0.0, 1.0, 0.0]],
+                dtype=np.float32,
+            ),
+            faces=np.asarray([[0, 1, 2]], dtype=np.uint32),
+            coordinate_space=CoordinateSpace.DATA,
+            color=np.asarray([255, 255, 255, 255], dtype=np.uint8),
+        )
+    )
+
+    result = renderer.query_view3d_mesh_triangle_pick(
+        View3DMeshTrianglePickRequest(view_id=view.id, panel_xy=(50.0, 50.0)),
+        layout_snapshot_id="layout:datoviz",
+    )
+
+    assert result.status is QueryStatus.HIT
+    assert result.visual_id == "visual:face-pick"
+    assert isinstance(result.extension_payload, View3DMeshTrianglePickPayload)
+    assert result.extension_payload.primitive_kind == "triangle"
+    assert result.extension_payload.primitive_index == 3
+    assert result.extension_payload.pick_scene_snapshot_id == "pick-scene:datoviz-17"
+    assert any(call[0] == "set_query_capabilities" and call[2] & 0x08 for call in fake.calls)
+    assert any(call[0] == "panel_query_px" and call[4].target == 4 for call in fake.calls)
 
 
 def test_facade_shape_rejects_missing_v04_functions():

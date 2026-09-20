@@ -449,12 +449,15 @@ def logical_px_to_points(logical_px: float, dpi: float) -> float:
 
 
 def plot_logical_px_to_plot_ndc(
-    snapshot: ResolvedLayoutSnapshot, coordinate_px: tuple[float, float]
+    snapshot: ResolvedLayoutSnapshot,
+    coordinate_px: tuple[float, float],
+    *,
+    panel_id: str | None = None,
 ) -> tuple[float, float]:
     """Map a render-target logical coordinate through the resolved data viewport."""
     _validate_layout_snapshot(snapshot)
     x_px, y_px = _validate_logical_coordinate(coordinate_px)
-    plot = snapshot.only_panel().plot_rect_px
+    plot = _select_panel(snapshot, panel_id).plot_rect_px
     _validate_nonempty_plot_rect(plot)
     if not _rect_contains_coordinate(plot, x_px, y_px):
         raise ValueError("coordinate_px must be inside the closed plot_rect_px")
@@ -469,12 +472,15 @@ def plot_logical_px_to_plot_ndc(
 
 
 def plot_ndc_to_plot_logical_px(
-    snapshot: ResolvedLayoutSnapshot, plot_ndc: tuple[float, float]
+    snapshot: ResolvedLayoutSnapshot,
+    plot_ndc: tuple[float, float],
+    *,
+    panel_id: str | None = None,
 ) -> tuple[float, float]:
     """Map plot NDC through the resolved data viewport into logical coordinates."""
     _validate_layout_snapshot(snapshot)
     x_ndc, y_ndc = _validate_logical_coordinate(plot_ndc)
-    plot = snapshot.only_panel().plot_rect_px
+    plot = _select_panel(snapshot, panel_id).plot_rect_px
     _validate_nonempty_plot_rect(plot)
     x_px = plot.x + (x_ndc + 1.0) * 0.5 * plot.width
     y_fraction = (
@@ -485,28 +491,39 @@ def plot_ndc_to_plot_logical_px(
     return (x_px, plot.y + y_fraction * plot.height)
 
 
-def resolved_plot_aspect_ratio(snapshot: ResolvedLayoutSnapshot) -> float:
+def resolved_plot_aspect_ratio(
+    snapshot: ResolvedLayoutSnapshot, *, panel_id: str | None = None
+) -> float:
     """Return the positive width/height aspect of the resolved data viewport."""
     _validate_layout_snapshot(snapshot)
-    plot = snapshot.only_panel().plot_rect_px
+    plot = _select_panel(snapshot, panel_id).plot_rect_px
     _validate_nonempty_plot_rect(plot)
     return plot.width / plot.height
 
 
 def logical_coordinate_in_data_viewport(
-    snapshot: ResolvedLayoutSnapshot, coordinate_px: tuple[float, float]
+    snapshot: ResolvedLayoutSnapshot,
+    coordinate_px: tuple[float, float],
+    *,
+    panel_id: str | None = None,
 ) -> bool:
     """Return whether a logical coordinate lies in the closed plot rectangle."""
-    return classify_logical_coordinate(snapshot, coordinate_px) is LogicalCoordinateRegion.DATA_PLOT
+    return (
+        classify_logical_coordinate(snapshot, coordinate_px, panel_id=panel_id)
+        is LogicalCoordinateRegion.DATA_PLOT
+    )
 
 
 def classify_logical_coordinate(
-    snapshot: ResolvedLayoutSnapshot, coordinate_px: tuple[float, float]
+    snapshot: ResolvedLayoutSnapshot,
+    coordinate_px: tuple[float, float],
+    *,
+    panel_id: str | None = None,
 ) -> LogicalCoordinateRegion:
     """Classify an absolute render-target logical coordinate for query routing."""
     _validate_layout_snapshot(snapshot)
     x_px, y_px = _validate_logical_coordinate(coordinate_px)
-    panel = snapshot.only_panel()
+    panel = _select_panel(snapshot, panel_id)
     if not _rect_contains_coordinate(panel.panel_rect_px, x_px, y_px):
         return LogicalCoordinateRegion.OUTSIDE_PANEL
     plot = panel.plot_rect_px
@@ -518,6 +535,10 @@ def classify_logical_coordinate(
 def _validate_layout_snapshot(snapshot: ResolvedLayoutSnapshot) -> None:
     if not isinstance(snapshot, ResolvedLayoutSnapshot):
         raise TypeError("snapshot must be a ResolvedLayoutSnapshot")
+
+
+def _select_panel(snapshot: ResolvedLayoutSnapshot, panel_id: str | None) -> ResolvedPanelLayout:
+    return snapshot.only_panel() if panel_id is None else snapshot.panel(panel_id)
 
 
 def _validate_logical_coordinate(

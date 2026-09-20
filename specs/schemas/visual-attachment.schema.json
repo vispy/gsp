@@ -7,17 +7,16 @@
   "required": [
     "visual_id",
     "panel_id",
-    "view_id",
-    "coordinate_space",
     "z_order",
+    "visible",
     "clip_scope"
   ],
   "properties": {
     "visual_id": {"type": "string", "minLength": 1},
     "panel_id": {"type": "string", "minLength": 1},
-    "view_id": {"type": "string", "minLength": 1},
-    "coordinate_space": {"enum": ["data", "view", "panel"]},
+    "view_id": {"type": ["string", "null"], "minLength": 1},
     "z_order": {"type": "integer"},
+    "visible": {"type": "boolean"},
     "clip_scope": {"enum": ["plot", "panel", "render_target"]}
   }
 }

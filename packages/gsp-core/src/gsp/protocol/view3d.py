@@ -9,7 +9,7 @@ import math
 from typing import Any, TypeVar
 
 from .ids import validate_id
-from .layout import ResolvedLayoutSnapshot, resolved_plot_aspect_ratio
+from .layout import ResolvedLayoutSnapshot, ResolvedPanelLayout
 from .transforms import ViewKind
 
 CAMERA3D_EPSILON = 1.0e-12
@@ -1093,7 +1093,7 @@ def _resolve_projection_layout_context(
     if layout_snapshot is not None:
         if not isinstance(layout_snapshot, ResolvedLayoutSnapshot):
             raise TypeError("layout_snapshot must be a ResolvedLayoutSnapshot")
-        resolved_panel = layout_snapshot.only_panel()
+        resolved_panel = _resolved_panel_for_view(layout_snapshot, view)
         if resolved_panel.view_id is not None and resolved_panel.view_id != view.id:
             raise ValueError("layout_snapshot view_id does not match the View3D")
         if layout_snapshot_id is not None and layout_snapshot_id != layout_snapshot.snapshot_id:
@@ -1126,7 +1126,10 @@ def _resolve_snapshot_aspect_ratio(
         )
     if layout_snapshot is not None:
         return (
-            resolved_plot_aspect_ratio(layout_snapshot),
+            (
+                _resolved_panel_for_view(layout_snapshot, view).plot_rect_px.width
+                / _resolved_panel_for_view(layout_snapshot, view).plot_rect_px.height
+            ),
             PerspectiveAspectRatioSource.RESOLVED_LAYOUT,
             (),
         )
@@ -1138,6 +1141,19 @@ def _resolve_snapshot_aspect_ratio(
             "aspect_ratio=None resolved to compatibility aspect 1.0",
         ),
     )
+
+
+def _resolved_panel_for_view(
+    layout_snapshot: ResolvedLayoutSnapshot, view: View3D
+) -> ResolvedPanelLayout:
+    """Select the view panel, preserving legacy single-panel renderer snapshots."""
+    try:
+        return layout_snapshot.panel(view.panel_id)
+    except ValueError:
+        panel = layout_snapshot.only_panel()
+        if panel.view_id is not None and panel.view_id != view.id:
+            raise ValueError("layout_snapshot view_id does not match the View3D") from None
+        return panel
 
 
 def _plot_ndc_in_data_viewport(coordinate: Float2) -> bool:

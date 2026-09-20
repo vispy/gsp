@@ -132,6 +132,42 @@ def test_resolved_plot_aspect_and_three_way_coordinate_classification() -> None:
     )
 
 
+def test_plot_helpers_select_an_explicit_panel_in_multi_panel_layout() -> None:
+    snapshot = ResolvedLayoutSnapshot(
+        snapshot_id="layout:multi",
+        render_target=RenderTarget(800.0, 600.0),
+        panels=(
+            ResolvedPanelLayout(
+                panel_id="panel:left",
+                view_id="view:left",
+                panel_rect_px=LogicalPixelRect(0.0, 0.0, 400.0, 600.0),
+                plot_rect_px=LogicalPixelRect(20.0, 50.0, 360.0, 500.0),
+            ),
+            ResolvedPanelLayout(
+                panel_id="panel:right",
+                view_id="view:right",
+                panel_rect_px=LogicalPixelRect(400.0, 0.0, 400.0, 600.0),
+                plot_rect_px=LogicalPixelRect(450.0, 100.0, 300.0, 400.0),
+            ),
+        ),
+    )
+
+    assert plot_logical_px_to_plot_ndc(
+        snapshot, (600.0, 300.0), panel_id="panel:right"
+    ) == pytest.approx((0.0, 0.0))
+    assert plot_ndc_to_plot_logical_px(
+        snapshot, (0.0, 0.0), panel_id="panel:right"
+    ) == pytest.approx((600.0, 300.0))
+    assert resolved_plot_aspect_ratio(snapshot, panel_id="panel:right") == pytest.approx(0.75)
+    assert logical_coordinate_in_data_viewport(snapshot, (600.0, 300.0), panel_id="panel:right")
+    assert (
+        classify_logical_coordinate(snapshot, (200.0, 300.0), panel_id="panel:right")
+        is LogicalCoordinateRegion.OUTSIDE_PANEL
+    )
+    with pytest.raises(ValueError, match="exactly one resolved panel"):
+        resolved_plot_aspect_ratio(snapshot)
+
+
 @pytest.mark.parametrize(
     ("panel", "plot", "message"),
     [

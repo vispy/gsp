@@ -25,6 +25,7 @@ from gsp.protocol import (
     TextVisual,
     VIEW3D_QUERY_PAYLOAD_KIND,
     View2D,
+    View3D,
     resolve_panel_layout_intent,
     resolve_view3d_projection_snapshot,
 )
@@ -181,10 +182,13 @@ class MatplotlibSession:
                 f"{sorted(scope.value for scope in unsupported_clip_scopes)!r}"
             )
         _validate_consumed_layout_scene(scene, layout_snapshot)
+        view2d = scene.views2d[0] if scene.views2d else None
+        view3d = scene.views3d[0] if scene.views3d else None
+        panel_visuals = scene.visuals_for_panel(scene.panels[0].id)
         result = render_protocol_scene_with_layout(
-            visuals=scene.visuals,
-            view=scene.view2d,
-            view3d=scene.view3d,
+            visuals=panel_visuals,
+            view=view2d,
+            view3d=view3d,
             axis_guides=scene.axis_guides,
             panel_text_guides=scene.panel_text_guides,
             colorbar_guides=scene.colorbar_guides,
@@ -199,11 +203,11 @@ class MatplotlibSession:
         self._results.append(result)
         self._scene_results[scene.id] = (scene, result)
         self._latest_scene_id = scene.id
-        if scene.view2d is not None:
+        if view2d is not None:
             self._view2d_bindings[result.axes] = _MatplotlibLiveView2DBinding(
                 result=result,
                 scene=scene,
-                view=scene.view2d,
+                view=view2d,
             )
         if target is not None:
             savefig_kwargs.setdefault("dpi", result.figure.dpi)
@@ -253,15 +257,15 @@ class MatplotlibSession:
         panel_bounds = _matplotlib_panel_bounds(result)
 
         if (
-            scene.view3d is not None
+            bool(scene.views3d)
             and VIEW3D_QUERY_PAYLOAD_KIND in effective_request.requested_extension_payload_kinds
         ):
             snapshot = resolve_view3d_projection_snapshot(
-                scene.view3d, layout_snapshot=result.layout_snapshot
+                scene.views3d[0], layout_snapshot=result.layout_snapshot
             )
             return query_view3d_ray_context(
                 effective_request,
-                scene.view3d,
+                scene.views3d[0],
                 snapshot,
                 panel_bounds=panel_bounds,
                 layout_snapshot=result.layout_snapshot,
@@ -280,7 +284,7 @@ class MatplotlibSession:
         if effective_request.scope in (QueryScope.DATA, QueryScope.ALL_RENDERED):
             unsupported = tuple(
                 type(visual).__name__
-                for visual in scene.visuals
+                for visual in scene.visuals_for_panel(request.panel_id)
                 if not isinstance(visual, _QUERYABLE_VISUAL_TYPES)
             )
             if unsupported:
@@ -298,8 +302,8 @@ class MatplotlibSession:
             )
 
         entries = tuple(
-            QueryVisualEntry(visual, z_order=index)
-            for index, visual in enumerate(scene.visuals)
+            QueryVisualEntry(visual, z_order=scene.attachment_for_visual(visual.id).z_order)
+            for visual in scene.visuals_for_panel(request.panel_id)
             if isinstance(visual, _QUERYABLE_VISUAL_TYPES)
         )
         if effective_request.scope is QueryScope.DATA:
@@ -312,7 +316,7 @@ class MatplotlibSession:
                     else None
                 ),
                 color_scales={item.id: item for item in scene.color_scales},
-                view=scene.view2d,
+                view=scene.views2d[0] if scene.views2d else None,
                 transform_resources={item.id: item for item in scene.transforms},
             )
         if effective_request.scope is QueryScope.GUIDES:
@@ -320,7 +324,7 @@ class MatplotlibSession:
         return query_scoped_scene(
             effective_request,
             visual_entries=entries,
-            view=scene.view2d,
+            view=scene.views2d[0] if scene.views2d else None,
             layout_snapshot=result.layout_snapshot,
             panel_bounds=(
                 panel_bounds
@@ -366,12 +370,7 @@ class MatplotlibSession:
 
 
 def _scene_panel_ids(scene: Scene) -> frozenset[str]:
-    panel_ids = {panel.id for panel in scene.panels}
-    if scene.view2d is not None:
-        panel_ids.add(scene.view2d.panel_id)
-    if scene.view3d is not None:
-        panel_ids.add(scene.view3d.panel_id)
-    return frozenset(panel_ids)
+    return frozenset(panel.id for panel in scene.panels)
 
 
 def _matplotlib_panel_bounds(
@@ -391,7 +390,10 @@ def _validate_consumed_layout_scene(
     if len(scene.panels) != 1:
         raise ValueError("resolved-layout consumption supports exactly one scene panel")
     panel = scene.panels[0]
-    active_view = scene.view2d if scene.view2d is not None else scene.view3d
+    views: tuple[View2D | View3D, ...] = (*scene.views2d, *scene.views3d)
+    if len(views) > 1:
+        raise ValueError("resolved-layout consumption supports at most one active scene view")
+    active_view = views[0] if views else None
     if active_view is not None:
         if active_view.panel_id != panel.id:
             raise ValueError("active view panel_id does not match the consumed scene panel")

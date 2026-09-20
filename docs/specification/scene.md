@@ -36,7 +36,7 @@ The record is closed. Unknown fields are invalid. In particular, producer figure
 
 `View2D` maps two-dimensional data domains into a panel. `View3D` combines a camera and projection with a panel. A visual in data coordinates requires the appropriate view; a visual already expressed in plot NDC does not acquire data meaning implicitly.
 
-`GSP-SCENE-008`: a panel may have at most one active primary data view per view role in core GSP 0.2. Multiple overlay views require explicit attachments and capability support; association is never inferred from creation order.
+`GSP-SCENE-008`: a panel may have at most one active primary data view across all view roles in core GSP 0.2. Multiple overlay views and simultaneous View2D/View3D records on one panel are deferred; association is never inferred from creation order.
 
 ## Visuals
 
@@ -46,7 +46,7 @@ A visual is a semantic family, not a backend draw call. Accepted families are po
 
 | Field | Type | Required | Default | Meaning | |---|---|---:|---|---| | `visual_id` | visual identifier | yes | — | Attached visual. | | `panel_id` | panel identifier | yes | — | Presentation/query panel. | | `view_id` | view identifier or null | conditional | null | Required for DATA-space visuals. | | `z_order` | signed integer | no | 0 | Ordering among contributions where depth semantics do not override it. | | `visible` | boolean | no | true | Semantic participation flag. |
 
-`GSP-SCENE-009`: attachments are explicit scene relationships. A visual can be attached more than once only when the backend advertises the required multi-attachment capability and query identities remain unambiguous.
+`GSP-SCENE-009`: every rendered visual has exactly one explicit attachment in core GSP 0.2. DATA visuals name the dimensionally correct view; NDC visuals use a null `view_id`. Multi-attachment visuals are deferred. Attachment visibility, cross-visual ordering, and clipping take precedence over visual-family-local primitive ordering.
 
 ## Guides
 

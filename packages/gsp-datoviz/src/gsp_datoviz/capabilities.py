@@ -738,12 +738,12 @@ def gsp_capability_snapshot_from_datoviz(
             "static orthographic View3D mesh rendering and canonical ray-context payloads"
         )
         metadata["s044_mesh_triangle_pick"] = (
-            "query.view3d.mesh_triangle_pick.v1 is not advertised until Datoviz can "
-            "prove public visual_id and canonical primitive_index mapping plus "
-            "layout/view/projection/pick-scene freshness"
+            "Datoviz public FACE queries provide canonical visual_id and primitive_index "
+            "for the bounded single-mesh path; strict query.view3d.mesh_triangle_pick.v1 "
+            "remains unadvertised until multi-visual frontmost depth is resolved"
         )
         metadata["s044_mesh_triangle_pick_diagnostics"] = (
-            "pick.unsupported.no_public_primitive_map",
+            "pick.unsupported.scene_occluder",
             "pick.unsupported.native_state_only",
         )
         if QUERY_VIEW3D_MESH_TRIANGLE_PICK_CAPABILITY in view3d_capabilities:

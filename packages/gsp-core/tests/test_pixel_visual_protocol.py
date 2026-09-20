@@ -10,18 +10,32 @@ from gsp.protocol import (
     PixelVisual,
     View2D,
     View3D,
+    VisualAttachment,
     full_target_panel_layout,
 )
 
 
 def _scene(**kwargs: object) -> Scene:
     supplied_panels = kwargs.pop("panels", None)
-    view = kwargs.get("view2d") or kwargs.get("view3d")
+    view2d = kwargs.pop("view2d", None)
+    view3d = kwargs.pop("view3d", None)
+    view = view2d or view3d
     panel_id = view.panel_id if isinstance(view, (View2D, View3D)) else "panel:main"
     panels = supplied_panels if supplied_panels is not None else (Panel(id=panel_id),)
+    visuals = kwargs.get("visuals", ())
     return Scene(
         panels=panels,  # type: ignore[arg-type]
         panel_layout=full_target_panel_layout(panels[0].id),  # type: ignore[index,union-attr]
+        views2d=(view2d,) if isinstance(view2d, View2D) else (),
+        views3d=(view3d,) if isinstance(view3d, View3D) else (),
+        attachments=tuple(
+            VisualAttachment(
+                visual_id=visual.id,
+                panel_id=panel_id,
+                view_id=view.id if view is not None else None,
+            )
+            for visual in visuals  # type: ignore[union-attr]
+        ),
         **kwargs,  # type: ignore[arg-type]
     )
 
@@ -102,7 +116,7 @@ def test_pixel_visual_rejects_malformed_fields(field: str, value: object, error:
 
 def test_pixel_visual_scene_view_requirements() -> None:
     pixels2d = _pixels()
-    with pytest.raises(ValueError, match="Scene.view2d"):
+    with pytest.raises(ValueError, match="requires an attachment view_id"):
         _scene(id="scene:missing-2d", visuals=(pixels2d,))
     view2d = View2D(id="view:2d", panel_id="panel:1")
     _scene(
@@ -116,7 +130,7 @@ def test_pixel_visual_scene_view_requirements() -> None:
         positions=np.array([[0.0, 0.0, 0.0]], dtype=np.float32),
         colors=np.array([255, 255, 255, 255], dtype=np.uint8),
     )
-    with pytest.raises(ValueError, match="Scene.view3d"):
+    with pytest.raises(ValueError, match="requires an attachment view_id"):
         _scene(id="scene:missing-3d", visuals=(pixels3d,))
     _scene(id="scene:3d", visuals=(pixels3d,), view3d=_view3d())
     with pytest.raises(ValueError, match="CoordinateSpace.DATA"):

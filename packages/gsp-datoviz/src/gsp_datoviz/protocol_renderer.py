@@ -93,6 +93,7 @@ from gsp.protocol import (
     ResolvedLayoutSnapshot,
     ResolvedPanelLayout,
     classify_logical_coordinate,
+    plot_logical_px_to_plot_ndc,
     project_view3d_data_point,
     quantize_logical_rect,
     resolve_view3d_projection_snapshot,
@@ -149,6 +150,7 @@ from gsp_datoviz.latest_api_contract import (
 )
 from gsp_datoviz.query import (
     DATOVIZ_QUERY_PAYLOAD_KIND,
+    DatovizQueryPayload,
     datoviz_query_view3d_ray_context,
     decode_dvz_query_result,
     datoviz_v04_query_binding_diagnostics,
@@ -272,9 +274,11 @@ DVZ_FIELD_FILTER_NEAREST = 1
 DVZ_MATERIAL_MODEL_UNLIT = 0
 DVZ_SCENE_TARGET_NONE = 0
 DVZ_SCENE_TARGET_ITEM = 2
+DVZ_SCENE_TARGET_FACE = 4
 DVZ_QUERY_HIT_FRONTMOST = 0
 DVZ_QUERY_PROFILE_UNSUPPORTED = 0
 DVZ_QUERY_CAPABILITY_ITEM = 0x02
+DVZ_QUERY_CAPABILITY_FACE = 0x08
 DVZ_QUERY_CAPABILITY_PIXEL = 0x10
 DVZ_CAMERA_PERSPECTIVE = 0
 DVZ_CAMERA_ORTHOGRAPHIC = 1
@@ -1857,7 +1861,12 @@ class DatovizV04ProtocolRenderer:
             "Datoviz mesh depth-test configuration failed",
         )
         _set_alpha_mode_if_translucent(self.dvz, dvz_visual, colors)
-        _set_query_capabilities(self.dvz, dvz_visual, DVZ_QUERY_CAPABILITY_ITEM)
+        query_capabilities = DVZ_QUERY_CAPABILITY_ITEM
+        if is_3d_mesh and visual.coordinate_space is CoordinateSpace.DATA:
+            query_capabilities |= getattr(
+                self.dvz, "DVZ_QUERY_CAPABILITY_FACE", DVZ_QUERY_CAPABILITY_FACE
+            )
+        _set_query_capabilities(self.dvz, dvz_visual, query_capabilities)
         _add_visual_to_panel(
             self.dvz,
             self.panel,
@@ -2505,7 +2514,9 @@ class DatovizV04ProtocolRenderer:
         if result not in (0, None, frame_ready):
             raise DatovizV04Unsupported("Datoviz offscreen frame render failed")
 
-    def query_panel(self, request: QueryRequest) -> QueryResult:
+    def query_panel(
+        self, request: QueryRequest, *, native_target: int = DVZ_SCENE_TARGET_ITEM
+    ) -> QueryResult:
         """Queue and poll one Datoviz panel query for data-scope panel coordinates."""
         stale = self._stale_consumed_layout_result(request)
         if stale is not None:
@@ -2528,7 +2539,7 @@ class DatovizV04ProtocolRenderer:
 
         dvz_request = self.dvz.dvz_query_request()
         dvz_request.request_id = _datoviz_request_id(request.id)
-        dvz_request.target = getattr(self.dvz, "DVZ_SCENE_TARGET_ITEM", DVZ_SCENE_TARGET_ITEM)
+        dvz_request.target = native_target
         dvz_request.hit_policy = getattr(
             self.dvz, "DVZ_QUERY_HIT_FRONTMOST", DVZ_QUERY_HIT_FRONTMOST
         )
@@ -2762,74 +2773,185 @@ class DatovizV04ProtocolRenderer:
         *,
         layout_snapshot_id: str,
     ) -> QueryResult:
-        """Return structured unsupported for S044 until Datoviz has strict pick evidence."""
+        """Use Datoviz public FACE queries for the bounded single-mesh S044 subset."""
+        result_id = f"query:{request.view_id}:mesh-pick"
+
+        def finish(
+            status: QueryStatus,
+            *,
+            code: View3DMeshPickDiagnosticCode | None = None,
+            message: str | None = None,
+            **payload_fields: Any,
+        ) -> QueryResult:
+            diagnostics = (
+                ()
+                if code is None
+                else (
+                    QueryDiagnostic(
+                        code=code,
+                        severity=QueryDiagnosticSeverity.ERROR,
+                        message=message,
+                    ),
+                )
+            )
+            payload = View3DMeshTrianglePickPayload(
+                status=status,
+                hit=status is QueryStatus.HIT,
+                view_id=request.view_id,
+                panel_id=request.panel_id or (self.view3d.panel_id if self.view3d else None),
+                panel_xy=request.panel_xy,
+                diagnostics=diagnostics,
+                **payload_fields,
+            )
+            return QueryResult(
+                request_id=result_id,
+                status=status,
+                hit=status is QueryStatus.HIT,
+                visual_id=payload.visual_id,
+                panel_coordinate=request.panel_xy,
+                extension_payload_kind=payload.kind,
+                extension_payload=payload,
+                diagnostic=None if code is None else code.value,
+                layout_snapshot_id=payload.layout_snapshot_id or layout_snapshot_id,
+                view_snapshot_id=payload.view_projection_snapshot_id,
+            )
+
         if self.consumed_layout_snapshot is not None and (
             layout_snapshot_id != self.consumed_layout_snapshot.snapshot_id
             or request.expected_layout_snapshot_id
             not in (None, self.consumed_layout_snapshot.snapshot_id)
         ):
-            diagnostic = QueryDiagnostic(
+            return finish(
+                QueryStatus.STALE,
                 code=View3DMeshPickDiagnosticCode.STALE_LAYOUT_SNAPSHOT,
-                severity=QueryDiagnosticSeverity.ERROR,
                 message="mesh pick references a stale consumed layout snapshot",
-            )
-            payload = View3DMeshTrianglePickPayload(
-                status=QueryStatus.STALE,
-                hit=False,
-                view_id=request.view_id,
-                panel_id=request.panel_id,
-                panel_xy=request.panel_xy,
-                diagnostics=(diagnostic,),
-            )
-            return QueryResult(
-                request_id=f"query:{request.view_id}:mesh-pick",
-                status=QueryStatus.STALE,
-                hit=False,
-                panel_coordinate=request.panel_xy,
-                extension_payload_kind=payload.kind,
-                extension_payload=payload,
-                diagnostic=View3DMeshPickDiagnosticCode.STALE_LAYOUT_SNAPSHOT.value,
                 layout_snapshot_id=self.consumed_layout_snapshot.snapshot_id,
             )
-        diagnostic = QueryDiagnostic(
-            code=View3DMeshPickDiagnosticCode.UNSUPPORTED_NO_PUBLIC_PRIMITIVE_MAP,
-            severity=QueryDiagnosticSeverity.ERROR,
-            message=(
-                "Datoviz S044 mesh triangle picking requires public visual_id and "
-                "canonical primitive_index mapping plus synchronized pick-scene freshness"
-            ),
-        )
-        payload = View3DMeshTrianglePickPayload(
-            status=QueryStatus.UNSUPPORTED,
-            hit=False,
-            view_id=request.view_id,
-            panel_id=request.panel_id or (self.view3d.panel_id if self.view3d else None),
-            panel_xy=request.panel_xy,
-            diagnostics=(diagnostic,),
-        )
-        view_snapshot_id = (
-            resolve_view3d_projection_snapshot(
-                self.view3d,
-                layout_snapshot=self.consumed_layout_snapshot,
-                layout_snapshot_id=layout_snapshot_id,
-            ).view_projection_snapshot_id
-            if self.view3d is not None
-            else None
-        )
-        return QueryResult(
-            request_id=f"query:{request.view_id}:mesh-pick",
-            status=QueryStatus.UNSUPPORTED,
-            hit=False,
-            panel_coordinate=request.panel_xy,
-            extension_payload_kind=payload.kind,
-            extension_payload=payload,
-            diagnostic=(
-                diagnostic.code.value
-                if isinstance(diagnostic.code, View3DMeshPickDiagnosticCode)
-                else diagnostic.code
-            ),
+        if self.view3d is None:
+            return finish(
+                QueryStatus.UNSUPPORTED,
+                code=View3DMeshPickDiagnosticCode.UNSUPPORTED_BACKEND,
+                message="Datoviz mesh picking requires a retained View3D",
+            )
+        if request.view_id != self.view3d.id:
+            return finish(
+                QueryStatus.INVALID,
+                code=View3DMeshPickDiagnosticCode.INVALID_VIEW_ID,
+                message="mesh pick view_id does not match the renderer View3D",
+            )
+        if request.panel_id not in (None, self.view3d.panel_id):
+            return finish(
+                QueryStatus.INVALID,
+                code=View3DMeshPickDiagnosticCode.INVALID_PANEL_ID,
+                message="mesh pick panel_id does not match the renderer View3D",
+            )
+        projection = resolve_view3d_projection_snapshot(
+            self.view3d,
+            layout_snapshot=self.consumed_layout_snapshot,
             layout_snapshot_id=layout_snapshot_id,
-            view_snapshot_id=view_snapshot_id,
+        )
+        common: dict[str, Any] = dict(
+            layout_snapshot_id=layout_snapshot_id,
+            view_revision=self.view3d.revision,
+            view_projection_snapshot_id=projection.view_projection_snapshot_id,
+            depth_mode=self.view3d.depth_mode.value,
+        )
+        if request.expected_view_revision not in (None, self.view3d.revision):
+            return finish(
+                QueryStatus.STALE,
+                code=View3DMeshPickDiagnosticCode.STALE_VIEW_REVISION,
+                message="mesh pick references a stale View3D revision",
+                **common,
+            )
+        if request.expected_view_projection_snapshot_id not in (
+            None,
+            projection.view_projection_snapshot_id,
+        ):
+            return finish(
+                QueryStatus.STALE,
+                code=View3DMeshPickDiagnosticCode.STALE_VIEW_PROJECTION_SNAPSHOT,
+                message="mesh pick references a stale View3D projection snapshot",
+                **common,
+            )
+        if len(self.visuals) != 1 or len(self.retained_view3d_meshes) != 1:
+            return finish(
+                QueryStatus.UNSUPPORTED,
+                code=View3DMeshPickDiagnosticCode.UNSUPPORTED_SCENE_OCCLUDER,
+                message=(
+                    "Datoviz FACE queries are strict only when exactly one retained "
+                    "DATA-space MeshVisual is the scene's sole visual"
+                ),
+                **common,
+            )
+        if self.consumed_layout_snapshot is not None:
+            region = classify_logical_coordinate(self.consumed_layout_snapshot, request.panel_xy)
+            if region is not LogicalCoordinateRegion.DATA_PLOT:
+                return finish(
+                    QueryStatus.INVALID,
+                    code=View3DMeshPickDiagnosticCode.INVALID_OUTSIDE_PANEL,
+                    message="mesh pick coordinate is outside the consumed plot viewport",
+                    **common,
+                )
+            plot_ndc = plot_logical_px_to_plot_ndc(self.consumed_layout_snapshot, request.panel_xy)
+        else:
+            x0, x1, y0, y1 = self._query_plot_bounds()
+            x, y = request.panel_xy
+            if not (x0 <= x <= x1 and y0 <= y <= y1):
+                return finish(
+                    QueryStatus.INVALID,
+                    code=View3DMeshPickDiagnosticCode.INVALID_OUTSIDE_PANEL,
+                    message="mesh pick coordinate is outside the renderer plot viewport",
+                    **common,
+                )
+            plot_ndc = (
+                -1.0 + 2.0 * (x - x0) / (x1 - x0),
+                1.0 - 2.0 * (y - y0) / (y1 - y0),
+            )
+
+        native = self.query_panel(
+            QueryRequest(
+                id=result_id,
+                panel_id=self.view3d.panel_id,
+                coordinate=request.panel_xy,
+                coordinate_space=QueryCoordinateSpace.PANEL,
+                requested_payload=(QueryPayload.IDENTITY,),
+                layout_snapshot_id=layout_snapshot_id,
+                view_snapshot_id=projection.view_projection_snapshot_id,
+            ),
+            native_target=getattr(self.dvz, "DVZ_SCENE_TARGET_FACE", DVZ_SCENE_TARGET_FACE),
+        )
+        if native.status is QueryStatus.MISS:
+            return finish(QueryStatus.MISS, plot_ndc_xy=plot_ndc, **common)
+        if native.status is not QueryStatus.HIT or not isinstance(
+            native.extension_payload, DatovizQueryPayload
+        ):
+            return finish(
+                QueryStatus.UNSUPPORTED,
+                code=View3DMeshPickDiagnosticCode.UNSUPPORTED_NATIVE_STATE_ONLY,
+                message="Datoviz FACE query did not return decodable public face identity",
+                plot_ndc_xy=plot_ndc,
+                **common,
+            )
+        native_payload = native.extension_payload
+        pick_scene_snapshot_id = f"pick-scene:datoviz-{native_payload.freshness_serial}"
+        if request.expected_pick_scene_snapshot_id not in (None, pick_scene_snapshot_id):
+            return finish(
+                QueryStatus.STALE,
+                code=View3DMeshPickDiagnosticCode.STALE_PICK_SCENE_SNAPSHOT,
+                message="mesh pick references a stale Datoviz scene snapshot",
+                pick_scene_snapshot_id=pick_scene_snapshot_id,
+                plot_ndc_xy=plot_ndc,
+                **common,
+            )
+        return finish(
+            QueryStatus.HIT,
+            plot_ndc_xy=plot_ndc,
+            pick_scene_snapshot_id=pick_scene_snapshot_id,
+            visual_id=native.visual_id,
+            visual_type="MeshVisual",
+            primitive_kind="triangle",
+            primitive_index=native_payload.face_id,
+            **common,
         )
 
     def _decorate_scalar_query_result(

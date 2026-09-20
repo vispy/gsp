@@ -14,6 +14,7 @@ from gsp.protocol import (
     PrimitiveVisual,
     View2D,
     View3D,
+    VisualAttachment,
 )
 
 
@@ -137,7 +138,7 @@ def test_primitive_visual_validates_dimensions_colors_views_and_topology_type() 
         visuals=(visual2d,),
         view2d=View2D(id="view:2d", panel_id="panel:2d"),
     )
-    with pytest.raises(ValueError, match="Scene.view2d"):
+    with pytest.raises(ValueError, match="requires an attachment view_id"):
         _scene(id="scene:missing-2d", visuals=(visual2d,))
 
     visual3d = _primitive(
@@ -157,7 +158,7 @@ def test_primitive_visual_validates_dimensions_colors_views_and_topology_type() 
         projection=PerspectiveProjection3D(near_far=(0.1, 100.0)),
     )
     _scene(id="scene:3d", visuals=(visual3d,), view3d=view3d)
-    with pytest.raises(ValueError, match="Scene.view3d"):
+    with pytest.raises(ValueError, match="requires an attachment view_id"):
         _scene(id="scene:missing-3d", visuals=(visual3d,))
     with pytest.raises(ValueError, match="CoordinateSpace.DATA"):
         _scene(
@@ -212,10 +213,23 @@ def test_primitive_visual_public_surface_has_no_raw_gpu_fields() -> None:
 
 
 def _scene(**kwargs: object) -> Scene:
-    view = kwargs.get("view2d") or kwargs.get("view3d")
+    view2d = kwargs.pop("view2d", None)
+    view3d = kwargs.pop("view3d", None)
+    view = view2d or view3d
     panel_id = view.panel_id if isinstance(view, (View2D, View3D)) else "panel:main"
+    visuals = kwargs.get("visuals", ())
     return Scene(
         panels=(Panel(id=panel_id),),
         panel_layout=full_target_panel_layout(panel_id),
+        views2d=(view2d,) if isinstance(view2d, View2D) else (),
+        views3d=(view3d,) if isinstance(view3d, View3D) else (),
+        attachments=tuple(
+            VisualAttachment(
+                visual_id=visual.id,
+                panel_id=panel_id,
+                view_id=view.id if view is not None else None,
+            )
+            for visual in visuals  # type: ignore[union-attr]
+        ),
         **kwargs,  # type: ignore[arg-type]
     )

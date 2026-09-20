@@ -17,14 +17,6 @@ class AspectPolicy(str, Enum):
     EQUAL = "equal"
 
 
-class VisualCoordinateSpace(str, Enum):
-    """Coordinate space used by a visual attachment."""
-
-    DATA = "data"
-    VIEW = "view"
-    PANEL = "panel"
-
-
 class ClipScope(str, Enum):
     """Rectangular raster-clipping boundary for one visual attachment."""
 
@@ -80,19 +72,24 @@ class View2D:
 
 @dataclass(frozen=True, slots=True)
 class VisualAttachment:
-    """Attach a data visual to a panel/view without making axes part of the visual stream."""
+    """Place one visual in one panel and optional data view."""
 
     visual_id: str
     panel_id: str
-    view_id: str
-    coordinate_space: VisualCoordinateSpace = VisualCoordinateSpace.DATA
+    view_id: str | None = None
     z_order: int = 0
+    visible: bool = True
     clip_scope: ClipScope = ClipScope.PLOT
 
     def __post_init__(self) -> None:
         validate_id(self.visual_id)
         validate_id(self.panel_id)
-        validate_id(self.view_id)
+        if self.view_id is not None:
+            validate_id(self.view_id)
+        if isinstance(self.z_order, bool) or not isinstance(self.z_order, int):
+            raise TypeError("z_order must be an integer")
+        if not isinstance(self.visible, bool):
+            raise TypeError("visible must be a bool")
         if isinstance(self.clip_scope, str):
             try:
                 object.__setattr__(self, "clip_scope", ClipScope(self.clip_scope))
