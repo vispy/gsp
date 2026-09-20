@@ -315,16 +315,19 @@ def gsp_capability_snapshot_from_datoviz(
     )
     guide_query_diagnostics = datoviz_v04_panel_frame_guide_query_diagnostics(dvz)
     guide_query_supported = frame_snapshot_supported and not guide_query_diagnostics
+    guide_query_audit_diagnostics = (
+        ("guide_query_native_verified", "all_rendered_guides_native_verified")
+        if guide_query_supported
+        else ("guide_query_missing", "all_rendered_guides_unsupported")
+    )
+    guide_query_unsupported_diagnostics = (
+        () if guide_query_supported else ("guide_query_missing", "all_rendered_guides_unsupported")
+    )
     frame_snapshot_audit_diagnostics = (
         (
             "layout_snapshot_partial",
             "guide_layout_snapshot_first_slice",
-            ("guide_query_native_verified" if guide_query_supported else "guide_query_missing"),
-            (
-                "all_rendered_guides_native_verified"
-                if guide_query_supported
-                else "all_rendered_guides_unsupported"
-            ),
+            *guide_query_audit_diagnostics,
             *guide_query_diagnostics,
         )
         if frame_snapshot_supported
@@ -335,8 +338,7 @@ def gsp_capability_snapshot_from_datoviz(
         "axis_style_mapping_partial",
         *grid_clip_audit_diagnostics,
         *frame_snapshot_audit_diagnostics,
-        "guide_query_missing",
-        "all_rendered_guides_unsupported",
+        *guide_query_unsupported_diagnostics,
     )
 
     metadata: dict[str, object] = {
@@ -355,15 +357,18 @@ def gsp_capability_snapshot_from_datoviz(
             "Datoviz native panel axes are an adapted provider in this GSP slice: "
             "panel View2D descriptor symbols are capability-gated, backend auto ticks "
             "may render, explicit GSP tick values/labels are applied when the "
-            "dvz_axis_set_ticks convenience wrapper is exposed, guide query is "
-            "deferred, and all-rendered guide contributions remain unsupported "
-            "until Datoviz exposes guide picking/query semantics"
+            "dvz_axis_set_ticks convenience wrapper is exposed; guide query and "
+            "all-rendered guide contributions are native when the panel frame "
+            "snapshot and guide-hit APIs are available"
         ),
         "s028_guide_view2d_diagnostics": (
             "datoviz_axis_provider_adapted",
             "explicit_gsp_ticks_binding_dependent",
-            "axis_guide_query_unsupported",
-            "all_rendered_guides_unsupported",
+            *(
+                ()
+                if guide_query_supported
+                else ("axis_guide_query_unsupported", "all_rendered_guides_unsupported")
+            ),
             "strict_guide_title_query_unverified",
         ),
         "s034_layout_status": (
@@ -393,8 +398,7 @@ def gsp_capability_snapshot_from_datoviz(
                 "axis_style_mapping_partial",
                 *grid_clip_audit_diagnostics,
                 *frame_snapshot_audit_diagnostics,
-                "guide_query_missing",
-                "all_rendered_guides_unsupported",
+                *guide_query_unsupported_diagnostics,
                 "font_metrics_parity_false",
             ),
         },

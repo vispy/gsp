@@ -2253,6 +2253,12 @@ def test_datoviz_capabilities_report_native_guide_query_when_frame_hit_api_exist
     assert caps.guide_layout_capability.axis_query is True
     assert caps.query_layout_capability.guide_query is True
     assert caps.query_layout_capability.all_rendered_guides is True
+    assert "guide_query_missing" not in audit["diagnostics"]
+    assert "all_rendered_guides_unsupported" not in audit["diagnostics"]
+    assert "axis_guide_query_unsupported" not in caps.metadata["s028_guide_view2d_diagnostics"]
+    assert "all_rendered_guides_unsupported" not in caps.metadata["s028_guide_view2d_diagnostics"]
+    assert "guide_query_missing" not in caps.guide_layout_capability.diagnostics
+    assert "all_rendered_guides_unsupported" not in caps.guide_layout_capability.diagnostics
 
 
 def test_retained_view2d_navigation_update_does_not_reupload_visual_buffers():
@@ -2459,7 +2465,9 @@ def test_decode_datoviz_image_hit_to_gsp_query_result():
 
     assert result.status == QueryStatus.HIT
     assert result.visual_family == VisualFamily.IMAGE
-    assert result.texel == (0, 9)
+    # Datoviz exposes a flat texel_id, not texture dimensions from which a canonical (x, y)
+    # coordinate can be recovered. The adapter must not fabricate coordinates.
+    assert result.texel is None
     assert result.displayed_rgba == (0.25, 0.5, 0.75, 1.0)
     assert result.value == (1.0, 0.5, 0.25, 1.0)
 

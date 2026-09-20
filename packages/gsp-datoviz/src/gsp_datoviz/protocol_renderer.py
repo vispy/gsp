@@ -147,6 +147,7 @@ from gsp_datoviz.latest_api_contract import (
     datoviz_vector_api_diagnostics,
 )
 from gsp_datoviz.query import (
+    DATOVIZ_QUERY_PAYLOAD_KIND,
     datoviz_query_view3d_ray_context,
     decode_dvz_query_result,
     datoviz_v04_query_binding_diagnostics,
@@ -5266,6 +5267,14 @@ def _resolved_scalar_texel(
         flat_index = col if row == 0 else row * width + col
         if 0 <= flat_index < values.size:
             resolved_row, resolved_col = np.unravel_index(flat_index, values.shape)
+            return (int(resolved_row), int(resolved_col))
+    # The canonical GSP result intentionally does not turn Datoviz's flat texel_id into a
+    # two-dimensional coordinate. Scalar-image decoration has the retained image shape, so it
+    # can safely resolve that native id here without leaking an invented canonical texel.
+    if result.extension_payload_kind == DATOVIZ_QUERY_PAYLOAD_KIND:
+        flat_texel_id = getattr(result.extension_payload, "texel_id", None)
+        if isinstance(flat_texel_id, int) and 0 <= flat_texel_id < values.size:
+            resolved_row, resolved_col = np.unravel_index(flat_texel_id, values.shape)
             return (int(resolved_row), int(resolved_col))
     if result.item_id is not None and 0 <= result.item_id < values.size:
         resolved_row, resolved_col = np.unravel_index(result.item_id, values.shape)

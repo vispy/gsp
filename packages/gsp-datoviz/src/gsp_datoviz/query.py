@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from math import sqrt
 from typing import Any, cast
 
@@ -39,7 +40,43 @@ DVZ_QUERY_STATUS_READBACK_FAILED = 11
 DVZ_QUERY_STATUS_DECODE_FAILED = 12
 
 DVZ_SCENE_VISUAL_FAMILY_POINT = 1
+DVZ_SCENE_VISUAL_FAMILY_PIXEL = 2
+DVZ_SCENE_VISUAL_FAMILY_MARKER = 3
+DVZ_SCENE_VISUAL_FAMILY_SEGMENT = 4
+DVZ_SCENE_VISUAL_FAMILY_VECTOR = 5
+DVZ_SCENE_VISUAL_FAMILY_PATH = 6
 DVZ_SCENE_VISUAL_FAMILY_IMAGE = 7
+DVZ_SCENE_VISUAL_FAMILY_MESH = 8
+DVZ_SCENE_VISUAL_FAMILY_VOLUME = 9
+DVZ_SCENE_VISUAL_FAMILY_PRIMITIVE = 10
+DVZ_SCENE_VISUAL_FAMILY_SPHERE = 11
+DVZ_SCENE_VISUAL_FAMILY_GLYPH = 12
+DVZ_SCENE_VISUAL_FAMILY_TEXT = 13
+DVZ_SCENE_VISUAL_FAMILY_LABELS = 14
+DVZ_SCENE_VISUAL_FAMILY_SPLAT = 15
+
+# These values intentionally mirror Datoviz's public DvzSceneVisualFamily enum.  Keep the
+# mapping local to the adapter: gsp-core must not acquire a Datoviz dependency, and unknown
+# future values must remain undecoded rather than being guessed from their numeric value.
+_DVZ_VISUAL_FAMILY_NAMES = {
+    DVZ_SCENE_VISUAL_FAMILY_POINT: "point",
+    DVZ_SCENE_VISUAL_FAMILY_PIXEL: "pixel",
+    DVZ_SCENE_VISUAL_FAMILY_MARKER: "marker",
+    DVZ_SCENE_VISUAL_FAMILY_SEGMENT: "segment",
+    DVZ_SCENE_VISUAL_FAMILY_VECTOR: "vector",
+    DVZ_SCENE_VISUAL_FAMILY_PATH: "path",
+    DVZ_SCENE_VISUAL_FAMILY_IMAGE: "image",
+    DVZ_SCENE_VISUAL_FAMILY_MESH: "mesh",
+    DVZ_SCENE_VISUAL_FAMILY_VOLUME: "volume",
+    DVZ_SCENE_VISUAL_FAMILY_PRIMITIVE: "primitive",
+    DVZ_SCENE_VISUAL_FAMILY_SPHERE: "sphere",
+    DVZ_SCENE_VISUAL_FAMILY_GLYPH: "glyph",
+    DVZ_SCENE_VISUAL_FAMILY_TEXT: "text",
+    DVZ_SCENE_VISUAL_FAMILY_LABELS: "labels",
+    DVZ_SCENE_VISUAL_FAMILY_SPLAT: "splat",
+}
+
+_DVZ_ITEM_ID_FAMILIES = frozenset(_DVZ_VISUAL_FAMILY_NAMES.values())
 
 DVZ_QUERY_VALUE_NONE = 0
 DVZ_QUERY_VALUE_SCALAR = 1
@@ -48,6 +85,36 @@ DVZ_QUERY_VALUE_VEC3 = 3
 DVZ_QUERY_VALUE_VEC4 = 4
 DVZ_QUERY_VALUE_CATEGORY = 5
 DVZ_QUERY_VALUE_TEXT = 6
+
+# This payload is deliberately adapter-local. It preserves native identity fields that do not
+# have a canonical GSP QueryResult slot (face/primitive/instance/flat texel IDs, links, and
+# depth) without pretending that those fields are portable GSP semantics.
+DATOVIZ_QUERY_PAYLOAD_KIND = "gsp.datoviz-query@0.1"
+
+
+@dataclass(frozen=True, slots=True)
+class DatovizQueryPayload:
+    """Versioned native metadata retained alongside a canonical query hit."""
+
+    payload_version: int
+    visual_family: int
+    resolved_target: int
+    resolved_id: int
+    item_id: int
+    group_id: int
+    auxiliary_id: int
+    instance_id: int
+    face_id: int
+    primitive_id: int
+    vertex_id: int
+    voxel_id: int
+    texel_id: int
+    link_key: int
+    link_channel: int
+    freshness_serial: int
+    uvw: tuple[float, float, float] | None
+    depth: float | None
+
 
 _REQUIRED_DVZ_QUERY_FUNCTIONS = (
     "dvz_query_request",
@@ -280,6 +347,7 @@ def _normalized3(value: tuple[float, float, float]) -> tuple[float, float, float
 def _decode_hit(raw: Any, request_id: str, panel_coordinate: tuple[float, float]) -> QueryResult:
     visual_family = _visual_family(raw)
     value = _value(raw)
+    extension_payload = _datoviz_payload(raw)
     return QueryResult(
         request_id=request_id,
         status=QueryStatus.HIT,
@@ -293,6 +361,10 @@ def _decode_hit(raw: Any, request_id: str, panel_coordinate: tuple[float, float]
         data_coordinate=_optional_pair(raw, "data_position", "has_data_position"),
         displayed_rgba=_display_rgba(raw),
         value=value,
+        extension_payload_kind=DATOVIZ_QUERY_PAYLOAD_KIND
+        if extension_payload is not None
+        else None,
+        extension_payload=extension_payload,
     )
 
 
@@ -329,28 +401,29 @@ def _visual_id(raw: Any) -> str:
 
 def _visual_family(raw: Any) -> VisualFamily | str | None:
     family = _int_field(raw, "visual_family")
-    if family == DVZ_SCENE_VISUAL_FAMILY_POINT:
+    mapped = _DVZ_VISUAL_FAMILY_NAMES.get(family)
+    if mapped == VisualFamily.POINT.value:
         return VisualFamily.POINT
-    if family == DVZ_SCENE_VISUAL_FAMILY_IMAGE:
+    if mapped == VisualFamily.IMAGE.value:
         return VisualFamily.IMAGE
-    return None
+    if mapped == VisualFamily.MESH.value:
+        return VisualFamily.MESH
+    if mapped == VisualFamily.TEXT.value:
+        return VisualFamily.TEXT
+    return mapped
 
 
 def _item_id(raw: Any, family: VisualFamily | str | None) -> int | None:
-    if family != VisualFamily.POINT:
+    if family is None or family not in _DVZ_ITEM_ID_FAMILIES:
         return None
     return _int_field(raw, "item_id")
 
 
 def _texel(raw: Any, family: VisualFamily | str | None) -> tuple[int, int] | None:
-    if family != VisualFamily.IMAGE:
-        return None
-    texel_id = _int_field(raw, "texel_id")
-    if texel_id > 0:
-        return (0, texel_id)
-    item_id = _int_field(raw, "item_id")
-    if item_id > 0:
-        return (0, item_id)
+    # DvzQueryResult exposes a flat texel_id, not its two-dimensional (x, y) coordinates.
+    # Without the texture width, synthesizing ``(0, texel_id)`` is incorrect for all but a
+    # narrow and unknowable subset of textures.  Keep the canonical GSP texel unset until the
+    # native result grows explicit coordinates or the adapter has a validated texture shape.
     return None
 
 
@@ -362,6 +435,26 @@ def _optional_pair(raw: Any, name: str, flag_name: str) -> tuple[float, float] |
     if sequence is None or len(sequence) < 2:
         return None
     return (float(cast(Any, sequence[0])), float(cast(Any, sequence[1])))
+
+
+def _optional_triple(raw: Any, name: str, flag_name: str) -> tuple[float, float, float] | None:
+    if not bool(_field(raw, flag_name, False)):
+        return None
+    value = _field(raw, name)
+    sequence = _sequence(value)
+    if sequence is None or len(sequence) < 3:
+        return None
+    return (
+        float(cast(Any, sequence[0])),
+        float(cast(Any, sequence[1])),
+        float(cast(Any, sequence[2])),
+    )
+
+
+def _optional_float(raw: Any, name: str, flag_name: str) -> float | None:
+    if not bool(_field(raw, flag_name, False)):
+        return None
+    return _float_field(raw, name)
 
 
 def _display_rgba(raw: Any) -> tuple[float, float, float, float] | None:
@@ -376,6 +469,30 @@ def _display_rgba(raw: Any) -> tuple[float, float, float, float] | None:
         float(cast(Any, sequence[1])),
         float(cast(Any, sequence[2])),
         float(cast(Any, sequence[3])),
+    )
+
+
+def _datoviz_payload(raw: Any) -> DatovizQueryPayload:
+    """Retain bounded native metadata without treating zero-valued IDs as absent."""
+    return DatovizQueryPayload(
+        payload_version=_int_field(raw, "payload_version"),
+        visual_family=_int_field(raw, "visual_family"),
+        resolved_target=_int_field(raw, "resolved_target"),
+        resolved_id=_int_field(raw, "resolved_id"),
+        item_id=_int_field(raw, "item_id"),
+        group_id=_int_field(raw, "group_id"),
+        auxiliary_id=_int_field(raw, "auxiliary_id"),
+        instance_id=_int_field(raw, "instance_id"),
+        face_id=_int_field(raw, "face_id"),
+        primitive_id=_int_field(raw, "primitive_id"),
+        vertex_id=_int_field(raw, "vertex_id"),
+        voxel_id=_int_field(raw, "voxel_id"),
+        texel_id=_int_field(raw, "texel_id"),
+        link_key=_int_field(raw, "link_key"),
+        link_channel=_int_field(raw, "link_channel"),
+        freshness_serial=_int_field(raw, "freshness_serial"),
+        uvw=_optional_triple(raw, "uvw", "has_uvw"),
+        depth=_optional_float(raw, "depth", "has_depth"),
     )
 
 
