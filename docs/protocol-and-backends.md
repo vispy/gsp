@@ -96,13 +96,14 @@ preserving semantic panel titles. The qualified Datoviz binding has no public ad
 ## Evidence
 
 The VisPy2 `examples/validate_gallery.py` harness copies gallery scripts outside both source trees,
-verifies wheel-installed imports, enforces process-group timeouts, requires all fourteen PNGs to be
-exactly 800×600, and records dimensions and hashes. M292 regenerated and qualified all fourteen
-exact-wheel captures. M300 subsequently proved public DATA-space scalar images and linked
-colorbars through retained Datoviz View2D, including pan, zoom, reversed-x, multiple canvas sizes,
-and clean lifecycle. The pre-RC3 multi-panel pass additionally qualified the current GSP and
-VisPy2 wheels against a locally built Datoviz candidate wheel: the fourteen gallery captures
-passed, and a separate mixed View2D/View3D smoke retained two native panels, resolved both panel
-and view identities from native partial snapshots, and captured one 640×360 PNG. Live mixed-panel
-interaction remains a later qualification item. Native evidence remains exact-runtime evidence
-rather than a universal backend claim.
+verifies wheel-installed imports, enforces process-group timeouts, and records dimensions and
+hashes. The permanent mixed-panel installed-wheel gate (VisPy2 `e9e3c56385135547a55d63a03f8c02159f29d714`,
+GSP `43f67b1bddc3212d791435c243090001e042ba1f`) validated sixteen fresh 800×600 captures on
+Matplotlib and Datoviz. It also passed a 640×360 warmup followed by an 800×600 mixed View2D/View3D
+rerender, with two panel/view identities, two visual attachments, explicit allocations, valid-panel
+query or structured unsupported behavior, invalid-panel rejection, and closed-session rejection.
+The gate used the exact local Datoviz candidate wheel from `c54f5c24ce32d09990ce86346a8bb0e112548ca1`;
+Datoviz's unsupported data-space query is accepted adaptation evidence, not a simulated hit. M300
+also proved public DATA-space scalar images and linked colorbars through retained Datoviz View2D,
+including pan, zoom, reversed-x, multiple canvas sizes, and clean lifecycle. Native evidence
+remains exact-runtime evidence rather than a universal backend claim.

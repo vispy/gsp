@@ -42,5 +42,27 @@ jobs:
         run: |
           python -m venv "$RUNNER_TEMP/gsp-wheel-venv"
           "$RUNNER_TEMP/gsp-wheel-venv/bin/python" -m pip install "$RUNNER_TEMP"/gsp-dist/*.whl "pytest>=8,<10"
-          cd "$RUNNER_TEMP"
-          PYTHONPATH="$GITHUB_WORKSPACE" "$RUNNER_TEMP/gsp-wheel-venv/bin/python" -m pytest -q "$GITHUB_WORKSPACE/packages" "$GITHUB_WORKSPACE/conformance"
+          wheel_tests="$RUNNER_TEMP/gsp-wheel-tests"
+          mkdir -p "$wheel_tests"
+          cp -R "$GITHUB_WORKSPACE/packages" "$wheel_tests/packages"
+          cp -R "$GITHUB_WORKSPACE/conformance" "$wheel_tests/conformance"
+          cd "$wheel_tests"
+          env -u PYTHONPATH PYTHONNOUSERSITE=1 "$RUNNER_TEMP/gsp-wheel-venv/bin/python" - <<PY
+          import pathlib
+          import sys
+
+          import gsp
+          import gsp_datoviz
+          import gsp_matplotlib
+
+          workspace = pathlib.Path("$GITHUB_WORKSPACE").resolve()
+          for module in (gsp, gsp_datoviz, gsp_matplotlib):
+              path = pathlib.Path(module.__file__).resolve()
+              if workspace == path or workspace in path.parents:
+                  raise SystemExit(f"{module.__name__} imported from workspace: {path}")
+              prefix = pathlib.Path(sys.prefix).resolve()
+              if prefix != path and prefix not in path.parents:
+                  raise SystemExit(f"{module.__name__} imported outside wheel venv: {path}")
+              print(f"{module.__name__}: {path}")
+          PY
+          env -u PYTHONPATH PYTHONNOUSERSITE=1 "$RUNNER_TEMP/gsp-wheel-venv/bin/python" -m pytest -q packages conformance
