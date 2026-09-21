@@ -2784,7 +2784,7 @@ class DatovizV04ProtocolRenderer:
             ),
         )
         semantic_visual_id = self._semantic_visual_id(int(getattr(raw_result, "visual_id", 0)))
-        if semantic_visual_id is not None:
+        if decoded.status is QueryStatus.HIT and semantic_visual_id is not None:
             decoded = replace(decoded, visual_id=semantic_visual_id)
         return self._decorate_scalar_query_result(decoded, request)
 

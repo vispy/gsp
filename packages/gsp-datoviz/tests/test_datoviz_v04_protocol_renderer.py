@@ -2612,6 +2612,31 @@ def test_query_panel_returns_dropped_when_bounded_poll_has_no_result():
     assert result.diagnostic == "Datoviz query produced no resolved result during bounded poll"
 
 
+def test_query_panel_does_not_attach_visual_identity_to_native_miss():
+    fake = FakeDatovizV04WithRuntimeQuery(
+        FakeDvzQueryResult(
+            status=DVZ_QUERY_STATUS_MISS,
+            hit=False,
+            visual_id=123,
+            visual_family=DVZ_SCENE_VISUAL_FAMILY_POINT,
+        )
+    )
+    renderer = DatovizV04ProtocolRenderer(dvz=fake)
+    renderer.visuals["visual:point"] = "visual"
+    request = QueryRequest(
+        id="query:miss",
+        panel_id="panel:main",
+        coordinate=(12.0, 34.0),
+        coordinate_space=QueryCoordinateSpace.PANEL,
+        requested_payload=(QueryPayload.IDENTITY,),
+    )
+
+    result = renderer.query_panel(request)
+
+    assert result.status is QueryStatus.MISS
+    assert result.visual_id is None
+
+
 def test_retained_multi_panel_query_uses_requested_native_panel():
     class MultiPanelDatoviz(FakeDatovizV04WithRuntimeQuery):
         def __init__(self):
