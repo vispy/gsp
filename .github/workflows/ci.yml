@@ -25,13 +25,18 @@ jobs:
           python -m pip install "mypy>=1.15,<3" "pytest>=8,<10" "ruff==0.16.1" "uv>=0.7,<1"
           python -m pip install -e packages/gsp-core -e packages/gsp-matplotlib -e packages/gsp-datoviz
       - name: Test
-        run: python -m pytest -q
+        run: python -m pytest -q packages conformance tools/tests
       - name: Type check
         run: python -m mypy packages/gsp-core/src packages/gsp-matplotlib/src packages/gsp-datoviz/src --strict --show-error-codes
       - name: Lint
         run: |
-          python -m ruff check packages conformance
-          python -m ruff format --check packages conformance
+          python -m ruff check packages conformance tools
+          python -m ruff format --check packages conformance tools
+      - name: Check specification traceability and docs
+        run: |
+          python tools/spec_traceability.py --check
+          python -m pip install "mkdocs-material>=9,<10"
+          python -m mkdocs build --strict --site-dir "$RUNNER_TEMP/gsp-docs"
       - name: Build wheels
         run: |
           mkdir -p "$RUNNER_TEMP/gsp-dist"

@@ -9,6 +9,7 @@ import numpy as np
 import numpy.typing as npt
 
 from .ids import validate_id
+from .ownership import freeze_array_fields
 
 
 ScalarArray = npt.NDArray[np.float32] | npt.NDArray[np.float64]
@@ -156,6 +157,7 @@ class ScalarColorEncoding:
             raise ValueError("alpha must be in [0, 1]")
         if self.domain is not None and not isinstance(self.domain, ScalarColorDomain):
             raise TypeError("domain must be a ScalarColorDomain")
+        freeze_array_fields(self)
 
 
 @dataclass(frozen=True, slots=True)

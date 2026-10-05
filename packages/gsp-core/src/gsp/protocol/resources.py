@@ -11,6 +11,7 @@ import numpy as np
 import numpy.typing as npt
 
 from .ids import validate_id
+from .ownership import freeze_array_fields
 
 
 class ResourceUsage(str, Enum):
@@ -109,6 +110,7 @@ class Texture2D:
             raise ValueError("texture2d_invalid_resource: image dimensions must be positive")
         if not self.image.flags.c_contiguous:
             raise ValueError("texture2d_invalid_resource: image must be contiguous")
+        freeze_array_fields(self)
 
 
 def validate_texture2d_resources(textures: Sequence[Texture2D]) -> dict[str, Texture2D]:

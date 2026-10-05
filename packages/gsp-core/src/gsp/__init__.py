@@ -10,6 +10,8 @@ from .backends import (
     BackendSelectionRequired,
     BackendUnavailable,
     DuplicateBackendError,
+    PointUpdateSession,
+    MeshPickSession,
     discover_backends,
     open_session,
 )
@@ -27,6 +29,8 @@ __all__ = [
     "BackendSelectionRequired",
     "BackendUnavailable",
     "DuplicateBackendError",
+    "PointUpdateSession",
+    "MeshPickSession",
     "Scene",
     "discover_backends",
     "open_session",

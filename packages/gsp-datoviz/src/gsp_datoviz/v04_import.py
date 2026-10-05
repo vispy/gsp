@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 import sys
-
+from pathlib import Path
 
 _ENV_SOURCE = "GSP_DATOVIZ_SOURCE"
 

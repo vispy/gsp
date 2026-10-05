@@ -17,6 +17,7 @@ from .color import (
     validate_scalar_encoding_shape,
 )
 from .ids import validate_id
+from .ownership import freeze_array_fields
 from .transforms import VisualTransformBinding
 
 
@@ -289,6 +290,7 @@ class PointVisual:
             domain=ScalarColorDomain.ITEM,
             field_name="colors",
         )
+        freeze_array_fields(self)
 
 
 @dataclass(frozen=True, slots=True)
@@ -308,6 +310,7 @@ class PixelVisual:
         item_count = _validate_positions(self.positions)
         _validate_rgba_values(self.colors, item_count, field_name="colors")
         _validate_positive_values(self.pixel_size_px, item_count, field_name="pixel_size_px")
+        freeze_array_fields(self)
 
     def pixel_size_values(self) -> npt.NDArray[np.float32]:
         """Return one logical-pixel width per item."""
@@ -341,6 +344,7 @@ class SphereVisual:
             raise ValueError("SphereVisual requires CoordinateSpace.DATA")
         _validate_positive_values(self.radii, item_count, field_name="radii")
         _validate_rgba_values(self.colors, item_count, field_name="colors")
+        freeze_array_fields(self)
 
     def radius_values(self) -> npt.NDArray[np.float32]:
         """Return one DATA-space radius per sphere."""
@@ -392,6 +396,7 @@ class VectorVisual:
             raise TypeError("start_cap must be a VectorCap")
         if not isinstance(self.end_cap, VectorCap):
             raise TypeError("end_cap must be a VectorCap")
+        freeze_array_fields(self)
 
     def width_values(self) -> npt.NDArray[np.float32]:
         """Return one logical-pixel stroke width per vector item."""
@@ -461,6 +466,7 @@ class PrimitiveVisual:
                 )
             element_count = int(self.indices.shape[0])
         self._validate_cardinality(element_count)
+        freeze_array_fields(self)
 
     def _validate_cardinality(self, count: int) -> None:
         valid = {
@@ -531,6 +537,7 @@ class MarkerVisual:
             raise ValueError("stroke_width must be finite")
         if self.stroke_width < 0:
             raise ValueError("stroke_width must be non-negative")
+        freeze_array_fields(self)
 
     def shape_values(self) -> MarkerShapeTuple:
         """Return one shape per marker."""
@@ -571,6 +578,7 @@ class SegmentVisual:
             raise ValueError("end_positions dimensionality must match start_positions")
         _validate_rgba_array(self.colors, shape=(segment_count, 4), field_name="colors")
         _validate_sizes(self.widths, segment_count, field_name="widths")
+        freeze_array_fields(self)
 
     def width_values(self) -> npt.NDArray[np.float32]:
         """Return one pixel stroke width per segment."""
@@ -615,6 +623,7 @@ class PathVisual:
             raise ValueError("miter_limit must be finite")
         if self.miter_limit < 0:
             raise ValueError("miter_limit must be non-negative")
+        freeze_array_fields(self)
 
     def width_values(self) -> npt.NDArray[np.float32]:
         """Return one pixel stroke width per subpath."""
@@ -730,6 +739,7 @@ class MeshVisual:
             raise TypeError("opacity_policy must be an OpacityPolicy")
         if isinstance(self.order, bool) or not np.isfinite(self.order):
             raise ValueError("order must be finite")
+        freeze_array_fields(self)
 
     def resolved_color_mode(self) -> MeshColorMode:
         """Return the explicit or inferred color association mode."""
@@ -803,6 +813,7 @@ class ImageVisual:
             if vmin >= vmax:
                 raise ValueError("clim minimum must be less than maximum")
         if self.image.dtype == np.dtype(np.uint8):
+            freeze_array_fields(self)
             return
         if self.image.dtype not in (np.dtype(np.float32), np.dtype(np.float64)):
             raise TypeError("image must be uint8, float32, or float64")
@@ -810,6 +821,7 @@ class ImageVisual:
             raise ValueError("floating point image values must be finite")
         if self.image.ndim == 3 and np.any((self.image < 0.0) | (self.image > 1.0)):
             raise ValueError("floating point RGB/RGBA image values must be in [0, 1]")
+        freeze_array_fields(self)
 
 
 @dataclass(frozen=True, slots=True)
@@ -851,6 +863,7 @@ class TextVisual:
         _validate_angles(self.rotation_rad, text_count, field_name="rotation_rad")
         if isinstance(self.z_order, bool) or not isinstance(self.z_order, int):
             raise TypeError("z_order must be an integer")
+        freeze_array_fields(self)
 
     def rgba_values(self) -> ColorArray:
         """Return one RGBA value per text item."""

@@ -276,7 +276,9 @@ def test_texture2d_resource_accepts_strict_rgba8_image():
 
     assert texture.id == "texture:checker"
     assert texture.format is Texture2DFormat.RGBA8
-    assert texture.image is image
+    np.testing.assert_array_equal(texture.image, image)
+    assert not np.shares_memory(texture.image, image)
+    assert not texture.image.flags.writeable
 
 
 def test_texture2d_resource_rejects_invalid_shape_dtype_and_duplicate_ids():

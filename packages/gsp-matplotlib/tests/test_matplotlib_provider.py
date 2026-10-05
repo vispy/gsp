@@ -509,12 +509,18 @@ def _query_scene(scene_id: str, x: float) -> gsp.Scene:
         visuals=(
             PointVisual(
                 id=f"visual:{scene_id.split(':')[-1]}",
+                coordinate_space=CoordinateSpace.DATA,
                 positions=np.asarray([[x, 0.0]], dtype=np.float32),
                 colors=np.asarray([[255, 0, 0, 255]], dtype=np.uint8),
                 sizes=4.0,
             ),
         ),
-        view2d=View2D(id=f"view:{scene_id.split(':')[-1]}", panel_id="panel:main"),
+        view2d=View2D(
+            id=f"view:{scene_id.split(':')[-1]}",
+            panel_id="panel:main",
+            x_range=(x - 1.0, x + 1.0),
+            y_range=(-1.0, 1.0),
+        ),
     )
 
 

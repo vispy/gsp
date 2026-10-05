@@ -1,13 +1,25 @@
 docs_host := env("GSP_DOCS_HOST", "")
 docs_port := env("GSP_DOCS_PORT", "8296")
+review_python := env("VISPY2_REVIEW_PYTHON", ".venv/bin/python")
+
+# Review this repo together with its sibling VisPy2 producer.
+[positional-arguments]
+review *args:
+    @"{{review_python}}" ../vispy2/tools/review.py "$@"
+
+review-setup:
+    @uv pip install --python "{{review_python}}" 'PySide6>=6.8,<7'
 
 lint:
-    @uvx --from 'ruff==0.16.1' ruff check packages conformance
-    @uvx --from 'ruff==0.16.1' ruff format --check packages conformance
+    @uvx --from 'ruff==0.16.1' ruff check packages conformance tools
+    @uvx --from 'ruff==0.16.1' ruff format --check packages conformance tools
 
 format:
-    @uvx --from 'ruff==0.16.1' ruff check --fix packages conformance
-    @uvx --from 'ruff==0.16.1' ruff format packages conformance
+    @uvx --from 'ruff==0.16.1' ruff check --fix packages conformance tools
+    @uvx --from 'ruff==0.16.1' ruff format packages conformance tools
+
+spec-check:
+    @uv run --no-project python tools/spec_traceability.py --check
 
 pre-commit-check: lint
     @git diff --check

@@ -1,5 +1,59 @@
 # Local bootstrap qualification
 
+## 2026-10-05 early refactor and frozen pre-RC3 gate
+
+GSP baseline: `2b4c7f78a4cfae9b793f13a6704a505152557621`.
+VisPy2 baseline: `fcafe1b82944b6a25716a65ec664b7ae0816a035`.
+Both candidate working trees contain the uncommitted audit changes. The manifest records their
+baseline commits, tracked diffs, and changed/untracked file hashes; it does not claim that the
+tested wheels equal either baseline commit.
+
+Datoviz remained clean at frozen main `066a7451195b38c5e95dcf7af7383b89ec5ec903`. Its Python
+bindings came from that checkout and its existing Linux native library came from
+`build/src/libdatoviz.so`, SHA-256
+`2b11f53ba0c891be99a3223747ec1837319580e5112ae11964e6d48c3e8549b1`.
+This is source-binding/native-build qualification of the pre-RC3 baseline; the native library was
+not rebuilt in this gate, and this is not qualification of a future published RC3 wheel or a
+released RC2 runtime. Datoviz code was not changed.
+
+| Gate | Result |
+|---|---|
+| Complete GSP source tests, including traceability | 898 passed |
+| Complete VisPy2 source tests | 229 passed |
+| Fresh installed wheels, tests outside both repositories | 898 GSP + 229 VisPy2 passed |
+| GSP wheel suite without source runtime bootstrap | 887 passed, 11 native-source tests skipped |
+| Strict mypy | 70 GSP + 11 VisPy2 source files clean |
+| Pinned Ruff, diff checks, justfile parsing | passed |
+| Specification destinations/IDs/evidence paths | passed; domain evidence is not per-rule coverage |
+| Strict GSP and VisPy2 documentation builds | passed |
+| Isolated-wheel gallery | 16 pixel-exact 800×600 captures validated |
+| Retained point updates, both backends | stable native identity, changed pixels, fresh HIT/MISS, atomic structural rejection |
+| Public Datoviz single-mesh FACE extension | triangle HIT, native-freshness MISS, stale pick-scene rejection |
+| New scientific grid, both backends | 2×2 panels, histogram, filled band, points, linked ranges, reference spans; colored content in each resolved panel |
+
+The installed-wheel tests explicitly proved all four project imports under the wheel environment's
+`site-packages`. The gallery additionally unpacks the four wheels into its own isolated project
+site, copies check scripts outside both repositories, and records the probed Datoviz binding and
+native-library hash. The GSP wheel suite used explicit source bootstrap for the eleven native
+tests; all GSP/adapter product code still came from wheels.
+
+| Candidate wheel | SHA-256 |
+|---|---|
+| `gsp_core-0.2.0a1-py3-none-any.whl` | `b028dbe48be42f9c47e0a8bf2ff5c58f0be67287eef25c718e1dd0ca987fb7c9` |
+| `gsp_matplotlib-0.2.0a1-py3-none-any.whl` | `40c8cac9ac31a3079717b1acc0042536b147b053df41346f8658323505580e32` |
+| `gsp_datoviz-0.2.0a1-py3-none-any.whl` | `841bea722ed25ba28658de2e5e7590228ffed7774a5cd1f9d0759152f5321058` |
+| `vispy2-0.2.0a1-py3-none-any.whl` | `515870995ffd2fa37ce01f605ef61d7c695a41dcc11cbd266e30f157d67ed7eb` |
+
+The full [qualification manifest](conformance/qualification/2026-10-05-pre-rc3.json) preserves
+capture hashes, script hashes, projection evidence, runtime provenance, and source-state hashes.
+Local wheels and captures are under `/tmp/gsp-audit-20261005.sauyiR/`.
+
+The new pinned-main Linux workflow is prepared with Mesa/lavapipe and an explicit paired GSP ref;
+it has not been executed on GitHub. Ordinary publication, native linked mouse navigation,
+legends, general command-server/batch execution, comprehensive mesh/texel/glyph picking, and
+the manual live-window review remain outside this gate. The next release gate is the actual RC3
+runtime wheel, followed by the manual review. No commit, push, tag, or publication was performed.
+
 ## ADR-0036 multi-panel migration gate
 
 Date: 2026-09-20

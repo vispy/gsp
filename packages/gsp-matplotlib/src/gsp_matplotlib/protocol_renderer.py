@@ -219,6 +219,63 @@ def render_protocol_scene_with_layout(
     layout_snapshot: ResolvedLayoutSnapshot | None = None,
     panel_id: str = "panel:default",
     panel_layout: PanelLayoutIntent | None = None,
+    visual_z_orders: Mapping[str, int] | None = None,
+) -> MatplotlibProtocolRenderResult:
+    """Render a scene, closing only internally allocated figures on failure."""
+    owns_figure = figure is None and axes is None
+    if owns_figure:
+        import matplotlib.pyplot as plt
+
+        figure = plt.figure()
+    try:
+        return _render_protocol_scene_with_layout(
+            visuals=visuals,
+            view=view,
+            view3d=view3d,
+            axis_guides=axis_guides,
+            panel_text_guides=panel_text_guides,
+            colorbar_guides=colorbar_guides,
+            color_scales=color_scales,
+            transform_resources=transform_resources,
+            snapshot_id=snapshot_id,
+            figure=figure,
+            axes=axes,
+            canvas_size=canvas_size,
+            output_dpi=output_dpi,
+            device_scale=device_scale,
+            view_snapshot_id=view_snapshot_id,
+            layout_snapshot=layout_snapshot,
+            panel_id=panel_id,
+            panel_layout=panel_layout,
+            visual_z_orders=visual_z_orders,
+        )
+    except BaseException:
+        if owns_figure:
+            plt.close(figure)
+        raise
+
+
+def _render_protocol_scene_with_layout(
+    *,
+    visuals: Iterable[ProtocolVisual],
+    view: View2D | None = None,
+    view3d: View3D | None = None,
+    axis_guides: Iterable[AxisGuide] = (),
+    panel_text_guides: Iterable[PanelTextGuide] = (),
+    colorbar_guides: Iterable[ColorbarGuide] = (),
+    color_scales: Mapping[str, ColorScale] | None = None,
+    transform_resources: Mapping[str, AffineTransform2DResource] | None = None,
+    snapshot_id: str = "layout:matplotlib",
+    figure: matplotlib.figure.Figure | None = None,
+    axes: matplotlib.axes.Axes | None = None,
+    canvas_size: CanvasSize | None = None,
+    output_dpi: float | None = None,
+    device_scale: float = 1.0,
+    view_snapshot_id: str | None = None,
+    layout_snapshot: ResolvedLayoutSnapshot | None = None,
+    panel_id: str = "panel:default",
+    panel_layout: PanelLayoutIntent | None = None,
+    visual_z_orders: Mapping[str, int] | None = None,
 ) -> MatplotlibProtocolRenderResult:
     """Render a protocol scene and report the resolved layout snapshot used."""
     axis_guide_tuple = tuple(axis_guides)
@@ -301,7 +358,7 @@ def render_protocol_scene_with_layout(
 
     color_scale_map = color_scales if color_scales is not None else {}
     for visual in visuals:
-        _render_protocol_visual(
+        rendered = _render_protocol_visual(
             axes,
             visual,
             view=view,
@@ -309,6 +366,12 @@ def render_protocol_scene_with_layout(
             transform_resources=transform_resources,
             view3d=view3d,
         )
+
+        if visual_z_orders is not None:
+            artists = rendered if isinstance(rendered, tuple) else (rendered,)
+            for artist in artists:
+                if isinstance(artist, matplotlib.artist.Artist):
+                    artist.set_zorder(visual_z_orders[visual.id])
 
     if view is not None:
         axes.set_xlim(view.x_range)

@@ -16,6 +16,7 @@ from gsp.backends import (
 _CAPABILITIES = frozenset(
     {
         "output.file",
+        "scene.update.points.v1",
         "visual.points",
         "visual.markers",
         "visual.segments",

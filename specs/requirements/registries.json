@@ -16,6 +16,8 @@
   ],
   "visual_families": ["point", "pixel", "sphere", "vector", "primitive", "marker", "segment", "path", "image", "text", "mesh"],
   "capabilities": [
+    "scene.update.points.v1",
+    "query.mesh.single.v1",
     "interaction.view2d.navigation.v1",
     "view3d.static.orthographic.v1",
     "view3d.static.perspective.v1",

@@ -7,6 +7,12 @@ the current experimental candidate rather than a package-index release.
 
 ### Protocol
 
+- Detached semantic array payloads from caller storage and made them permanently read-only.
+- Added optional `PointUpdateSession` (`scene.update.points.v1`) with stable resource identity,
+  complete structural validation, and per-scene revisions.
+- Exposed bounded Datoviz `MeshPickSession` (`query.mesh.single.v1`) through caller-owned sessions,
+  preserving explicit native freshness, stale results, and unsupported multi-visual cases.
+
 - Made `Panel` identity-only and moved outer allocation into required scene-level
   `layout.panel.explicit_rects.v1` intent.
 - Made resolved layout explicitly per-panel with one protocol-defined edge quantizer.
@@ -21,6 +27,11 @@ the current experimental candidate rather than a package-index release.
 - Added package long descriptions, SPDX licensing, project URLs, classifiers, and license files.
 
 ### Documentation
+
+- Repaired specification tables and requirement destinations; added automated traceability checks.
+- Split adapter orchestration from visual lowering, queries, capture, layout, and navigation.
+- Fixed Matplotlib attachment ordering, failed-render cleanup, and point footprint queries across
+  zoom, DPI, and device scale; corrected Datoviz semantic identity in individual query hits.
 
 - Designated the fresh-root GSP repository as the canonical GSP 0.2 specification home.
 - Corrected current native gallery and DATA-space image evidence.

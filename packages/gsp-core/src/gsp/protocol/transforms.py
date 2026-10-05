@@ -9,6 +9,7 @@ import numpy as np
 import numpy.typing as npt
 
 from .ids import validate_id
+from .ownership import freeze_array_fields
 
 
 class TransformKind(str, Enum):
@@ -85,6 +86,7 @@ class AffineTransform2DResource:
                 f"{TransformDiagnosticCode.TRANSFORM_UNSUPPORTED_KIND.value}: "
                 "only AFFINE_2D transforms are accepted in S027"
             )
+        freeze_array_fields(self)
 
     @property
     def inverse_matrix(self) -> npt.NDArray[np.float64]:
@@ -106,6 +108,7 @@ class InlineAffineTransform2D:
                 f"{TransformDiagnosticCode.TRANSFORM_UNSUPPORTED_KIND.value}: "
                 "only AFFINE_2D transforms are accepted in S027"
             )
+        freeze_array_fields(self)
 
     @property
     def inverse_matrix(self) -> npt.NDArray[np.float64]:

@@ -7,7 +7,6 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any
 
-
 EXPECTED_DATOVIZ_PACKAGE_ROOT = Path("/Users/cyrille/GIT/Viz/datoviz/datoviz")
 
 REQUIRED_DATOVIZ_VECTOR_SYMBOLS: tuple[str, ...] = (

@@ -155,7 +155,7 @@ def capability_snapshot() -> CapabilitySnapshot:
             PRIMITIVE_VISUAL_TRIANGLE_STRIP_CAPABILITY,
         ),
         output_formats=("png", "svg", "pdf"),
-        extensions=(TILED_IMAGE_EXTENSION_CAPABILITY,),
+        extensions=(TILED_IMAGE_EXTENSION_CAPABILITY, "scene.update.points.v1"),
         supports_extension_manifests=True,
         supports_virtual_data_sources=True,
         supports_tiled_image_sources=True,

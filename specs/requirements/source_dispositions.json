@@ -1,237 +1,237 @@
 {
   "dispositions": [
     {
-      "destination": "spec/current/backend-profiles.md",
+      "destination": "docs/specification/backend-profiles.md",
       "disposition": "move-to-backend-profile",
-      "notes": "Detailed source retained for provenance; GSP 0.2 target text and registry control future changes.",
+      "notes": "Legacy source paths are provenance only and do not assert local presence or normative authority; current authority is the linked chapter and requirement registry. Provenance/disposition record for legacy source material; this source path is archival and is not a promise that a local normative source file exists. Current authority is the linked chapter plus the requirement registry.",
       "source": "spec/backend_capabilities_visuals.md"
     },
     {
-      "destination": "spec/current/backend-profiles.md",
+      "destination": "docs/specification/backend-profiles.md",
       "disposition": "move-to-backend-profile",
-      "notes": "Detailed source retained for provenance; GSP 0.2 target text and registry control future changes.",
+      "notes": "Legacy source paths are provenance only and do not assert local presence or normative authority; current authority is the linked chapter and requirement registry. Provenance/disposition record for legacy source material; this source path is archival and is not a promise that a local normative source file exists. Current authority is the linked chapter plus the requirement registry.",
       "source": "spec/backends/datoviz.md"
     },
     {
-      "destination": "spec/current/backend-profiles.md",
+      "destination": "docs/specification/backend-profiles.md",
       "disposition": "move-to-backend-profile",
-      "notes": "Detailed source retained for provenance; GSP 0.2 target text and registry control future changes.",
+      "notes": "Legacy source paths are provenance only and do not assert local presence or normative authority; current authority is the linked chapter and requirement registry. Provenance/disposition record for legacy source material; this source path is archival and is not a promise that a local normative source file exists. Current authority is the linked chapter plus the requirement registry.",
       "source": "spec/backends/matplotlib.md"
     },
     {
-      "destination": "spec/current/views-layout.md",
+      "destination": "docs/specification/views-layout.md",
       "disposition": "migrated-to-normative-chapter",
-      "notes": "Detailed source retained for provenance; GSP 0.2 target text and registry control future changes.",
+      "notes": "Legacy source paths are provenance only and do not assert local presence or normative authority; current authority is the linked chapter and requirement registry. Provenance/disposition record for legacy source material; this source path is archival and is not a promise that a local normative source file exists. Current authority is the linked chapter plus the requirement registry.",
       "source": "spec/canvas_size.md"
     },
     {
-      "destination": "spec/current/capabilities.md",
+      "destination": "docs/specification/capabilities.md",
       "disposition": "migrated-to-normative-chapter",
-      "notes": "Detailed source retained for provenance; GSP 0.2 target text and registry control future changes.",
+      "notes": "Legacy source paths are provenance only and do not assert local presence or normative authority; current authority is the linked chapter and requirement registry. Provenance/disposition record for legacy source material; this source path is archival and is not a promise that a local normative source file exists. Current authority is the linked chapter plus the requirement registry.",
       "source": "spec/capabilities.md"
     },
     {
-      "destination": "spec/current/visuals.md",
+      "destination": "docs/specification/visuals.md",
       "disposition": "migrated-to-normative-chapter",
-      "notes": "Detailed source retained for provenance; GSP 0.2 target text and registry control future changes.",
+      "notes": "Legacy source paths are provenance only and do not assert local presence or normative authority; current authority is the linked chapter and requirement registry. Provenance/disposition record for legacy source material; this source path is archival and is not a promise that a local normative source file exists. Current authority is the linked chapter plus the requirement registry.",
       "source": "spec/color_mapping.md"
     },
     {
-      "destination": "spec/requirements/requirements.json",
+      "destination": "docs/specification/index.md",
       "disposition": "move-to-conformance",
-      "notes": "Detailed source retained for provenance; GSP 0.2 target text and registry control future changes.",
+      "notes": "Legacy source paths are provenance only and do not assert local presence or normative authority; current authority is the linked chapter and requirement registry. Provenance/disposition record for legacy source material; this source path is archival and is not a promise that a local normative source file exists. Current authority is the linked chapter plus the requirement registry.",
       "source": "spec/conformance-fixtures.md"
     },
     {
-      "destination": "spec/current/resources.md",
+      "destination": "docs/specification/resources.md",
       "disposition": "migrated-to-normative-chapter",
-      "notes": "Bounded preconfigured/tiled/HTTP-array rules migrated; general remote-data support is not claimed.",
+      "notes": "Legacy source paths are provenance only and do not assert local presence or normative authority; current authority is the linked chapter and requirement registry. Provenance/disposition record for legacy source material; this source path is archival and is not a promise that a local normative source file exists. Current authority is the linked chapter plus the requirement registry.",
       "source": "spec/data_sources.md"
     },
     {
-      "destination": "spec/current/backend-profiles.md",
+      "destination": "docs/specification/backend-profiles.md",
       "disposition": "move-to-backend-profile",
-      "notes": "Detailed source retained for provenance; GSP 0.2 target text and registry control future changes.",
+      "notes": "Legacy source paths are provenance only and do not assert local presence or normative authority; current authority is the linked chapter and requirement registry. Provenance/disposition record for legacy source material; this source path is archival and is not a promise that a local normative source file exists. Current authority is the linked chapter plus the requirement registry.",
       "source": "spec/datoviz_v04_api_boundary.md"
     },
     {
-      "destination": "spec/current/transports-extensions.md",
+      "destination": "docs/specification/transports-extensions.md",
       "disposition": "migrated-to-normative-chapter",
-      "notes": "Detailed source retained for provenance; GSP 0.2 target text and registry control future changes.",
+      "notes": "Legacy source paths are provenance only and do not assert local presence or normative authority; current authority is the linked chapter and requirement registry. Provenance/disposition record for legacy source material; this source path is archival and is not a promise that a local normative source file exists. Current authority is the linked chapter plus the requirement registry.",
       "source": "spec/extensions.md"
     },
     {
-      "destination": "spec/current/views-layout.md",
+      "destination": "docs/specification/views-layout.md",
       "disposition": "migrated-to-normative-chapter",
-      "notes": "Detailed source retained for provenance; GSP 0.2 target text and registry control future changes.",
+      "notes": "Legacy source paths are provenance only and do not assert local presence or normative authority; current authority is the linked chapter and requirement registry. Provenance/disposition record for legacy source material; this source path is archival and is not a promise that a local normative source file exists. Current authority is the linked chapter plus the requirement registry.",
       "source": "spec/layout.md"
     },
     {
-      "destination": "spec/current/views-layout.md",
+      "destination": "docs/specification/views-layout.md",
       "disposition": "migrated-to-normative-chapter",
-      "notes": "Detailed source retained for provenance; GSP 0.2 target text and registry control future changes.",
+      "notes": "Legacy source paths are provenance only and do not assert local presence or normative authority; current authority is the linked chapter and requirement registry. Provenance/disposition record for legacy source material; this source path is archival and is not a promise that a local normative source file exists. Current authority is the linked chapter plus the requirement registry.",
       "source": "spec/navigation.md"
     },
     {
-      "destination": "spec/current/protocol.md",
+      "destination": "docs/specification/protocol.md",
       "disposition": "migrated-to-normative-chapter",
-      "notes": "Detailed source retained for provenance; GSP 0.2 target text and registry control future changes.",
+      "notes": "Legacy source paths are provenance only and do not assert local presence or normative authority; current authority is the linked chapter and requirement registry. Provenance/disposition record for legacy source material; this source path is archival and is not a promise that a local normative source file exists. Current authority is the linked chapter plus the requirement registry.",
       "source": "spec/protocol.md"
     },
     {
-      "destination": "spec/current/queries.md",
+      "destination": "docs/specification/queries.md",
       "disposition": "migrated-to-normative-chapter",
-      "notes": "Detailed source retained for provenance; GSP 0.2 target text and registry control future changes.",
+      "notes": "Legacy source paths are provenance only and do not assert local presence or normative authority; current authority is the linked chapter and requirement registry. Provenance/disposition record for legacy source material; this source path is archival and is not a promise that a local normative source file exists. Current authority is the linked chapter plus the requirement registry.",
       "source": "spec/query.md"
     },
     {
-      "destination": "spec/current/resources.md",
+      "destination": "docs/specification/resources.md",
       "disposition": "migrated-to-normative-chapter",
-      "notes": "Detailed source retained for provenance; GSP 0.2 target text and registry control future changes.",
+      "notes": "Legacy source paths are provenance only and do not assert local presence or normative authority; current authority is the linked chapter and requirement registry. Provenance/disposition record for legacy source material; this source path is archival and is not a promise that a local normative source file exists. Current authority is the linked chapter plus the requirement registry.",
       "source": "spec/resources.md"
     },
     {
-      "destination": "spec/current/views-layout.md",
+      "destination": "docs/specification/views-layout.md",
       "disposition": "migrated-to-normative-chapter",
-      "notes": "Detailed source retained for provenance; GSP 0.2 target text and registry control future changes.",
+      "notes": "Legacy source paths are provenance only and do not assert local presence or normative authority; current authority is the linked chapter and requirement registry. Provenance/disposition record for legacy source material; this source path is archival and is not a promise that a local normative source file exists. Current authority is the linked chapter plus the requirement registry.",
       "source": "spec/transforms.md"
     },
     {
-      "destination": "spec/current/transports-extensions.md",
+      "destination": "docs/specification/transports-extensions.md",
       "disposition": "migrated-to-normative-chapter",
-      "notes": "Detailed source retained for provenance; GSP 0.2 target text and registry control future changes.",
+      "notes": "Legacy source paths are provenance only and do not assert local presence or normative authority; current authority is the linked chapter and requirement registry. Provenance/disposition record for legacy source material; this source path is archival and is not a promise that a local normative source file exists. Current authority is the linked chapter plus the requirement registry.",
       "source": "spec/transports.md"
     },
     {
-      "destination": "spec/current/views-layout.md",
+      "destination": "docs/specification/views-layout.md",
       "disposition": "migrated-to-normative-chapter",
-      "notes": "Detailed source retained for provenance; GSP 0.2 target text and registry control future changes.",
+      "notes": "Legacy source paths are provenance only and do not assert local presence or normative authority; current authority is the linked chapter and requirement registry. Provenance/disposition record for legacy source material; this source path is archival and is not a promise that a local normative source file exists. Current authority is the linked chapter plus the requirement registry.",
       "source": "spec/view3d.md"
     },
     {
-      "destination": "spec/current/views-layout.md",
+      "destination": "docs/specification/views-layout.md",
       "disposition": "migrated-to-normative-chapter",
-      "notes": "Detailed source retained for provenance; GSP 0.2 target text and registry control future changes.",
+      "notes": "Legacy source paths are provenance only and do not assert local presence or normative authority; current authority is the linked chapter and requirement registry. Provenance/disposition record for legacy source material; this source path is archival and is not a promise that a local normative source file exists. Current authority is the linked chapter plus the requirement registry.",
       "source": "spec/view3d_mesh_triangle_pick_geometry.md"
     },
     {
-      "destination": "spec/current/views-layout.md",
+      "destination": "docs/specification/views-layout.md",
       "disposition": "migrated-to-normative-chapter",
-      "notes": "Detailed source retained for provenance; GSP 0.2 target text and registry control future changes.",
+      "notes": "Legacy source paths are provenance only and do not assert local presence or normative authority; current authority is the linked chapter and requirement registry. Provenance/disposition record for legacy source material; this source path is archival and is not a promise that a local normative source file exists. Current authority is the linked chapter plus the requirement registry.",
       "source": "spec/view3d_mesh_triangle_picking.md"
     },
     {
-      "destination": "spec/current/views-layout.md",
+      "destination": "docs/specification/views-layout.md",
       "disposition": "migrated-to-normative-chapter",
-      "notes": "Detailed source retained for provenance; GSP 0.2 target text and registry control future changes.",
+      "notes": "Legacy source paths are provenance only and do not assert local presence or normative authority; current authority is the linked chapter and requirement registry. Provenance/disposition record for legacy source material; this source path is archival and is not a promise that a local normative source file exists. Current authority is the linked chapter plus the requirement registry.",
       "source": "spec/view3d_navigation.md"
     },
     {
-      "destination": "spec/current/scene.md",
+      "destination": "docs/specification/scene.md",
       "disposition": "move-to-producer-profile",
-      "notes": "Detailed source retained for provenance; GSP 0.2 target text and registry control future changes.",
+      "notes": "Legacy source paths are provenance only and do not assert local presence or normative authority; current authority is the linked chapter and requirement registry. Provenance/disposition record for legacy source material; this source path is archival and is not a promise that a local normative source file exists. Current authority is the linked chapter plus the requirement registry.",
       "source": "spec/vispy2/acceptance_s051.md"
     },
     {
-      "destination": "spec/current/scene.md",
+      "destination": "docs/specification/scene.md",
       "disposition": "move-to-producer-profile",
-      "notes": "Detailed source retained for provenance; GSP 0.2 target text and registry control future changes.",
+      "notes": "Legacy source paths are provenance only and do not assert local presence or normative authority; current authority is the linked chapter and requirement registry. Provenance/disposition record for legacy source material; this source path is archival and is not a promise that a local normative source file exists. Current authority is the linked chapter plus the requirement registry.",
       "source": "spec/vispy2/api.md"
     },
     {
-      "destination": "spec/current/scene.md",
+      "destination": "docs/specification/scene.md",
       "disposition": "move-to-producer-profile",
-      "notes": "Detailed source retained for provenance; GSP 0.2 target text and registry control future changes.",
+      "notes": "Legacy source paths are provenance only and do not assert local presence or normative authority; current authority is the linked chapter and requirement registry. Provenance/disposition record for legacy source material; this source path is archival and is not a promise that a local normative source file exists. Current authority is the linked chapter plus the requirement registry.",
       "source": "spec/vispy2/session_preview_s053.md"
     },
     {
-      "destination": "spec/current/scene.md",
+      "destination": "docs/specification/scene.md",
       "disposition": "move-to-producer-profile",
-      "notes": "Detailed source retained for provenance; GSP 0.2 target text and registry control future changes.",
+      "notes": "Legacy source paths are provenance only and do not assert local presence or normative authority; current authority is the linked chapter and requirement registry. Provenance/disposition record for legacy source material; this source path is archival and is not a promise that a local normative source file exists. Current authority is the linked chapter plus the requirement registry.",
       "source": "spec/vispy2_visual_api.md"
     },
     {
-      "destination": "spec/current/visuals.md",
+      "destination": "docs/specification/visuals.md",
       "disposition": "migrated-to-normative-chapter",
-      "notes": "Detailed source retained for provenance; GSP 0.2 target text and registry control future changes.",
+      "notes": "Legacy source paths are provenance only and do not assert local presence or normative authority; current authority is the linked chapter and requirement registry. Provenance/disposition record for legacy source material; this source path is archival and is not a promise that a local normative source file exists. Current authority is the linked chapter plus the requirement registry.",
       "source": "spec/visual_cross_cutting_rules.md"
     },
     {
-      "destination": "spec/current/visuals.md",
+      "destination": "docs/specification/visuals.md",
       "disposition": "migrated-to-normative-chapter",
-      "notes": "Detailed source retained for provenance; GSP 0.2 target text and registry control future changes.",
+      "notes": "Legacy source paths are provenance only and do not assert local presence or normative authority; current authority is the linked chapter and requirement registry. Provenance/disposition record for legacy source material; this source path is archival and is not a promise that a local normative source file exists. Current authority is the linked chapter plus the requirement registry.",
       "source": "spec/visual_families_v1.md"
     },
     {
-      "destination": "spec/requirements/requirements.json",
+      "destination": "docs/specification/index.md",
       "disposition": "move-to-conformance",
-      "notes": "Detailed source retained for provenance; GSP 0.2 target text and registry control future changes.",
+      "notes": "Legacy source paths are provenance only and do not assert local presence or normative authority; current authority is the linked chapter and requirement registry. Provenance/disposition record for legacy source material; this source path is archival and is not a promise that a local normative source file exists. Current authority is the linked chapter plus the requirement registry.",
       "source": "spec/visual_qa_harness.md"
     },
     {
-      "destination": "spec/current/visuals.md",
+      "destination": "docs/specification/visuals.md",
       "disposition": "migrated-to-normative-chapter",
-      "notes": "Detailed source retained for provenance; GSP 0.2 target text and registry control future changes.",
+      "notes": "Legacy source paths are provenance only and do not assert local presence or normative authority; current authority is the linked chapter and requirement registry. Provenance/disposition record for legacy source material; this source path is archival and is not a promise that a local normative source file exists. Current authority is the linked chapter plus the requirement registry.",
       "source": "spec/visuals/image.md"
     },
     {
-      "destination": "spec/current/visuals.md",
+      "destination": "docs/specification/visuals.md",
       "disposition": "migrated-to-normative-chapter",
-      "notes": "Detailed source retained for provenance; GSP 0.2 target text and registry control future changes.",
+      "notes": "Legacy source paths are provenance only and do not assert local presence or normative authority; current authority is the linked chapter and requirement registry. Provenance/disposition record for legacy source material; this source path is archival and is not a promise that a local normative source file exists. Current authority is the linked chapter plus the requirement registry.",
       "source": "spec/visuals/marker.md"
     },
     {
-      "destination": "spec/current/visuals.md",
+      "destination": "docs/specification/visuals.md",
       "disposition": "migrated-to-normative-chapter",
-      "notes": "Detailed source retained for provenance; GSP 0.2 target text and registry control future changes.",
+      "notes": "Legacy source paths are provenance only and do not assert local presence or normative authority; current authority is the linked chapter and requirement registry. Provenance/disposition record for legacy source material; this source path is archival and is not a promise that a local normative source file exists. Current authority is the linked chapter plus the requirement registry.",
       "source": "spec/visuals/mesh.md"
     },
     {
-      "destination": "spec/current/visuals.md",
+      "destination": "docs/specification/visuals.md",
       "disposition": "migrated-to-normative-chapter",
-      "notes": "Projected-NDC culling migrated; strict non-opaque 3D compositing remains outside GSP 0.2.",
+      "notes": "Legacy source paths are provenance only and do not assert local presence or normative authority; current authority is the linked chapter and requirement registry. Provenance/disposition record for legacy source material; this source path is archival and is not a promise that a local normative source file exists. Current authority is the linked chapter plus the requirement registry.",
       "source": "spec/visuals/mesh_face_culling_alpha_s050.md"
     },
     {
-      "destination": "spec/current/visuals.md",
+      "destination": "docs/specification/visuals.md",
       "disposition": "migrated-to-normative-chapter",
-      "notes": "Detailed source retained for provenance; GSP 0.2 target text and registry control future changes.",
+      "notes": "Legacy source paths are provenance only and do not assert local presence or normative authority; current authority is the linked chapter and requirement registry. Provenance/disposition record for legacy source material; this source path is archival and is not a promise that a local normative source file exists. Current authority is the linked chapter plus the requirement registry.",
       "source": "spec/visuals/mesh_flat_lambert_s039.md"
     },
     {
-      "destination": "spec/current/visuals.md",
+      "destination": "docs/specification/visuals.md",
       "disposition": "migrated-to-normative-chapter",
-      "notes": "Bounded unlit/flat-Lambert/Texture2D contracts migrated; general material graphs remain outside GSP 0.2.",
+      "notes": "Legacy source paths are provenance only and do not assert local presence or normative authority; current authority is the linked chapter and requirement registry. Provenance/disposition record for legacy source material; this source path is archival and is not a promise that a local normative source file exists. Current authority is the linked chapter plus the requirement registry.",
       "source": "spec/visuals/mesh_materials_s038.md"
     },
     {
-      "destination": "spec/current/visuals.md",
+      "destination": "docs/specification/visuals.md",
       "disposition": "migrated-to-normative-chapter",
-      "notes": "Detailed source retained for provenance; GSP 0.2 target text and registry control future changes.",
+      "notes": "Legacy source paths are provenance only and do not assert local presence or normative authority; current authority is the linked chapter and requirement registry. Provenance/disposition record for legacy source material; this source path is archival and is not a promise that a local normative source file exists. Current authority is the linked chapter plus the requirement registry.",
       "source": "spec/visuals/mesh_texture2d_unlit_s050.md"
     },
     {
-      "destination": "spec/current/visuals.md",
+      "destination": "docs/specification/visuals.md",
       "disposition": "migrated-to-normative-chapter",
-      "notes": "Detailed source retained for provenance; GSP 0.2 target text and registry control future changes.",
+      "notes": "Legacy source paths are provenance only and do not assert local presence or normative authority; current authority is the linked chapter and requirement registry. Provenance/disposition record for legacy source material; this source path is archival and is not a promise that a local normative source file exists. Current authority is the linked chapter plus the requirement registry.",
       "source": "spec/visuals/path.md"
     },
     {
-      "destination": "spec/current/visuals.md",
+      "destination": "docs/specification/visuals.md",
       "disposition": "migrated-to-normative-chapter",
-      "notes": "Detailed source retained for provenance; GSP 0.2 target text and registry control future changes.",
+      "notes": "Legacy source paths are provenance only and do not assert local presence or normative authority; current authority is the linked chapter and requirement registry. Provenance/disposition record for legacy source material; this source path is archival and is not a promise that a local normative source file exists. Current authority is the linked chapter plus the requirement registry.",
       "source": "spec/visuals/point.md"
     },
     {
-      "destination": "spec/current/visuals.md",
+      "destination": "docs/specification/visuals.md",
       "disposition": "migrated-to-normative-chapter",
-      "notes": "Detailed source retained for provenance; GSP 0.2 target text and registry control future changes.",
+      "notes": "Legacy source paths are provenance only and do not assert local presence or normative authority; current authority is the linked chapter and requirement registry. Provenance/disposition record for legacy source material; this source path is archival and is not a promise that a local normative source file exists. Current authority is the linked chapter plus the requirement registry.",
       "source": "spec/visuals/segment.md"
     },
     {
-      "destination": "spec/current/visuals.md",
+      "destination": "docs/specification/visuals.md",
       "disposition": "migrated-to-normative-chapter",
-      "notes": "Detailed source retained for provenance; GSP 0.2 target text and registry control future changes.",
+      "notes": "Legacy source paths are provenance only and do not assert local presence or normative authority; current authority is the linked chapter and requirement registry. Provenance/disposition record for legacy source material; this source path is archival and is not a promise that a local normative source file exists. Current authority is the linked chapter plus the requirement registry.",
       "source": "spec/visuals/text.md"
     }
   ],

@@ -4,7 +4,11 @@
 
 Visuals declare whether coordinates are data values or plot-normalized device coordinates. Conversion between spaces is defined by the associated view and transform records, not by backend convention.
 
-| Space | Meaning | |---|---| | `DATA` | Values interpreted by the attached `View2D` or `View3D`. | | `NDC` | Plot normalized device coordinates after data/view mapping; x and y use `[-1,+1]`. | | logical pixels | Resolved panel/layout lengths with top-left screen origin where a screen coordinate is required. |
+| Space | Meaning
+|---|---|
+| `DATA` | Values interpreted by the attached `View2D` or `View3D`.
+| `NDC` | Plot normalized device coordinates after data/view mapping; x and y use `[-1,+1]`.
+| logical pixels | Resolved panel/layout lengths with top-left screen origin where a screen coordinate is required. |
 
 `GSP-VIEW-001`: a record declares its coordinate space. No implementation may guess DATA versus NDC from numeric range, array rank, or backend defaults.
 
@@ -16,7 +20,11 @@ The accepted 2D transform is finite and invertible. Inline and named transforms 
 
 ### AffineTransform2D
 
-| Field | Type | Required/default | |---|---|---| | `id` | identifier | named resource only | | `matrix` | finite float `(3,3)` | required; homogeneous last row valid | | `placement` | client/server/backend policy | negotiated; semantics unchanged |
+| Field | Type | Required/default
+|---|---|---|
+| `id` | identifier | named resource only
+| `matrix` | finite float `(3,3)` | required; homogeneous last row valid
+| `placement` | client/server/backend policy | negotiated; semantics unchanged |
 
 Matrices act on homogeneous column vectors. Composition order is explicitly listed from source coordinates toward the view. `GSP-VIEW-003`: singular matrices are invalid in the core invertible contract. Inline and referenced matrices with equal values produce equal forward/inverse semantics.
 
@@ -26,7 +34,12 @@ Matrices act on homogeneous column vectors. Composition order is explicitly list
 
 ### View2D
 
-| Field | Type | Required/default | |---|---|---| | `id` | identifier | required | | `panel_id` | panel identifier | required | | `x_range`, `y_range` | two finite unequal numbers | default `(-1,+1)`; order preserved | | `aspect_policy` | auto | fixed bounded core policy |
+| Field | Type | Required/default
+|---|---|---|
+| `id` | identifier | required
+| `panel_id` | panel identifier | required
+| `x_range`, `y_range` | two finite unequal numbers | default `(-1,+1)`; order preserved
+| `aspect_policy` | auto | fixed bounded core policy |
 
 For x range `(x0,x1)`, `ndc_x = -1 + 2*(x-x0)/(x1-x0)`; y is analogous. Reversed ranges require no special case beyond preserving denominator sign.
 
@@ -34,7 +47,12 @@ Clipping is not a view property. Each `VisualAttachment` owns a `clip_scope`: `p
 
 `GSP-VIEW-004`: navigation actions name the view, base revision, parameters, and expected snapshot where applicable. An accepted action returns the new view and revision. Stale base revision rejects without mutation.
 
-| Action | Parameters | |---|---| | pan | finite data or normalized delta under the action schema | | zoom-about | positive finite scale and anchor | | set-view | complete valid ranges | | reset | accepted initial view identity/revision |
+| Action | Parameters
+|---|---|
+| pan | finite data or normalized delta under the action schema
+| zoom-about | positive finite scale and anchor
+| set-view | complete valid ranges
+| reset | accepted initial view identity/revision |
 
 ## View3D
 
@@ -44,13 +62,20 @@ Strict opaque depth applies only to advertised supported mesh and view combinati
 
 ### Camera3D
 
-| Field | Type | Validation | |---|---|---| | `eye` | finite vec3 | distinct from target | | `target` | finite vec3 | defines forward direction with eye | | `up` | finite vec3 | non-zero and not collinear with forward |
+| Field | Type | Validation
+|---|---|---|
+| `eye` | finite vec3 | distinct from target
+| `target` | finite vec3 | defines forward direction with eye
+| `up` | finite vec3 | non-zero and not collinear with forward |
 
 The canonical basis is derived deterministically from eye, target, and up. `GSP-VIEW-005`: camera records are values, not mutable native controllers. Backend-native interaction must either emit canonical actions/state or remain explicitly non-canonical review behavior.
 
 ### Projections
 
-| Projection | Fields | Validation | |---|---|---| | orthographic | x/y bounds, near/far | finite non-degenerate bounds; ordered near/far | | perspective | vertical FOV degrees, near/far | `0 < fov < 180`; positive ordered clipping range |
+| Projection | Fields | Validation
+|---|---|---|
+| orthographic | x/y bounds, near/far | finite non-degenerate bounds; ordered near/far
+| perspective | vertical FOV degrees, near/far | `0 < fov < 180`; positive ordered clipping range |
 
 `GSP-VIEW-006`: a view projection snapshot ID changes when camera, projection, relevant layout, or coordinate mapping changes. Query rays and mesh picking name the snapshot they use.
 
@@ -72,7 +97,13 @@ Resolved layout records concrete logical-pixel rectangles for every panel, plot 
 
 ### ResolvedLayoutSnapshot
 
-| Field | Type | Meaning | |---|---|---| | `id` | identifier | Snapshot identity. | | `canvas_logical_size` | positive width/height | Reference layout space. | | `device_scale` | positive finite x/y scale | Logical→framebuffer conversion. | | `output_dpi` | positive finite value or null | Output metadata where meaningful. | | `panels` | tuple of `ResolvedPanelLayout` | Exactly one entry per resolved panel. |
+| Field | Type | Meaning
+|---|---|---|
+| `id` | identifier | Snapshot identity.
+| `canvas_logical_size` | positive width/height | Reference layout space.
+| `device_scale` | positive finite x/y scale | Logical→framebuffer conversion.
+| `output_dpi` | positive finite value or null | Output metadata where meaningful.
+| `panels` | tuple of `ResolvedPanelLayout` | Exactly one entry per resolved panel. |
 
 Each `ResolvedPanelLayout` contains `panel_id`, positive `panel_rect_px`, positive contained `plot_rect_px`, optional view identity, transforms, guide boxes, layers, and diagnostics. There is no canonical singular top-level panel or plot rectangle.
 

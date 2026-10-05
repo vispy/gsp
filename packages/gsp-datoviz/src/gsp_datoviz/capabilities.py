@@ -4,26 +4,20 @@ from __future__ import annotations
 
 import ctypes
 import os
-from pathlib import Path
 import subprocess
+from pathlib import Path
 from types import ModuleType
 from typing import Any, Literal, cast
 
 from gsp.protocol import (
-    AxisProviderCapability,
-    CapabilitySnapshot,
-    FontLayoutCapability,
-    GuideLayoutCapability,
-    LayoutCapability,
     MESH3D_DATA_VIEW3D_CAPABILITY,
     MESH3D_NDC_CAPABILITY,
     MESH3D_OPAQUE_DEPTH_CAPABILITY,
     MESH_MATERIAL_FLAT_LAMBERT_CAPABILITY,
     MESH_MATERIAL_TEXTURE2D_UNLIT_CAPABILITY,
-    MESH_TEXTURE_FILTER_LINEAR_CAPABILITY,
-    MESH_NORMALS_FACE3D_CAPABILITY,
     MESH_NORMAL_GENERATION_FACE_FLAT_CAPABILITY,
-    NavigationPlacement,
+    MESH_NORMALS_FACE3D_CAPABILITY,
+    MESH_TEXTURE_FILTER_LINEAR_CAPABILITY,
     PIXEL_VISUAL_CAPABILITY,
     PIXEL_VISUAL_EXACT_LOGICAL_SIZE_CAPABILITY,
     PIXEL_VISUAL_POSITIONS3D_DATA_VIEW3D_CAPABILITY,
@@ -34,14 +28,26 @@ from gsp.protocol import (
     PRIMITIVE_VISUAL_POINT_LIST_CAPABILITY,
     PRIMITIVE_VISUAL_TRIANGLE_LIST_CAPABILITY,
     PRIMITIVE_VISUAL_TRIANGLE_STRIP_CAPABILITY,
+    QUERY_VIEW3D_MESH_TRIANGLE_PICK_CAPABILITY,
+    QUERY_VIEW3D_RAY_READBACK_CAPABILITY,
     SPHERE_VISUAL_ANALYTIC_SURFACE_DEPTH_CAPABILITY,
     SPHERE_VISUAL_CAPABILITY,
     TEXT_VISUAL_BILLBOARD3D_CAPABILITY,
     VECTOR_VISUAL_POSITIONS3D_DATA_VIEW3D_CAPABILITY,
     VECTOR_VISUAL_STRAIGHT_CAPABILITY,
     VECTOR_VISUAL_TRIANGLE_HEAD_CAPABILITY,
-    QUERY_VIEW3D_MESH_TRIANGLE_PICK_CAPABILITY,
-    QUERY_VIEW3D_RAY_READBACK_CAPABILITY,
+    VIEW3D_LIGHT_AMBIENT_CAPABILITY,
+    VIEW3D_LIGHT_DIRECTIONAL_CAPABILITY,
+    VIEW3D_NAVIGATION_ORBIT_PAN_ZOOM_CAPABILITY,
+    VIEW3D_RETAINED_DATA_SPACE_VISUALS_CAPABILITY,
+    VIEW3D_STATIC_ORTHOGRAPHIC_CAPABILITY,
+    VIEW3D_STATIC_PERSPECTIVE_CAPABILITY,
+    AxisProviderCapability,
+    CapabilitySnapshot,
+    FontLayoutCapability,
+    GuideLayoutCapability,
+    LayoutCapability,
+    NavigationPlacement,
     QueryCoordinateSpace,
     QueryHitPolicy,
     QueryLayoutCapability,
@@ -52,23 +58,17 @@ from gsp.protocol import (
     QueryTargetCapability,
     QueryTargetKind,
     RenderTargetCapability,
-    TransportKind,
     TransformPlacement,
-    VIEW3D_LIGHT_AMBIENT_CAPABILITY,
-    VIEW3D_LIGHT_DIRECTIONAL_CAPABILITY,
-    VIEW3D_NAVIGATION_ORBIT_PAN_ZOOM_CAPABILITY,
-    VIEW3D_RETAINED_DATA_SPACE_VISUALS_CAPABILITY,
-    VIEW3D_STATIC_ORTHOGRAPHIC_CAPABILITY,
-    VIEW3D_STATIC_PERSPECTIVE_CAPABILITY,
+    TransportKind,
 )
-from gsp_datoviz.query import datoviz_v04_query_binding_diagnostics
+
 from gsp_datoviz.latest_api_contract import (
     datoviz_primitive_api_diagnostics,
     datoviz_text_api_diagnostics,
     datoviz_vector_api_diagnostics,
 )
+from gsp_datoviz.query import datoviz_v04_query_binding_diagnostics
 from gsp_datoviz.v04_import import bootstrap_datoviz_v04_source
-
 
 DATOVIZ_V04_AXIS_PROVIDER = "datoviz.v04.panel_axis.wip"
 DATOVIZ_GRID_CLIP_TO_PLOT_RECT_COMMIT = "9ba820489fae8b1da4a3debd5d19decd0a8c2533"
@@ -244,6 +244,30 @@ _DVZ_CAPABILITY_FIELDS = (
     "query_profile_u64_rg32",
     "query_profile_u64_2xr32",
 )
+
+
+SINGLE_MESH_PICK_CAPABILITY = "query.mesh.single.v1"
+
+
+def datoviz_single_mesh_pick_ready(dvz: Any) -> bool:
+    """Require public FACE identity and retained View3D bindings for bounded picks."""
+    if (
+        dvz is None
+        or datoviz_v04_query_binding_diagnostics(dvz)
+        or _datoviz_v04_view3d_binding_diagnostics(dvz)
+        or datoviz_v04_view3d_retained_data_diagnostics(dvz)
+        or not hasattr(dvz, "DVZ_SCENE_TARGET_FACE")
+        or not hasattr(dvz, "DVZ_QUERY_CAPABILITY_FACE")
+    ):
+        return False
+    result_type = getattr(dvz, "DvzQueryResult", None)
+    if not callable(result_type):
+        return False
+    try:
+        result = result_type()
+        return hasattr(result, "face_id") and hasattr(result, "freshness_serial")
+    except Exception:
+        return False
 
 
 def datoviz_v04_capability_snapshot(
@@ -742,6 +766,13 @@ def gsp_capability_snapshot_from_datoviz(
             "for the bounded single-mesh path; strict query.view3d.mesh_triangle_pick.v1 "
             "remains unadvertised until multi-visual frontmost depth is resolved"
         )
+        if datoviz_single_mesh_pick_ready(dvz):
+            metadata["single_mesh_pick_support"] = (
+                "query.mesh.single.v1: a sole visible DATA-space MeshVisual in the whole scene, "
+                "attached to the selected View3D panel; "
+                "native FACE identity and freshness only, with explicit diagnostics; "
+                "general strict multi-visual mesh picking remains unadvertised"
+            )
         metadata["s044_mesh_triangle_pick_diagnostics"] = (
             "pick.unsupported.scene_occluder",
             "pick.unsupported.native_state_only",
@@ -783,6 +814,10 @@ def gsp_capability_snapshot_from_datoviz(
         query_capabilities=query_capabilities,
         view3d_capabilities=view3d_capabilities,
         output_formats=output_formats,
+        extensions=(
+            "scene.update.points.v1",
+            *((SINGLE_MESH_PICK_CAPABILITY,) if datoviz_single_mesh_pick_ready(dvz) else ()),
+        ),
         supported_data_source_localities=(),
         supported_credential_policies=("none",),
         cache_modes=("none",),

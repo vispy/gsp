@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from gsp.backends import (
+    PLUGIN_API_VERSION,
     BackendDescriptor,
     BackendInfo,
     BackendProvider,
     BackendSession,
-    PLUGIN_API_VERSION,
     SessionRequest,
 )
 
@@ -30,6 +30,8 @@ _DECLARED_CAPABILITIES = frozenset(
         "texture.filter.nearest",
         "texture.filter.linear",
         "query.panel",
+        "scene.update.points.v1",
+        "query.mesh.single.v1",
     }
 )
 
@@ -71,6 +73,8 @@ class DatovizProvider:
             )
         snapshot = datoviz_v04_capability_snapshot(dvz)
         capabilities = set(_DECLARED_CAPABILITIES)
+        if not getattr(snapshot, "supports_extension", lambda _kind: False)("query.mesh.single.v1"):
+            capabilities.discard("query.mesh.single.v1")
         capabilities.update(snapshot.transform_capabilities)
         capabilities.update(snapshot.navigation_capabilities)
         capabilities.update(snapshot.view3d_capabilities)

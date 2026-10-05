@@ -1,5 +1,7 @@
 # Architecture - GSP / VisPy2
 
+This document describes the target architecture. The project charter and this architecture govern boundaries; current protocol semantics live in `docs/specification/` and accepted ADRs. Historical GSP_API/VisPy2 source references recorded in migration inventories are provenance, not current authority. Backend and producer support claims are limited to the evidence in the current profiles and conformance suite.
+
 ## Layered target
 
 ```text
@@ -59,6 +61,15 @@ Data plane:
 - cache and LOD policies.
 
 ## Capability model
+
+Internal modules may be refactored early while preserving the public protocol and producer
+boundary. Semantic snapshots own immutable array values; an explicit borrowed buffer resource
+keeps its separately declared lifetime contract. Adapter orchestration, native bindings, visual
+lowering, layout, navigation, queries, and capture belong in separate modules.
+
+The optional `scene.update.points.v1` local session extension replaces values of an existing
+point visual without reallocating native resources. It does not implement the general command
+server or remote transport contract. See [ADR-0037](adrs/ADR-0037-owned-snapshots-retained-point-updates.md).
 
 Every backend exposes a `CapabilitySnapshot`. Planning/adaptation happens before execution. Unsupported behavior must produce one of:
 

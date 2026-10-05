@@ -7,13 +7,13 @@ from math import sqrt
 from typing import Any, cast
 
 from gsp.protocol import (
+    VIEW3D_QUERY_PAYLOAD_KIND,
+    LogicalCoordinateRegion,
     QueryCoordinateSpace,
     QueryRequest,
     QueryResult,
     QueryStatus,
-    LogicalCoordinateRegion,
     ResolvedLayoutSnapshot,
-    VIEW3D_QUERY_PAYLOAD_KIND,
     View3D,
     View3DDiagnosticCode,
     View3DProjectionSnapshot,
@@ -23,7 +23,6 @@ from gsp.protocol import (
     plot_logical_px_to_plot_ndc,
     unproject_view3d_plot_ndc_point,
 )
-
 
 DVZ_QUERY_STATUS_UNKNOWN = 0
 DVZ_QUERY_STATUS_HIT = 1
@@ -141,13 +140,17 @@ _FAILED_STATUSES = {
 }
 
 
-def decode_dvz_query_result(raw: Any) -> QueryResult:
+def decode_dvz_query_result(
+    raw: Any, *, native_metadata: dict[str, int] | None = None
+) -> QueryResult:
     """Decode a Datoviz v0.4 `DvzQueryResult`-shaped object into GSP query output.
 
     The decoder accepts ctypes objects and simple synthetic objects with matching field names. It
     does not advertise Datoviz query support by itself; capability promotion is a later runtime
     parity step once execution and application-id mapping are validated.
     """
+    if native_metadata is not None and hasattr(raw, "freshness_serial"):
+        native_metadata["freshness_serial"] = _int_field(raw, "freshness_serial")
     request_id = f"query:datoviz-{_field(raw, 'request_id', 0)}"
     panel_coordinate = _panel_coordinate(raw)
     status = _int_field(raw, "status", DVZ_QUERY_STATUS_UNKNOWN)

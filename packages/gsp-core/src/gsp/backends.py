@@ -12,7 +12,9 @@ from .protocol import (
     CapabilitySnapshot,
     QueryRequest,
     QueryResult,
+    PointVisual,
     ResolvedLayoutSnapshot,
+    View3DMeshTrianglePickRequest,
 )
 
 BACKEND_ENTRY_POINT_GROUP = "gsp.backends"
@@ -97,6 +99,23 @@ class BackendSession(Protocol):
     def close(self) -> None: ...
     def __enter__(self) -> "BackendSession": ...
     def __exit__(self, exc_type: object, exc: object, traceback: object) -> None: ...
+
+
+@runtime_checkable
+class PointUpdateSession(Protocol):
+    """Optional local extension advertised as ``scene.update.points.v1``."""
+
+    def update_point(self, visual: PointVisual, *, scene_id: str | None = None) -> int: ...
+    def scene_revision(self, scene_id: str | None = None) -> int: ...
+
+
+@runtime_checkable
+class MeshPickSession(Protocol):
+    """Optional bounded native extension advertised as ``query.mesh.single.v1``."""
+
+    def pick_mesh(
+        self, request: View3DMeshTrianglePickRequest, *, scene_id: str | None = None
+    ) -> QueryResult: ...
 
 
 @runtime_checkable

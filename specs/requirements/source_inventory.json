@@ -332,304 +332,354 @@
       "path": "adr/ADR-0035-gsp-vispy2-repository-separation.md"
     },
     {
-      "classification": "detailed-normative-source",
+      "classification": "legacy-source-provenance",
       "destination": "spec/current/visuals.md",
       "disposition": "migration-required",
-      "path": "spec/backend_capabilities_visuals.md"
+      "path": "spec/backend_capabilities_visuals.md",
+      "notes": "Provenance record for legacy source material; the recorded source path may not exist in this repository and does not assert a local normative document."
     },
     {
-      "classification": "detailed-normative-source",
+      "classification": "legacy-source-provenance",
       "destination": "spec/current/capabilities.md",
       "disposition": "migration-required",
-      "path": "spec/backends/datoviz.md"
+      "path": "spec/backends/datoviz.md",
+      "notes": "Provenance record for legacy source material; the recorded source path may not exist in this repository and does not assert a local normative document."
     },
     {
-      "classification": "detailed-normative-source",
+      "classification": "legacy-source-provenance",
       "destination": "spec/current/capabilities.md",
       "disposition": "migration-required",
-      "path": "spec/backends/matplotlib.md"
+      "path": "spec/backends/matplotlib.md",
+      "notes": "Provenance record for legacy source material; the recorded source path may not exist in this repository and does not assert a local normative document."
     },
     {
-      "classification": "detailed-normative-source",
+      "classification": "legacy-source-provenance",
       "destination": "spec/current/views-layout.md",
       "disposition": "migration-required",
-      "path": "spec/canvas_size.md"
+      "path": "spec/canvas_size.md",
+      "notes": "Provenance record for legacy source material; the recorded source path may not exist in this repository and does not assert a local normative document."
     },
     {
-      "classification": "detailed-normative-source",
+      "classification": "legacy-source-provenance",
       "destination": "spec/current/capabilities.md",
       "disposition": "migration-required",
-      "path": "spec/capabilities.md"
+      "path": "spec/capabilities.md",
+      "notes": "Provenance record for legacy source material; the recorded source path may not exist in this repository and does not assert a local normative document."
     },
     {
-      "classification": "detailed-normative-source",
+      "classification": "legacy-source-provenance",
       "destination": "spec/current/visuals.md",
       "disposition": "migration-required",
-      "path": "spec/color_mapping.md"
+      "path": "spec/color_mapping.md",
+      "notes": "Provenance record for legacy source material; the recorded source path may not exist in this repository and does not assert a local normative document."
     },
     {
-      "classification": "detailed-normative-source",
+      "classification": "legacy-source-provenance",
       "destination": "spec/current/protocol.md",
       "disposition": "migration-required",
-      "path": "spec/conformance-fixtures.md"
+      "path": "spec/conformance-fixtures.md",
+      "notes": "Provenance record for legacy source material; the recorded source path may not exist in this repository and does not assert a local normative document."
     },
     {
-      "classification": "consolidation-draft",
-      "destination": "spec/current/backend-profiles.md",
+      "classification": "legacy-source-provenance",
+      "destination": "docs/specification/backend-profiles.md",
       "disposition": "target",
-      "path": "spec/current/backend-profiles.md"
+      "path": "spec/current/backend-profiles.md",
+      "notes": "Provenance record for legacy source material; the recorded source path may not exist in this repository and does not assert a local normative document."
     },
     {
-      "classification": "consolidation-draft",
-      "destination": "spec/current/capabilities.md",
+      "classification": "legacy-source-provenance",
+      "destination": "docs/specification/capabilities.md",
       "disposition": "target",
-      "path": "spec/current/capabilities.md"
+      "path": "spec/current/capabilities.md",
+      "notes": "Provenance record for legacy source material; the recorded source path may not exist in this repository and does not assert a local normative document."
     },
     {
-      "classification": "consolidation-draft",
+      "classification": "legacy-source-provenance",
+      "destination": "docs/specification/index.md",
+      "disposition": "target",
+      "path": "spec/current/index.md",
+      "notes": "Provenance record for legacy source material; the recorded source path may not exist in this repository and does not assert a local normative document."
+    },
+    {
+      "classification": "legacy-source-provenance",
+      "destination": "docs/specification/protocol.md",
+      "disposition": "target",
+      "path": "spec/current/protocol.md",
+      "notes": "Provenance record for legacy source material; the recorded source path may not exist in this repository and does not assert a local normative document."
+    },
+    {
+      "classification": "legacy-source-provenance",
+      "destination": "docs/specification/queries.md",
+      "disposition": "target",
+      "path": "spec/current/queries.md",
+      "notes": "Provenance record for legacy source material; the recorded source path may not exist in this repository and does not assert a local normative document."
+    },
+    {
+      "classification": "legacy-source-provenance",
+      "destination": "docs/specification/registries.md",
+      "disposition": "target",
+      "path": "spec/current/registries.md",
+      "notes": "Provenance record for legacy source material; the recorded source path may not exist in this repository and does not assert a local normative document."
+    },
+    {
+      "classification": "legacy-source-provenance",
+      "destination": "docs/specification/resources.md",
+      "disposition": "target",
+      "path": "spec/current/resources.md",
+      "notes": "Provenance record for legacy source material; the recorded source path may not exist in this repository and does not assert a local normative document."
+    },
+    {
+      "classification": "legacy-source-provenance",
+      "destination": "docs/specification/scene.md",
+      "disposition": "target",
+      "path": "spec/current/scene.md",
+      "notes": "Provenance record for legacy source material; the recorded source path may not exist in this repository and does not assert a local normative document."
+    },
+    {
+      "classification": "legacy-source-provenance",
+      "destination": "docs/specification/transports-extensions.md",
+      "disposition": "target",
+      "path": "spec/current/transports-extensions.md",
+      "notes": "Provenance record for legacy source material; the recorded source path may not exist in this repository and does not assert a local normative document."
+    },
+    {
+      "classification": "legacy-source-provenance",
+      "destination": "docs/specification/views-layout.md",
+      "disposition": "target",
+      "path": "spec/current/views-layout.md",
+      "notes": "Provenance record for legacy source material; the recorded source path may not exist in this repository and does not assert a local normative document."
+    },
+    {
+      "classification": "legacy-source-provenance",
+      "destination": "docs/specification/visuals.md",
+      "disposition": "target",
+      "path": "spec/current/visuals.md",
+      "notes": "Provenance record for legacy source material; the recorded source path may not exist in this repository and does not assert a local normative document."
+    },
+    {
+      "classification": "legacy-source-provenance",
+      "destination": "spec/current/resources.md",
+      "disposition": "migration-required",
+      "path": "spec/data_sources.md",
+      "notes": "Provenance record for legacy source material; the recorded source path may not exist in this repository and does not assert a local normative document."
+    },
+    {
+      "classification": "legacy-source-provenance",
       "destination": "spec/current/index.md",
-      "disposition": "target",
-      "path": "spec/current/index.md"
-    },
-    {
-      "classification": "consolidation-draft",
-      "destination": "spec/current/protocol.md",
-      "disposition": "target",
-      "path": "spec/current/protocol.md"
-    },
-    {
-      "classification": "consolidation-draft",
-      "destination": "spec/current/queries.md",
-      "disposition": "target",
-      "path": "spec/current/queries.md"
-    },
-    {
-      "classification": "consolidation-draft",
-      "destination": "spec/current/registries.md",
-      "disposition": "target",
-      "path": "spec/current/registries.md"
-    },
-    {
-      "classification": "consolidation-draft",
-      "destination": "spec/current/resources.md",
-      "disposition": "target",
-      "path": "spec/current/resources.md"
-    },
-    {
-      "classification": "consolidation-draft",
-      "destination": "spec/current/scene.md",
-      "disposition": "target",
-      "path": "spec/current/scene.md"
-    },
-    {
-      "classification": "consolidation-draft",
-      "destination": "spec/current/transports-extensions.md",
-      "disposition": "target",
-      "path": "spec/current/transports-extensions.md"
-    },
-    {
-      "classification": "consolidation-draft",
-      "destination": "spec/current/views-layout.md",
-      "disposition": "target",
-      "path": "spec/current/views-layout.md"
-    },
-    {
-      "classification": "consolidation-draft",
-      "destination": "spec/current/visuals.md",
-      "disposition": "target",
-      "path": "spec/current/visuals.md"
-    },
-    {
-      "classification": "detailed-normative-source",
-      "destination": "spec/current/resources.md",
       "disposition": "migration-required",
-      "path": "spec/data_sources.md"
+      "path": "spec/datoviz_v04_api_boundary.md",
+      "notes": "Provenance record for legacy source material; the recorded source path may not exist in this repository and does not assert a local normative document."
     },
     {
-      "classification": "detailed-normative-source",
-      "destination": "spec/current/index.md",
-      "disposition": "migration-required",
-      "path": "spec/datoviz_v04_api_boundary.md"
-    },
-    {
-      "classification": "detailed-normative-source",
+      "classification": "legacy-source-provenance",
       "destination": "spec/current/transports-extensions.md",
       "disposition": "migration-required",
-      "path": "spec/extensions.md"
+      "path": "spec/extensions.md",
+      "notes": "Provenance record for legacy source material; the recorded source path may not exist in this repository and does not assert a local normative document."
     },
     {
-      "classification": "detailed-normative-source",
+      "classification": "legacy-source-provenance",
       "destination": "spec/current/views-layout.md",
       "disposition": "migration-required",
-      "path": "spec/layout.md"
+      "path": "spec/layout.md",
+      "notes": "Provenance record for legacy source material; the recorded source path may not exist in this repository and does not assert a local normative document."
     },
     {
-      "classification": "detailed-normative-source",
+      "classification": "legacy-source-provenance",
       "destination": "spec/current/views-layout.md",
       "disposition": "migration-required",
-      "path": "spec/navigation.md"
+      "path": "spec/navigation.md",
+      "notes": "Provenance record for legacy source material; the recorded source path may not exist in this repository and does not assert a local normative document."
     },
     {
-      "classification": "detailed-normative-source",
+      "classification": "legacy-source-provenance",
       "destination": "spec/current/protocol.md",
       "disposition": "migration-required",
-      "path": "spec/protocol.md"
+      "path": "spec/protocol.md",
+      "notes": "Provenance record for legacy source material; the recorded source path may not exist in this repository and does not assert a local normative document."
     },
     {
-      "classification": "detailed-normative-source",
+      "classification": "legacy-source-provenance",
       "destination": "spec/current/queries.md",
       "disposition": "migration-required",
-      "path": "spec/query.md"
+      "path": "spec/query.md",
+      "notes": "Provenance record for legacy source material; the recorded source path may not exist in this repository and does not assert a local normative document."
     },
     {
-      "classification": "detailed-normative-source",
+      "classification": "legacy-source-provenance",
       "destination": "spec/current/resources.md",
       "disposition": "migration-required",
-      "path": "spec/resources.md"
+      "path": "spec/resources.md",
+      "notes": "Provenance record for legacy source material; the recorded source path may not exist in this repository and does not assert a local normative document."
     },
     {
-      "classification": "detailed-normative-source",
+      "classification": "legacy-source-provenance",
       "destination": "spec/current/views-layout.md",
       "disposition": "migration-required",
-      "path": "spec/transforms.md"
+      "path": "spec/transforms.md",
+      "notes": "Provenance record for legacy source material; the recorded source path may not exist in this repository and does not assert a local normative document."
     },
     {
-      "classification": "detailed-normative-source",
+      "classification": "legacy-source-provenance",
       "destination": "spec/current/transports-extensions.md",
       "disposition": "migration-required",
-      "path": "spec/transports.md"
+      "path": "spec/transports.md",
+      "notes": "Provenance record for legacy source material; the recorded source path may not exist in this repository and does not assert a local normative document."
     },
     {
-      "classification": "detailed-normative-source",
+      "classification": "legacy-source-provenance",
       "destination": "spec/current/views-layout.md",
       "disposition": "migration-required",
-      "path": "spec/view3d.md"
+      "path": "spec/view3d.md",
+      "notes": "Provenance record for legacy source material; the recorded source path may not exist in this repository and does not assert a local normative document."
     },
     {
-      "classification": "detailed-normative-source",
+      "classification": "legacy-source-provenance",
       "destination": "spec/current/views-layout.md",
       "disposition": "migration-required",
-      "path": "spec/view3d_mesh_triangle_pick_geometry.md"
+      "path": "spec/view3d_mesh_triangle_pick_geometry.md",
+      "notes": "Provenance record for legacy source material; the recorded source path may not exist in this repository and does not assert a local normative document."
     },
     {
-      "classification": "detailed-normative-source",
+      "classification": "legacy-source-provenance",
       "destination": "spec/current/views-layout.md",
       "disposition": "migration-required",
-      "path": "spec/view3d_mesh_triangle_picking.md"
+      "path": "spec/view3d_mesh_triangle_picking.md",
+      "notes": "Provenance record for legacy source material; the recorded source path may not exist in this repository and does not assert a local normative document."
     },
     {
-      "classification": "detailed-normative-source",
+      "classification": "legacy-source-provenance",
       "destination": "spec/current/views-layout.md",
       "disposition": "migration-required",
-      "path": "spec/view3d_navigation.md"
+      "path": "spec/view3d_navigation.md",
+      "notes": "Provenance record for legacy source material; the recorded source path may not exist in this repository and does not assert a local normative document."
     },
     {
-      "classification": "detailed-normative-source",
+      "classification": "legacy-source-provenance",
       "destination": "spec/current/scene.md",
       "disposition": "migration-required",
-      "path": "spec/vispy2/acceptance_s051.md"
+      "path": "spec/vispy2/acceptance_s051.md",
+      "notes": "Provenance record for legacy source material; the recorded source path may not exist in this repository and does not assert a local normative document."
     },
     {
-      "classification": "detailed-normative-source",
+      "classification": "legacy-source-provenance",
       "destination": "spec/current/scene.md",
       "disposition": "migration-required",
-      "path": "spec/vispy2/api.md"
+      "path": "spec/vispy2/api.md",
+      "notes": "Provenance record for legacy source material; the recorded source path may not exist in this repository and does not assert a local normative document."
     },
     {
-      "classification": "detailed-normative-source",
+      "classification": "legacy-source-provenance",
       "destination": "spec/current/scene.md",
       "disposition": "migration-required",
-      "path": "spec/vispy2/session_preview_s053.md"
+      "path": "spec/vispy2/session_preview_s053.md",
+      "notes": "Provenance record for legacy source material; the recorded source path may not exist in this repository and does not assert a local normative document."
     },
     {
-      "classification": "detailed-normative-source",
+      "classification": "legacy-source-provenance",
       "destination": "spec/current/visuals.md",
       "disposition": "migration-required",
-      "path": "spec/vispy2_visual_api.md"
+      "path": "spec/vispy2_visual_api.md",
+      "notes": "Provenance record for legacy source material; the recorded source path may not exist in this repository and does not assert a local normative document."
     },
     {
-      "classification": "detailed-normative-source",
+      "classification": "legacy-source-provenance",
       "destination": "spec/current/visuals.md",
       "disposition": "migration-required",
-      "path": "spec/visual_cross_cutting_rules.md"
+      "path": "spec/visual_cross_cutting_rules.md",
+      "notes": "Provenance record for legacy source material; the recorded source path may not exist in this repository and does not assert a local normative document."
     },
     {
-      "classification": "detailed-normative-source",
+      "classification": "legacy-source-provenance",
       "destination": "spec/current/visuals.md",
       "disposition": "migration-required",
-      "path": "spec/visual_families_v1.md"
+      "path": "spec/visual_families_v1.md",
+      "notes": "Provenance record for legacy source material; the recorded source path may not exist in this repository and does not assert a local normative document."
     },
     {
-      "classification": "detailed-normative-source",
+      "classification": "legacy-source-provenance",
       "destination": "spec/current/visuals.md",
       "disposition": "migration-required",
-      "path": "spec/visual_qa_harness.md"
+      "path": "spec/visual_qa_harness.md",
+      "notes": "Provenance record for legacy source material; the recorded source path may not exist in this repository and does not assert a local normative document."
     },
     {
-      "classification": "detailed-normative-source",
+      "classification": "legacy-source-provenance",
       "destination": "spec/current/visuals.md",
       "disposition": "migration-required",
-      "path": "spec/visuals/image.md"
+      "path": "spec/visuals/image.md",
+      "notes": "Provenance record for legacy source material; the recorded source path may not exist in this repository and does not assert a local normative document."
     },
     {
-      "classification": "detailed-normative-source",
+      "classification": "legacy-source-provenance",
       "destination": "spec/current/visuals.md",
       "disposition": "migration-required",
-      "path": "spec/visuals/marker.md"
+      "path": "spec/visuals/marker.md",
+      "notes": "Provenance record for legacy source material; the recorded source path may not exist in this repository and does not assert a local normative document."
     },
     {
-      "classification": "detailed-normative-source",
+      "classification": "legacy-source-provenance",
       "destination": "spec/current/visuals.md",
       "disposition": "migration-required",
-      "path": "spec/visuals/mesh.md"
+      "path": "spec/visuals/mesh.md",
+      "notes": "Provenance record for legacy source material; the recorded source path may not exist in this repository and does not assert a local normative document."
     },
     {
-      "classification": "detailed-normative-source",
+      "classification": "legacy-source-provenance",
       "destination": "spec/current/visuals.md",
       "disposition": "migration-required",
-      "path": "spec/visuals/mesh_face_culling_alpha_s050.md"
+      "path": "spec/visuals/mesh_face_culling_alpha_s050.md",
+      "notes": "Provenance record for legacy source material; the recorded source path may not exist in this repository and does not assert a local normative document."
     },
     {
-      "classification": "detailed-normative-source",
+      "classification": "legacy-source-provenance",
       "destination": "spec/current/visuals.md",
       "disposition": "migration-required",
-      "path": "spec/visuals/mesh_flat_lambert_s039.md"
+      "path": "spec/visuals/mesh_flat_lambert_s039.md",
+      "notes": "Provenance record for legacy source material; the recorded source path may not exist in this repository and does not assert a local normative document."
     },
     {
-      "classification": "detailed-normative-source",
+      "classification": "legacy-source-provenance",
       "destination": "spec/current/visuals.md",
       "disposition": "migration-required",
-      "path": "spec/visuals/mesh_materials_s038.md"
+      "path": "spec/visuals/mesh_materials_s038.md",
+      "notes": "Provenance record for legacy source material; the recorded source path may not exist in this repository and does not assert a local normative document."
     },
     {
-      "classification": "detailed-normative-source",
+      "classification": "legacy-source-provenance",
       "destination": "spec/current/visuals.md",
       "disposition": "migration-required",
-      "path": "spec/visuals/mesh_texture2d_unlit_s050.md"
+      "path": "spec/visuals/mesh_texture2d_unlit_s050.md",
+      "notes": "Provenance record for legacy source material; the recorded source path may not exist in this repository and does not assert a local normative document."
     },
     {
-      "classification": "detailed-normative-source",
+      "classification": "legacy-source-provenance",
       "destination": "spec/current/visuals.md",
       "disposition": "migration-required",
-      "path": "spec/visuals/path.md"
+      "path": "spec/visuals/path.md",
+      "notes": "Provenance record for legacy source material; the recorded source path may not exist in this repository and does not assert a local normative document."
     },
     {
-      "classification": "detailed-normative-source",
+      "classification": "legacy-source-provenance",
       "destination": "spec/current/visuals.md",
       "disposition": "migration-required",
-      "path": "spec/visuals/point.md"
+      "path": "spec/visuals/point.md",
+      "notes": "Provenance record for legacy source material; the recorded source path may not exist in this repository and does not assert a local normative document."
     },
     {
-      "classification": "detailed-normative-source",
+      "classification": "legacy-source-provenance",
       "destination": "spec/current/visuals.md",
       "disposition": "migration-required",
-      "path": "spec/visuals/segment.md"
+      "path": "spec/visuals/segment.md",
+      "notes": "Provenance record for legacy source material; the recorded source path may not exist in this repository and does not assert a local normative document."
     },
     {
-      "classification": "detailed-normative-source",
+      "classification": "legacy-source-provenance",
       "destination": "spec/current/visuals.md",
       "disposition": "migration-required",
-      "path": "spec/visuals/text.md"
+      "path": "spec/visuals/text.md",
+      "notes": "Provenance record for legacy source material; the recorded source path may not exist in this repository and does not assert a local normative document."
     }
   ]
 }

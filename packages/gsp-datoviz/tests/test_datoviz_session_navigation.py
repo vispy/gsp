@@ -144,6 +144,7 @@ def _session(
     session._renderers = []
     session._renderer_scenes = {}
     session._scene_renderers = {}
+    session._scene_revisions = {}
     session._latest_scene_id = None
     session._interactive_view2d_renderers = set()
     session._interactive_view3d_renderers = set()

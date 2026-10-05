@@ -20,18 +20,25 @@ from gsp.protocol import (
     QueryResult,
     QueryScope,
     ResolvedLayoutSnapshot,
-    CanvasSize,
     ClipScope,
     TextVisual,
     VIEW3D_QUERY_PAYLOAD_KIND,
     View2D,
     View3D,
-    resolve_panel_layout_intent,
     resolve_view3d_projection_snapshot,
 )
 
+from ._live_view2d import _MatplotlibLiveView2DBinding
+from ._point_update import update_point_collection
+from ._native_point_query import native_point_query
+from ._panel_state import (
+    _combine_panel_results,
+    _matplotlib_panel_bounds,
+    _scene_panel_ids,
+    _snapshot_for_panel,
+    _validate_consumed_layout_scene,
+)
 from .capabilities import capability_snapshot
-from .layout import resolve_matplotlib_layout_snapshot
 from .layout_query import query_resolved_layout_guides
 from .protocol_query import (
     QueryVisualEntry,
@@ -52,105 +59,6 @@ _QUERYABLE_VISUAL_TYPES = (
 )
 
 
-class _MatplotlibLiveView2DBinding:
-    """Synchronize native axes limits with one canonical session-owned View2D."""
-
-    def __init__(
-        self,
-        *,
-        result: MatplotlibProtocolRenderResult,
-        scene: Scene,
-        view: View2D,
-        axes: Any,
-    ) -> None:
-        self.result = result
-        self.scene = scene
-        self.view = view
-        self.axes = axes
-        self.revision_index = 1
-        self.view2d_revision = "view-rev:matplotlib-live-1"
-        self.view_snapshot_id = (
-            result.view_snapshot_id_for_panel(view.panel_id) or "view-snapshot:matplotlib-live-1"
-        )
-        self._applying_canonical_view = False
-        self._closed = False
-        self._callback_ids = (
-            axes.callbacks.connect("xlim_changed", self._on_native_limits),
-            axes.callbacks.connect("ylim_changed", self._on_native_limits),
-        )
-        _set_panel_view_snapshot_id(result, view.panel_id, self.view_snapshot_id)
-
-    @property
-    def closed(self) -> bool:
-        return self._closed
-
-    def apply_canonical_view(self, view: View2D) -> None:
-        """Apply accepted canonical state without recursively accepting callbacks."""
-        if self._closed:
-            raise RuntimeError("live View2D binding is closed")
-        if view.id != self.view.id or view.panel_id != self.view.panel_id:
-            raise ValueError("canonical View2D target does not match live binding")
-        self._applying_canonical_view = True
-        try:
-            self.axes.set_xlim(view.x_range)
-            self.axes.set_ylim(view.y_range)
-        finally:
-            self._applying_canonical_view = False
-        self._accept_view(view)
-
-    def close(self) -> None:
-        if self._closed:
-            return
-        for callback_id in self._callback_ids:
-            self.axes.callbacks.disconnect(callback_id)
-        self._closed = True
-
-    def _on_native_limits(self, _axes: Any) -> None:
-        if self._closed or self._applying_canonical_view:
-            return
-        axes = self.axes
-        x0, x1 = axes.get_xlim()
-        y0, y1 = axes.get_ylim()
-        self._accept_view(
-            replace(
-                self.view,
-                x_range=(float(x0), float(x1)),
-                y_range=(float(y0), float(y1)),
-            )
-        )
-
-    def _accept_view(self, view: View2D) -> None:
-        if view == self.view:
-            return
-        self.revision_index += 1
-        self.view = view
-        self.view2d_revision = f"view-rev:matplotlib-live-{self.revision_index}"
-        self.view_snapshot_id = f"view-snapshot:matplotlib-live-{self.revision_index}"
-        if not self.result.layout_was_consumed:
-            panel_snapshot = resolve_matplotlib_layout_snapshot(
-                self.result.figure,
-                self.axes,
-                snapshot_id=f"layout:matplotlib-live-{self.revision_index}",
-                panel_id=view.panel_id,
-                view=view,
-                axis_guides=tuple(
-                    guide for guide in self.scene.axis_guides if guide.view_id == view.id
-                ),
-                panel_text_guides=tuple(
-                    guide
-                    for guide in self.scene.panel_text_guides
-                    if guide.panel_id == view.panel_id
-                ),
-                panel_rect_px=self.result.layout_snapshot.panel(view.panel_id).panel_rect_px,
-            )
-            object.__setattr__(
-                self.result,
-                "layout_snapshot",
-                _replace_resolved_panel(self.result.layout_snapshot, panel_snapshot),
-            )
-        _set_panel_view_snapshot_id(self.result, view.panel_id, self.view_snapshot_id)
-
-
 class MatplotlibSession:
     backend_name = "matplotlib"
 
@@ -161,6 +69,7 @@ class MatplotlibSession:
         self._results: list[MatplotlibProtocolRenderResult] = []
         self._scene_results: dict[str, tuple[Scene, MatplotlibProtocolRenderResult]] = {}
         self._latest_scene_id: str | None = None
+        self._scene_revisions: dict[str, int] = {}
         self._view2d_bindings: dict[Any, _MatplotlibLiveView2DBinding] = {}
         self._closed = False
 
@@ -196,56 +105,98 @@ class MatplotlibSession:
             )
         _validate_consumed_layout_scene(scene, layout_snapshot)
         panel_results: list[MatplotlibProtocolRenderResult] = []
-        figure = None
-        for panel in scene.panels:
-            active_view = scene.primary_view_for_panel(panel.id)
-            panel_result = render_protocol_scene_with_layout(
-                visuals=scene.visuals_for_panel(panel.id),
-                view=active_view if isinstance(active_view, View2D) else None,
-                view3d=active_view if isinstance(active_view, View3D) else None,
-                axis_guides=tuple(
-                    guide
-                    for guide in scene.axis_guides
-                    if active_view is not None and guide.view_id == active_view.id
-                ),
-                panel_text_guides=tuple(
-                    guide for guide in scene.panel_text_guides if guide.panel_id == panel.id
-                ),
-                colorbar_guides=tuple(
-                    guide for guide in scene.colorbar_guides if guide.panel_id == panel.id
-                ),
-                color_scales={item.id: item for item in scene.color_scales},
-                transform_resources={item.id: item for item in scene.transforms},
-                canvas_size=scene.canvas_size,
-                output_dpi=output_dpi,
-                layout_snapshot=(
-                    _snapshot_for_panel(layout_snapshot, panel.id)
-                    if layout_snapshot is not None
-                    else None
-                ),
-                panel_id=panel.id,
-                panel_layout=scene.panel_layout,
-                figure=figure,
-            )
-            figure = panel_result.figure
-            panel_results.append(panel_result)
+        import matplotlib.pyplot as plt
 
-        result = _combine_panel_results(panel_results, consumed=layout_snapshot is not None)
+        figure = plt.figure()
+        bindings: dict[Any, _MatplotlibLiveView2DBinding] = {}
+        try:
+            for panel in scene.panels:
+                active_view = scene.primary_view_for_panel(panel.id)
+                panel_result = render_protocol_scene_with_layout(
+                    visuals=scene.visuals_for_panel(panel.id),
+                    view=active_view if isinstance(active_view, View2D) else None,
+                    view3d=active_view if isinstance(active_view, View3D) else None,
+                    axis_guides=tuple(
+                        guide
+                        for guide in scene.axis_guides
+                        if active_view is not None and guide.view_id == active_view.id
+                    ),
+                    panel_text_guides=tuple(
+                        guide for guide in scene.panel_text_guides if guide.panel_id == panel.id
+                    ),
+                    colorbar_guides=tuple(
+                        guide for guide in scene.colorbar_guides if guide.panel_id == panel.id
+                    ),
+                    color_scales={item.id: item for item in scene.color_scales},
+                    transform_resources={item.id: item for item in scene.transforms},
+                    canvas_size=scene.canvas_size,
+                    output_dpi=output_dpi,
+                    layout_snapshot=(
+                        _snapshot_for_panel(layout_snapshot, panel.id)
+                        if layout_snapshot is not None
+                        else None
+                    ),
+                    panel_id=panel.id,
+                    panel_layout=scene.panel_layout,
+                    figure=figure,
+                    visual_z_orders={item.visual_id: item.z_order for item in scene.attachments},
+                )
+                figure = panel_result.figure
+                panel_results.append(panel_result)
+
+            result = _combine_panel_results(panel_results, consumed=layout_snapshot is not None)
+            for view2d in scene.views2d:
+                axes = result.axes_for_panel(view2d.panel_id)
+                bindings[axes] = _MatplotlibLiveView2DBinding(
+                    result=result,
+                    scene=scene,
+                    view=view2d,
+                    axes=axes,
+                )
+            if target is not None:
+                savefig_kwargs.setdefault("dpi", result.figure.dpi)
+                result.figure.savefig(target, **savefig_kwargs)
+        except BaseException:
+            for binding in bindings.values():
+                binding.close()
+            plt.close(figure)
+            raise
         self._results.append(result)
         self._scene_results[scene.id] = (scene, result)
+        self._scene_revisions[scene.id] = self._scene_revisions.get(scene.id, -1) + 1
         self._latest_scene_id = scene.id
-        for view2d in scene.views2d:
-            axes = result.axes_for_panel(view2d.panel_id)
-            self._view2d_bindings[axes] = _MatplotlibLiveView2DBinding(
-                result=result,
-                scene=scene,
-                view=view2d,
-                axes=axes,
-            )
-        if target is not None:
-            savefig_kwargs.setdefault("dpi", result.figure.dpi)
-            result.figure.savefig(target, **savefig_kwargs)
+        self._view2d_bindings.update(bindings)
         return result
+
+    def scene_revision(self, scene_id: str | None = None) -> int:
+        """Return the revision of the latest successful render/update of a scene."""
+        self._require_open()
+        scene, _ = self._query_target(scene_id)
+        return self._scene_revisions[scene.id]
+
+    def update_point(self, visual: PointVisual, *, scene_id: str | None = None) -> int:
+        """Update point positions, colors and sizes without recreating graphics resources."""
+        self._require_open()
+        if not isinstance(visual, PointVisual):
+            raise TypeError("update_point() requires a PointVisual")
+        scene, result = self._query_target(scene_id)
+        binding = (
+            self._view2d_bindings.get(
+                result.axes_for_panel(scene.attachment_for_visual(visual.id).panel_id)
+            )
+            if any(item.id == visual.id for item in scene.visuals)
+            else None
+        )
+        updated = update_point_collection(
+            scene, result, visual, view=binding.view if binding is not None else None
+        )
+        self._scene_results[scene.id] = (updated, result)
+        for binding in self._view2d_bindings.values():
+            if binding.result is result:
+                binding.scene = updated
+        self._scene_revisions[scene.id] += 1
+        result.figure.canvas.draw_idle()
+        return self._scene_revisions[scene.id]
 
     def display(
         self,
@@ -290,6 +241,9 @@ class MatplotlibSession:
         panel_layout = _snapshot_for_panel(result.layout_snapshot, request.panel_id)
         panel_bounds = _matplotlib_panel_bounds(result, request.panel_id)
         active_view = scene.primary_view_for_panel(request.panel_id)
+        binding = self._view2d_bindings.get(result.axes_for_panel(request.panel_id))
+        if binding is not None:
+            active_view = binding.view
 
         if (
             isinstance(active_view, View3D)
@@ -327,7 +281,21 @@ class MatplotlibSession:
                     f"families: {unsupported}",
                 )
 
-        decision = self.capabilities.adapt_query_request(effective_request)
+        point_only = all(
+            isinstance(visual, PointVisual) for visual in scene.visuals_for_panel(request.panel_id)
+        )
+        # Native point footprints cover both coordinate spaces. Keep the global
+        # capability conservative for mixed scenes using standalone evaluators.
+        decision_request = effective_request
+        if (
+            point_only
+            and effective_request.scope is QueryScope.DATA
+            and not effective_request.requested_extension_payload_kinds
+        ):
+            decision_request = replace(
+                effective_request, scope=QueryScope.DATA, coordinate_space=QueryCoordinateSpace.DATA
+            )
+        decision = self.capabilities.adapt_query_request(decision_request)
         if decision.outcome is not AdaptationOutcome.ACCEPT:
             return unsupported_query_result(
                 effective_request,
@@ -335,7 +303,20 @@ class MatplotlibSession:
             )
 
         entries = tuple(
-            QueryVisualEntry(visual, z_order=scene.attachment_for_visual(visual.id).z_order)
+            QueryVisualEntry(
+                visual,
+                z_order=scene.attachment_for_visual(visual.id).z_order,
+                native_query=(
+                    native_point_query(
+                        scene,
+                        result,
+                        visual,
+                        active_view if isinstance(active_view, View2D) else None,
+                    )
+                    if isinstance(visual, PointVisual)
+                    else None
+                ),
+            )
             for visual in scene.visuals_for_panel(request.panel_id)
             if isinstance(visual, _QUERYABLE_VISUAL_TYPES)
         )
@@ -400,164 +381,3 @@ class MatplotlibSession:
 
     def __exit__(self, exc_type: object, exc: object, traceback: object) -> None:
         self.close()
-
-
-def _scene_panel_ids(scene: Scene) -> frozenset[str]:
-    return frozenset(panel.id for panel in scene.panels)
-
-
-def _matplotlib_panel_bounds(
-    result: MatplotlibProtocolRenderResult,
-    panel_id: str,
-) -> tuple[float, float, float, float]:
-    rect = result.layout_snapshot.panel(panel_id).plot_rect_px
-    return (rect.x, rect.x + rect.width, rect.y, rect.y + rect.height)
-
-
-def _snapshot_for_panel(snapshot: ResolvedLayoutSnapshot, panel_id: str) -> ResolvedLayoutSnapshot:
-    """Project one panel out of a scene-wide snapshot for singular helpers."""
-    return ResolvedLayoutSnapshot(
-        snapshot_id=snapshot.snapshot_id,
-        render_target=snapshot.render_target,
-        panels=(snapshot.panel(panel_id),),
-    )
-
-
-def _combine_panel_results(
-    panel_results: list[MatplotlibProtocolRenderResult], *, consumed: bool
-) -> MatplotlibProtocolRenderResult:
-    if not panel_results:
-        raise ValueError("Matplotlib rendering requires at least one panel")
-    first = panel_results[0]
-    render_target = first.layout_snapshot.render_target
-    if any(result.layout_snapshot.render_target != render_target for result in panel_results[1:]):
-        raise ValueError("Matplotlib panel passes resolved inconsistent render targets")
-    snapshot_ids = {result.layout_snapshot.snapshot_id for result in panel_results}
-    snapshot_id = next(iter(snapshot_ids)) if len(snapshot_ids) == 1 else "layout:matplotlib"
-    snapshot = ResolvedLayoutSnapshot(
-        snapshot_id=snapshot_id,
-        render_target=render_target,
-        panels=tuple(result.layout_snapshot.only_panel() for result in panel_results),
-    )
-    panel_axes = tuple(
-        (result.layout_snapshot.only_panel().panel_id, result.axes) for result in panel_results
-    )
-    panel_view_snapshot_ids = tuple(
-        (result.layout_snapshot.only_panel().panel_id, result.view_snapshot_id)
-        for result in panel_results
-    )
-    panel_view3d_projection_snapshots = tuple(
-        (
-            result.layout_snapshot.only_panel().panel_id,
-            result.view3d_projection_snapshot,
-        )
-        for result in panel_results
-    )
-    return MatplotlibProtocolRenderResult(
-        figure=first.figure,
-        axes=first.axes,
-        layout_snapshot=snapshot,
-        resolved_canvas=first.resolved_canvas,
-        view_snapshot_id=first.view_snapshot_id if len(panel_results) == 1 else None,
-        view3d_projection_snapshot=(
-            first.view3d_projection_snapshot if len(panel_results) == 1 else None
-        ),
-        layout_was_consumed=consumed,
-        panel_axes=panel_axes,
-        panel_view_snapshot_ids=panel_view_snapshot_ids,
-        panel_view3d_projection_snapshots=panel_view3d_projection_snapshots,
-    )
-
-
-def _replace_resolved_panel(
-    current: ResolvedLayoutSnapshot, replacement: ResolvedLayoutSnapshot
-) -> ResolvedLayoutSnapshot:
-    panel = replacement.only_panel()
-    return ResolvedLayoutSnapshot(
-        snapshot_id=replacement.snapshot_id,
-        render_target=current.render_target,
-        panels=tuple(
-            panel if existing.panel_id == panel.panel_id else existing
-            for existing in current.panels
-        ),
-    )
-
-
-def _set_panel_view_snapshot_id(
-    result: MatplotlibProtocolRenderResult,
-    panel_id: str,
-    snapshot_id: str | None,
-) -> None:
-    updated = tuple(
-        (candidate, snapshot_id if candidate == panel_id else existing)
-        for candidate, existing in result.panel_view_snapshot_ids
-    )
-    object.__setattr__(result, "panel_view_snapshot_ids", updated)
-    if len(updated) == 1:
-        object.__setattr__(result, "view_snapshot_id", snapshot_id)
-
-
-def _validate_consumed_layout_scene(
-    scene: Scene, layout_snapshot: ResolvedLayoutSnapshot | None
-) -> None:
-    if layout_snapshot is None:
-        return
-    if not isinstance(layout_snapshot, ResolvedLayoutSnapshot):
-        raise TypeError("layout_snapshot must be a ResolvedLayoutSnapshot")
-    _validate_scene_canvas_target(scene.canvas_size, layout_snapshot)
-    scene_panel_ids = tuple(panel.id for panel in scene.panels)
-    snapshot_panel_ids = tuple(panel.panel_id for panel in layout_snapshot.panels)
-    if set(scene_panel_ids) != set(snapshot_panel_ids):
-        raise ValueError("layout_snapshot panels do not match the consumed scene panels")
-    for panel in scene.panels:
-        active_view = scene.primary_view_for_panel(panel.id)
-        resolved_panel = layout_snapshot.panel(panel.id)
-        if active_view is not None:
-            if resolved_panel.view_id != active_view.id:
-                raise ValueError("layout_snapshot view_id does not match the active scene view")
-        elif resolved_panel.view_id is not None:
-            raise ValueError("viewless scene panel cannot consume a view-bound layout_snapshot")
-    expected = resolve_panel_layout_intent(scene.panel_layout, layout_snapshot.render_target)
-    expected_rects = {panel.panel_id: panel.panel_rect_px for panel in expected}
-    if any(
-        expected_rects.get(panel.id) != layout_snapshot.panel(panel.id).panel_rect_px
-        for panel in scene.panels
-    ):
-        raise ValueError("layout_snapshot panel_rect_px does not match the scene panel allocation")
-    if scene.axis_guides or scene.colorbar_guides:
-        raise ValueError(
-            "consumed Matplotlib layout does not prove native axis/colorbar guide geometry"
-        )
-    for panel in scene.panels:
-        panel_guides = tuple(
-            guide for guide in scene.panel_text_guides if guide.panel_id == panel.id
-        )
-        title_guides = tuple(guide for guide in panel_guides if guide.role.value == "title")
-        if len(title_guides) != len(panel_guides) or len(title_guides) > 1:
-            raise ValueError("consumed Matplotlib layout supports at most one title per panel")
-        title_box_ids = {box.guide_id for box in layout_snapshot.panel(panel.id).title_boxes}
-        if title_guides and title_guides[0].id not in title_box_ids:
-            raise ValueError("supplied title guide requires matching resolved title geometry")
-
-
-def _validate_scene_canvas_target(
-    canvas_size: CanvasSize | None, snapshot: ResolvedLayoutSnapshot
-) -> None:
-    if canvas_size is None:
-        return
-    target = snapshot.render_target
-    resolved = canvas_size.resolve(
-        output_dpi=canvas_size.reference_dpi * target.device_scale,
-        device_scale=target.device_scale,
-    )
-    if (
-        resolved.canvas_width_px != target.logical_width_px
-        or resolved.canvas_height_px != target.logical_height_px
-        or resolved.framebuffer_width != target.framebuffer_width_px
-        or resolved.framebuffer_height != target.framebuffer_height_px
-        or resolved.device_scale_x != target.device_scale
-        or resolved.device_scale_y != target.device_scale
-    ):
-        raise ValueError(
-            "scene canvas policy does not resolve to the consumed layout render target"
-        )

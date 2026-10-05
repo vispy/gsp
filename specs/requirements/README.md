@@ -25,9 +25,9 @@ deleting its history.
 
 ## Files
 
-- `source_inventory.json` classifies every specification, ADR, and accepted decision source.
-- `source_dispositions.json` records the GSP 0.2 destination of every detailed specification.
-- `requirements.json` is the normative requirement registry populated during M237.
+- `source_inventory.json` records source classifications and provenance; legacy source paths do not promise local files or current normative authority.
+- `source_dispositions.json` records migration destinations for historical source material.
+- `requirements.json` is the accepted GSP 0.2 requirement registry. Destination paths point to current chapters; test paths are domain-level evidence references, not rule-level coverage claims.
 - `schema.json` defines the machine-checkable registry format.
 
 Run `uv run python tools/spec_traceability.py --check` after changing specification authority or

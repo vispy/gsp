@@ -8,7 +8,12 @@ Every addressable protocol entity uses a non-empty validated identifier. Referen
 
 ### Identifier contract
 
-| Rule | Requirement | |---|---| | `GSP-SCENE-001` | An identifier is a non-empty Unicode string with no surrounding whitespace or control characters. | | `GSP-SCENE-002` | Identity comparison is exact code-point equality; implementations must not case-fold or normalize identifiers implicitly. | | `GSP-SCENE-003` | IDs are unique among simultaneously live entities of all core kinds unless a command schema explicitly defines a separate namespace. | | `GSP-SCENE-004` | References are session-local. Cross-session references are invalid even when their text matches. |
+| Rule | Requirement
+|---|---|
+| `GSP-SCENE-001` | An identifier is a non-empty Unicode string with no surrounding whitespace or control characters.
+| `GSP-SCENE-002` | Identity comparison is exact code-point equality; implementations must not case-fold or normalize identifiers implicitly.
+| `GSP-SCENE-003` | IDs are unique among simultaneously live entities of all core kinds unless a command schema explicitly defines a separate namespace.
+| `GSP-SCENE-004` | References are session-local. Cross-session references are invalid even when their text matches. |
 
 Colon-separated names such as `visual:temperature` are a recommended producer convention, not a semantic hierarchy.
 
@@ -26,7 +31,9 @@ A panel is a scene-scoped identity node that associates views, attachments, and 
 
 ### Panel record
 
-| Field | Type | Required | Default | Meaning | |---|---|---:|---|---| | `id` | identifier | yes | — | Identity unique within the owning scene. |
+| Field | Type | Required | Default | Meaning
+|---|---|---:|---|---|
+| `id` | identifier | yes | — | Identity unique within the owning scene. |
 
 The record is closed. Unknown fields are invalid. In particular, producer figure identity, allocation rectangles, clipping, hierarchy, background styling, and metadata are not panel fields.
 
@@ -44,7 +51,13 @@ A visual is a semantic family, not a backend draw call. Accepted families are po
 
 ### Visual attachment
 
-| Field | Type | Required | Default | Meaning | |---|---|---:|---|---| | `visual_id` | visual identifier | yes | — | Attached visual. | | `panel_id` | panel identifier | yes | — | Presentation/query panel. | | `view_id` | view identifier or null | conditional | null | Required for DATA-space visuals. | | `z_order` | signed integer | no | 0 | Ordering among contributions where depth semantics do not override it. | | `visible` | boolean | no | true | Semantic participation flag. |
+| Field | Type | Required | Default | Meaning
+|---|---|---:|---|---|
+| `visual_id` | visual identifier | yes | — | Attached visual.
+| `panel_id` | panel identifier | yes | — | Presentation/query panel.
+| `view_id` | view identifier or null | conditional | null | Required for DATA-space visuals.
+| `z_order` | signed integer | no | 0 | Ordering among contributions where depth semantics do not override it.
+| `visible` | boolean | no | true | Semantic participation flag. |
 
 `GSP-SCENE-009`: every rendered visual has exactly one explicit attachment in core GSP 0.2. DATA visuals name the dimensionally correct view; NDC visuals use a null `view_id`. Multi-attachment visuals are deferred. Attachment visibility, cross-visual ordering, and clipping take precedence over visual-family-local primitive ordering.
 
@@ -60,7 +73,12 @@ Guides are not pre-rendered decorations. Query geometry and exact layout require
 
 ### Guide common fields
 
-| Field | Type | Required | Meaning | |---|---|---:|---| | `id` | identifier | yes | Guide identity. | | `panel_id` | panel identifier | yes | Owning panel. | | `visible` | boolean | no | Defaults true. | | `style` | typed guide-style record | no | Logical-pixel and RGBA styling only. |
+| Field | Type | Required | Meaning
+|---|---|---:|---|
+| `id` | identifier | yes | Guide identity.
+| `panel_id` | panel identifier | yes | Owning panel.
+| `visible` | boolean | no | Defaults true.
+| `style` | typed guide-style record | no | Logical-pixel and RGBA styling only. |
 
 `GSP-SCENE-010`: guides participate in layout and queries only when the corresponding capability is advertised. Rendering an axis line does not imply tick-label layout or guide-query support.
 

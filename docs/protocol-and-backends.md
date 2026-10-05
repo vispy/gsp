@@ -58,6 +58,20 @@ must keep the session open across non-blocking display and query operations. Clo
 releases native resources. Interactive Datoviz applications additionally close the window to
 terminate the event loop; `Ctrl-C` is the terminal fallback.
 
+## Retained point values
+
+Both first-party adapters advertise the optional `scene.update.points.v1` extension and implement
+`PointUpdateSession`. After rendering a scene, `session.update_point(replacement, scene_id=...)`
+keeps its native figure and point visual and returns the new scene revision. The initial revision
+is zero. Point positions, colors or scalar values/alpha, and pixel diameters may change; count,
+dimension, coordinate space, transform binding, and scalar scale binding remain fixed. Rejected
+structural changes leave state untouched. Datoviz closes the session if a native upload fails after
+mutation may have started. VisPy2's `Figure.update_point(session, replacement)` publishes producer
+state only after session success. See ADR-0037 for the ownership and lifetime contract.
+
+These are local adapter operations. They do not establish support for the general command server,
+resource mutations, batch rollback, remote transports, or updates to other visual families.
+
 ## Queries
 
 The public query model asks what rendered contribution lies under a panel coordinate. Query
@@ -68,8 +82,14 @@ and request structure are valid, unsupported visual families return a structured
 
 The qualified slice proves Matplotlib point identity `HIT`/`MISS` behavior and bounded Datoviz
 frontmost item-identity queries for point, pixel, marker, sphere, vector, segment, path, primitive,
-mesh, and image visuals. Mesh-face and image pixel/sample targets, billboard text, and per-glyph
-picking are not claimed. View3D ray construction is separate from item picking.
+mesh, and image visuals. The optional Datoviz `MeshPickSession` advertises `query.mesh.single.v1`
+only when native FACE bindings qualify. `pick_mesh(View3DMeshTrianglePickRequest, scene_id=...)`
+requires the scene's sole visual to be one visible DATA-space mesh in the selected View3D panel
+and reports native pick-scene
+freshness on HIT and MISS. Ambiguous scenes, stale snapshots, and unsupported geometry fail
+explicitly. This bounded extension does not advertise the strict
+`query.view3d.mesh_triangle_pick.v1` contract. Image pixel/sample targets, billboard text, and
+per-glyph picking remain unsupported. View3D ray construction is separate from item picking.
 
 ## Backend limitations
 

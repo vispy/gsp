@@ -7,17 +7,26 @@ from typing import Any
 
 from gsp import Scene
 from gsp.backends import SessionRequest
+from gsp.updates import prepare_point_update
 from gsp.protocol import (
+    VIEW3D_NAVIGATION_ORBIT_PAN_ZOOM_CAPABILITY,
+    VIEW3D_QUERY_PAYLOAD_KIND,
     AdaptationOutcome,
     AxisDimension,
     CanvasSize,
     ClipScope,
+    CoordinateSpace,
+    QueryDiagnostic,
+    QueryDiagnosticSeverity,
+    View3DMeshPickDiagnosticCode,
+    View3DMeshTrianglePickPayload,
+    View3DMeshTrianglePickRequest,
     GuideQueryPolicy,
     ImageVisual,
     MarkerVisual,
     MeshVisual,
-    PathVisual,
     PanelTextRole,
+    PathVisual,
     PixelVisual,
     PointVisual,
     PrimitiveVisual,
@@ -29,17 +38,14 @@ from gsp.protocol import (
     SphereVisual,
     TextVisual,
     TickSpecKind,
-    VIEW3D_QUERY_PAYLOAD_KIND,
-    VIEW3D_NAVIGATION_ORBIT_PAN_ZOOM_CAPABILITY,
     VectorVisual,
     View2D,
     View3D,
     resolve_panel_layout_intent,
 )
 
-from .capabilities import datoviz_v04_capability_snapshot
+from .capabilities import datoviz_single_mesh_pick_ready, datoviz_v04_capability_snapshot
 from .protocol_renderer import DatovizV04ProtocolRenderer, import_datoviz_v04
-
 
 _DATOVIZ_ITEM_QUERY_VISUAL_TYPES = (
     PointVisual,
@@ -66,6 +72,7 @@ class DatovizSession:
         self._renderers: list[DatovizV04ProtocolRenderer] = []
         self._renderer_scenes: dict[int, Scene] = {}
         self._scene_renderers: dict[str, tuple[Scene, DatovizV04ProtocolRenderer]] = {}
+        self._scene_revisions: dict[str, int] = {}
         self._latest_scene_id: str | None = None
         self._interactive_view2d_renderers: set[int] = set()
         self._interactive_view3d_renderers: set[int] = set()
@@ -97,7 +104,7 @@ class DatovizSession:
                 f"{sorted(scope.value for scope in unsupported_clip_scopes)!r}"
             )
         _validate_consumed_layout_scene(scene, layout_snapshot)
-        if layout_snapshot is not None and scene.panel_text_guides:
+        if scene.panel_text_guides:
             self._diagnostics.append("panel_text_title_unsupported_no_public_renderer_path")
         if kwargs:
             raise TypeError(f"unsupported Datoviz render options: {sorted(kwargs)!r}")
@@ -106,13 +113,42 @@ class DatovizSession:
             if layout_snapshot is None
             else self._build_renderer(scene, layout_snapshot=layout_snapshot)
         )
+        try:
+            if target is not None:
+                Path(target).write_bytes(renderer.capture_png_bytes())
+        except Exception:
+            renderer.close()
+            raise
         self._renderers.append(renderer)
         self._renderer_scenes[id(renderer)] = scene
         self._scene_renderers[scene.id] = (scene, renderer)
+        self._scene_revisions[scene.id] = self._scene_revisions.get(scene.id, -1) + 1
         self._latest_scene_id = scene.id
-        if target is not None:
-            Path(target).write_bytes(renderer.capture_png_bytes())
         return renderer
+
+    def scene_revision(self, scene_id: str | None = None) -> int:
+        """Return the revision of a successfully rendered or updated scene."""
+        self._require_open()
+        scene, _ = self._query_target(scene_id)
+        return self._scene_revisions[scene.id]
+
+    def update_point(self, visual: PointVisual, *, scene_id: str | None = None) -> int:
+        """Replace bounded point values without recreating native resources."""
+        self._require_open()
+        scene, renderer = self._query_target(scene_id)
+        updated = prepare_point_update(scene, visual)
+        renderer.activate_panel(scene.attachment_for_visual(visual.id).panel_id)
+        try:
+            renderer.update_point_visual(visual)
+        except Exception:
+            # A native upload can fail after another attribute was uploaded.
+            # Close the session rather than exposing divergent semantic state.
+            self.close()
+            raise
+        self._renderer_scenes[id(renderer)] = updated
+        self._scene_renderers[scene.id] = (updated, renderer)
+        self._scene_revisions[scene.id] += 1
+        return self._scene_revisions[scene.id]
 
     def display(
         self,
@@ -182,6 +218,80 @@ class DatovizSession:
                 decision.diagnostic or "Datoviz query request is unsupported",
             )
         return renderer.query_panel(request)
+
+    def pick_mesh(
+        self,
+        request: View3DMeshTrianglePickRequest,
+        *,
+        scene_id: str | None = None,
+    ) -> QueryResult:
+        """Pick a face when the scene contains one visible retained DATA-space mesh."""
+        self._require_open()
+        if not isinstance(request, View3DMeshTrianglePickRequest):
+            raise TypeError("pick_mesh() requires a View3DMeshTrianglePickRequest")
+        scene, renderer = self._query_target(scene_id)
+        panel_id = request.panel_id
+        if panel_id is None:
+            panel_id = next(
+                (view.panel_id for view in scene.views3d if view.id == request.view_id), None
+            )
+            if panel_id is None:
+                return _mesh_pick_rejection(
+                    request,
+                    QueryStatus.INVALID,
+                    View3DMeshPickDiagnosticCode.INVALID_VIEW_ID,
+                    "mesh pick view_id does not identify a scene View3D",
+                )
+        if panel_id not in _scene_panel_ids(scene):
+            return _mesh_pick_rejection(
+                request,
+                QueryStatus.INVALID,
+                View3DMeshPickDiagnosticCode.INVALID_PANEL_ID,
+                "mesh pick panel_id is not present in the scene",
+            )
+        view = scene.primary_view_for_panel(panel_id)
+        if not isinstance(view, View3D):
+            return _mesh_pick_rejection(
+                request,
+                QueryStatus.UNSUPPORTED,
+                View3DMeshPickDiagnosticCode.UNSUPPORTED_BACKEND,
+                "mesh picking requires a retained View3D",
+            )
+        if request.view_id != view.id:
+            return _mesh_pick_rejection(
+                request,
+                QueryStatus.INVALID,
+                View3DMeshPickDiagnosticCode.INVALID_VIEW_ID,
+                "mesh pick view_id does not match the panel View3D",
+            )
+        visuals = scene.visuals_for_panel(panel_id)
+        if (
+            len(scene.visuals) != 1
+            or len(visuals) != 1
+            or not isinstance(visuals[0], MeshVisual)
+            or visuals[0].coordinate_space is not CoordinateSpace.DATA
+        ):
+            return _mesh_pick_rejection(
+                request,
+                QueryStatus.UNSUPPORTED,
+                View3DMeshPickDiagnosticCode.UNSUPPORTED_SCENE_OCCLUDER,
+                "mesh picking requires the scene's sole visual to be a visible DATA-space mesh",
+            )
+        if not datoviz_single_mesh_pick_ready(self._dvz):
+            return _mesh_pick_rejection(
+                request,
+                QueryStatus.UNSUPPORTED,
+                View3DMeshPickDiagnosticCode.UNSUPPORTED_BACKEND,
+                "Datoviz public FACE identity or retained View3D bindings are unavailable",
+            )
+        renderer.activate_panel(panel_id)
+        layout = renderer.authoritative_layout_snapshot()
+        return renderer.query_view3d_mesh_triangle_pick(
+            request,
+            layout_snapshot_id=layout.snapshot_id
+            if layout is not None
+            else "layout:datoviz-session",
+        )
 
     def _query_target(self, scene_id: str | None) -> tuple[Scene, DatovizV04ProtocolRenderer]:
         target = self._latest_scene_id if scene_id is None else scene_id
@@ -553,3 +663,30 @@ def _canvas_size_for_consumed_layout(snapshot: ResolvedLayoutSnapshot) -> Canvas
         target.logical_height_px,
         reference_dpi=target.dpi or 96.0,
     ).with_requested_device_scale(target.device_scale)
+
+
+def _mesh_pick_rejection(
+    request: View3DMeshTrianglePickRequest,
+    status: QueryStatus,
+    code: View3DMeshPickDiagnosticCode,
+    message: str,
+) -> QueryResult:
+    payload = View3DMeshTrianglePickPayload(
+        status=status,
+        hit=False,
+        view_id=request.view_id,
+        panel_id=request.panel_id,
+        panel_xy=request.panel_xy,
+        diagnostics=(
+            QueryDiagnostic(code=code, severity=QueryDiagnosticSeverity.ERROR, message=message),
+        ),
+    )
+    return QueryResult(
+        request_id=f"query:{request.view_id}:mesh-pick",
+        status=status,
+        hit=False,
+        panel_coordinate=request.panel_xy,
+        extension_payload_kind=payload.kind,
+        extension_payload=payload,
+        diagnostic=code.value,
+    )

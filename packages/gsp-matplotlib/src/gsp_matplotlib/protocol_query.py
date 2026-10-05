@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 from math import sqrt
 from typing import Iterable
@@ -86,6 +86,7 @@ class QueryVisualEntry:
 
     visual: PointVisual | ImageVisual | TextVisual | MeshVisual | MarkerVisual
     z_order: int = 0
+    native_query: Callable[[QueryRequest], QueryResult | None] | None = None
 
 
 _MeshPickHit = tuple[
@@ -125,9 +126,13 @@ def query_visuals(
         )
 
     hits: list[QueryResult] = []
-    for entry in sorted(entries, key=lambda item: item.z_order, reverse=True):
+    for _, entry in sorted(
+        enumerate(entries), key=lambda item: (item[1].z_order, item[0]), reverse=True
+    ):
         visual = entry.visual
-        if isinstance(visual, PointVisual):
+        if entry.native_query is not None:
+            hit = entry.native_query(request)
+        elif isinstance(visual, PointVisual):
             hit = _query_point_visual(
                 request,
                 visual,
