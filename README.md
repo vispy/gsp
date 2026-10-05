@@ -30,6 +30,10 @@ capability checks, queries, and backend limitations. High-level plotting journey
 artifacts live in the VisPy2 repository.
 
 For a guided review of project contracts and backend behavior, use the [interactive review tour](../vispy2/docs/review.md).
+Run `just review-setup` once to install the Qt toolkit, then `just review`. On macOS, the recipe
+configures an installed Vulkan SDK through the Datoviz source checkout's environment helper when
+no Vulkan driver is explicitly selected. `GSP_DATOVIZ_SOURCE` selects that checkout, defaulting to
+`../datoviz`; explicit `VK_DRIVER_FILES` or `VK_ICD_FILENAMES` settings are preserved.
 
 The intended first ordinary publication set is `gsp-core` plus `gsp-matplotlib`; there is no
 repository-root umbrella distribution. The Datoviz adapter intentionally has no ordinary Datoviz

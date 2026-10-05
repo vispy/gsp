@@ -5,7 +5,15 @@ review_python := env("VISPY2_REVIEW_PYTHON", ".venv/bin/python")
 # Review this repo together with its sibling VisPy2 producer.
 [positional-arguments]
 review *args:
-    @"{{review_python}}" ../vispy2/tools/review.py "$@"
+    #!/usr/bin/env bash
+    set -eo pipefail
+    datoviz_source="${GSP_DATOVIZ_SOURCE:-../datoviz}"
+    if [ "$(uname)" = "Darwin" ] && [ -z "${VK_DRIVER_FILES:-}${VK_ICD_FILENAMES:-}" ] && \
+       [ -f "$datoviz_source/tools/vulkan-env.sh" ] && \
+       { [ -n "${VULKAN_SDK:-}" ] || [ -d "$HOME/VulkanSDK" ]; }; then
+        source "$datoviz_source/tools/vulkan-env.sh"
+    fi
+    exec "{{review_python}}" ../vispy2/tools/review.py "$@"
 
 review-setup:
     @uv pip install --python "{{review_python}}" 'PySide6>=6.8,<7'
